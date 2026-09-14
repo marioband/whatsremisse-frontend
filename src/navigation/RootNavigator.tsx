@@ -51,7 +51,7 @@ export type RootStackParamList = {
     memberRole: 'owner' | 'admin' | 'member';
   };
   Settings: undefined;
-  PaymentDetails: undefined;
+  PaymentDetails: { fromOnboarding?: boolean } | undefined;
   MyServices: undefined;
   Privacy: undefined;
   BlockedDrivers: undefined;

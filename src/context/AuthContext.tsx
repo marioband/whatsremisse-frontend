@@ -1,100 +1,77 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Session, AuthError } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+
 import { supabase } from '../lib/supabase';
+import { Profile } from '../types';
 
-interface Profile {
-  id: string;
-  phone: string;
-  role?: string;
-  full_name?: string;
-  vehicle_data?: any;
-  yape_number?: string;
-  bcp_account?: string;
-}
-
-interface AuthContextData {
-  session: any | null;
+interface AuthContextValue {
+  session: Session | null;
   profile: Profile | null;
   loading: boolean;
   requiresProfileSetup: boolean;
+  phone: string | null;
   requireSmsVerification: boolean;
+  requestOtp: (phone: string) => Promise<void>;
   signIn: (phone: string, otp: string) => Promise<boolean>;
-  requestOtp: (phone: string) => Promise<boolean>;
   completeProfileSetup: (updates?: Partial<Profile>) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextData>({} as AuthContextData);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
 const PHONE_KEY = '@whatsremisse_phone';
 
+const requireSmsVerification = process.env.EXPO_PUBLIC_REQUIRE_SMS_VERIFICATION !== 'false';
+
+function mapProfile(row: Record<string, unknown>): Profile {
+  return {
+    id: String(row.id),
+    email: row.email ? String(row.email) : '',
+    full_name: row.full_name ? String(row.full_name) : null,
+    phone: row.phone ? String(row.phone) : null,
+    role: (row.role as Profile['role']) || 'DRIVER',
+    group_id: null,
+    tier: 'PREMIUM',
+    subscription_expires_at: null,
+    current_debt: 0,
+    vehicle_data: (row.vehicle_data as Profile['vehicle_data']) || null,
+    license_data: (row.license_data as Profile['license_data']) || null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<any | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [requiresProfileSetup, setRequiresProfileSetup] = useState(false);
-  const [phone, setPhone] = useState('');
-
-  const requireSmsVerification = false; // Modo desarrollo activo
-
-  async function loadProfile(userId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        setProfile(null);
-        setRequiresProfileSetup(true);
-        return;
-      }
-
-      if (data) {
-        const mapped: Profile = {
-          id: data.id,
-          phone: data.phone || '',
-          role: data.role,
-          full_name: data.full_name,
-          vehicle_data: data.vehicle_data,
-          yape_number: data.yape_number,
-          bcp_account: data.bcp_account,
-        };
-        setProfile(mapped);
-        const isProfileComplete = Boolean(mapped.role && mapped.full_name && mapped.vehicle_data);
-        // eslint-disable-next-line no-console
-        console.log('[Auth] Perfil cargado:', mapped, 'isProfileComplete:', isProfileComplete);
-        setRequiresProfileSetup(!isProfileComplete);
-      } else {
-        setRequiresProfileSetup(true);
-      }
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[Auth] Error cargando perfil:', err);
-      setProfile(null);
-      setRequiresProfileSetup(true);
-    }
-  }
+  const [phone, setPhone] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    async function initAuth() {
+    const initSession = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        setSession(data.session);
-        if (data.session?.user) {
+        const savedPhone = await AsyncStorage.getItem(PHONE_KEY);
+        if (savedPhone && mounted) setPhone(savedPhone);
+
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (mounted && data.session) {
+          setSession(data.session);
           await loadProfile(data.session.user.id);
         }
-      } catch (e) {
-        // ignore
+      } catch (err) {
+        console.error('[Auth] initSession error:', err);
       } finally {
         if (mounted) setLoading(false);
       }
-    }
+    };
 
-    initAuth();
+    initSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       if (!mounted) return;
@@ -115,33 +92,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithoutOtp = async (normalizedPhone: string): Promise<boolean> => {
+  const loadProfile = async (userId: string) => {
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        phone: normalizedPhone,
-        password: 'default-password-placeholder',
-      });
-
-      if (authError || !authData.session) {
-        // Si no existe, simulamos sesión local o usuario mock para pruebas
-        const mockUser = { id: 'mock-user-id-123', phone: normalizedPhone };
-        setSession({ user: mockUser });
-        await loadProfile(mockUser.id);
-        return true;
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (error) throw error;
+      if (data) {
+        const mapped = mapProfile(data);
+        setProfile(mapped);
+        const isProfileComplete = Boolean(mapped.role && mapped.full_name && mapped.vehicle_data);
+        // eslint-disable-next-line no-console
+        console.log('[Auth] Perfil cargado:', mapped, 'isProfileComplete:', isProfileComplete);
+        setRequiresProfileSetup(!isProfileComplete);
+      } else {
+        setRequiresProfileSetup(true);
       }
-
-      setSession(authData.session);
-      await loadProfile(authData.session.user.id);
-      return true;
     } catch (err) {
-      // Fallback a perfil vacío para forzar onboarding si falla la red
+      // eslint-disable-next-line no-console
+      console.error('[Auth] Error cargando perfil:', err);
+      setProfile(null);
       setRequiresProfileSetup(true);
-      return true;
     }
   };
 
+  const requestOtp = async (inputPhone: string) => {
+    setPhone(inputPhone);
+    await AsyncStorage.setItem(PHONE_KEY, inputPhone);
+
+    if (!requireSmsVerification) return;
+
+    const { error } = await supabase.auth.signInWithOtp({ phone: inputPhone });
+    if (error) throw error;
+  };
+
+  const signInWithoutOtp = async (inputPhone: string): Promise<boolean> => {
+    const password = inputPhone;
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      phone: inputPhone,
+      password,
+    });
+
+    if (!signInError) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        setSession(data.session);
+        await loadProfile(data.session.user.id);
+        return true;
+      }
+      return false;
+    }
+
+    // Si el usuario no existe, lo creamos automáticamente
+    if (isInvalidCredentialsError(signInError)) {
+      const { error: signUpError } = await supabase.auth.signUp({
+        phone: inputPhone,
+        password,
+      });
+
+      if (signUpError) throw signUpError;
+
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        setSession(data.session);
+        await loadProfile(data.session.user.id);
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   const signIn = async (inputPhone: string, otp: string): Promise<boolean> => {
-    const normalizedPhone = inputPhone.startsWith('+') ? inputPhone : `+51${inputPhone.trim()}`;
+    const normalizedPhone = inputPhone || phone || '';
     setPhone(normalizedPhone);
     await AsyncStorage.setItem(PHONE_KEY, normalizedPhone);
 
@@ -172,29 +194,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const completeProfileSetup = async (updates?: Partial<Profile>) => {
-    if (profile) {
-      const updated = { ...profile, ...updates };
-      setProfile(updated);
-      const isComplete = Boolean(updated.role && updated.full_name && updated.vehicle_data);
-      setRequiresProfileSetup(!isComplete);
-    }
-  };
+    if (!session?.user) return;
 
-  const requestOtp = async (inputPhone: string): Promise<boolean> => {
-    const normalizedPhone = inputPhone.startsWith('+') ? inputPhone : `+51${inputPhone.trim()}`;
-    setPhone(normalizedPhone);
-    await AsyncStorage.setItem(PHONE_KEY, normalizedPhone);
+    const nextProfile: Profile = {
+      ...(profile || {
+        id: session.user.id,
+        email: '',
+        full_name: null,
+        phone: phone || null,
+        role: 'DRIVER',
+        group_id: null,
+        tier: 'PREMIUM',
+        subscription_expires_at: null,
+        current_debt: 0,
+        vehicle_data: null,
+        license_data: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+      ...updates,
+      id: session.user.id,
+      updated_at: new Date().toISOString(),
+    };
 
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: normalizedPhone,
+    const { error } = await supabase.from('profiles').upsert({
+      id: session.user.id,
+      phone: nextProfile.phone,
+      role: nextProfile.role,
+      full_name: nextProfile.full_name,
+      vehicle_data: nextProfile.vehicle_data,
+      license_data: nextProfile.license_data,
     });
-    return !error;
+
+    if (error) throw error;
+
+    setProfile(nextProfile);
+    setRequiresProfileSetup(false);
   };
 
   const signOut = async () => {
+    await AsyncStorage.removeItem(PHONE_KEY);
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
+    setPhone(null);
     setRequiresProfileSetup(false);
   };
 
@@ -205,9 +248,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         loading,
         requiresProfileSetup,
+        phone,
         requireSmsVerification,
-        signIn,
         requestOtp,
+        signIn,
         completeProfileSetup,
         signOut,
       }}
@@ -217,6 +261,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
+function isInvalidCredentialsError(error: AuthError): boolean {
+  return (
+    error.message.toLowerCase().includes('invalid login credentials') ||
+    error.message.toLowerCase().includes('user not found') ||
+    error.status === 400
+  );
 }
+
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+};

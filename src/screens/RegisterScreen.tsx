@@ -7,8 +7,11 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -37,47 +40,142 @@ export function RegisterScreen() {
         if (!success) {
           setError('No se pudo iniciar sesión. Verifica tu número o intenta de nuevo.');
         }
-      } else {
-        const success = await requestOtp(phone);
-        if (success) {
-          navigation.navigate('VerifyOtp', { phone });
-        } else {
-          setError('No se pudo enviar el código SMS.');
-        }
+        return;
       }
+
+      await requestOtp(phone);
+      Alert.alert('Código enviado', `Se envió el código al ${phone}.`);
+      navigation.navigate('Login', { phone });
     } catch (err: any) {
-      setError(err.message || 'Ocurrió un error inesperado.');
+      const message = err?.message || 'Ocurrió un error inesperado.';
+      setError(message);
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>WhatsRemisse</Text>
-      <Text style={styles.subtitle}>Ingresa tu número de celular para continuar</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ej. 987654321"
-        placeholderTextColor="#888"
-        keyboardType="phone-pad"
-        value={phone}
-        onChangeText={setPhone}
-      />
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      <TouchableOpacity style={styles.button} onPress={handleSend} disabled={loading}>
-        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Continuar</Text>}
-      </TouchableOpacity>
-    </View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={styles.logoContainer}>
+        <View style={styles.bubble}>
+          <View style={styles.bubbleTail} />
+        </View>
+        <Text style={styles.brand}>WhatsRemisse</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.title}>Registro</Text>
+        <Text style={styles.subtitle}>Ingresa tu número celular</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Número Celular"
+          placeholderTextColor="#999"
+          keyboardType="phone-pad"
+          value={phone}
+          onChangeText={setPhone}
+          maxLength={12}
+        />
+
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleSend}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>{loading ? 'Enviando...' : 'enviar'}</Text>
+        </TouchableOpacity>
+
+        {error && <Text style={styles.errorText}>{error}</Text>}
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#2D2D2D' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#FFF', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#AAA', textAlign: 'center', marginBottom: 24 },
-  input: { backgroundColor: '#3A3A3A', color: '#FFF', padding: 14, borderRadius: 8, fontSize: 16, marginBottom: 12 },
-  button: { backgroundColor: '#3F51B5', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
-  buttonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  errorText: { color: '#FF6B6B', fontSize: 14, textAlign: 'center', marginTop: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: '#2D2D2D',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  bubble: {
+    width: 80,
+    height: 62,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  bubbleTail: {
+    position: 'absolute',
+    bottom: -9,
+    left: 10,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 9,
+    borderRightWidth: 9,
+    borderTopWidth: 16,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#fff',
+  },
+  brand: {
+    color: '#fff',
+    fontSize: 26,
+    fontWeight: 'bold',
+  },
+  card: {
+    backgroundColor: '#2D2D2D',
+    width: '100%',
+  },
+  title: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subtitle: {
+    color: '#bbb',
+    fontSize: 14,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 14,
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  button: {
+    backgroundColor: '#3B4CCA',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 16,
+  },
 });

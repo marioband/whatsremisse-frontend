@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
 import {
@@ -16,13 +16,16 @@ import { useMockStore } from '../context/MockStoreContext';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type PaymentNav = StackNavigationProp<RootStackParamList, 'PaymentDetails'>;
+type PaymentRoute = RouteProp<RootStackParamList, 'PaymentDetails'>;
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
 
 export function PaymentDetailsScreen() {
   const navigation = useNavigation<PaymentNav>();
+  const route = useRoute<PaymentRoute>();
   const { userProfile, setUserProfile } = useMockStore();
+  const fromOnboarding = route.params?.fromOnboarding ?? false;
 
   const [yape, setYape] = useState(userProfile?.yapeNumber || '');
   const [bcpAccount, setBcpAccount] = useState(userProfile?.bcpAccount || '');
@@ -37,6 +40,11 @@ export function PaymentDetailsScreen() {
       bcpCci,
     });
     Alert.alert('Guardado', 'Tus datos de pago han sido actualizados.');
+    if (fromOnboarding) {
+      navigation.replace('Main');
+    } else {
+      navigation.goBack();
+    }
   };
 
   return (

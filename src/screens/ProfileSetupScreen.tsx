@@ -102,7 +102,7 @@ export function ProfileSetupScreen() {
           plate,
         },
       });
-      navigation.replace('Main');
+      navigation.replace('PaymentDetails', { fromOnboarding: true });
     } else {
       navigation.goBack();
     }
@@ -117,15 +117,20 @@ export function ProfileSetupScreen() {
   ) => (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={[styles.input, !editable && styles.inputDisabled]}
-        value={value}
-        onChangeText={onChange}
-        editable={editable}
-        keyboardType={keyboardType}
-        placeholder="-"
-        placeholderTextColor="#999"
-      />
+      {editable ? (
+        <TextInput
+          style={styles.input}
+          value={value}
+          onChangeText={onChange}
+          keyboardType={keyboardType}
+          placeholder="-"
+          placeholderTextColor="#999"
+        />
+      ) : (
+        <Text style={[styles.input, styles.inputDisabled]} numberOfLines={1}>
+          {value || '-'}
+        </Text>
+      )}
     </View>
   );
 
