@@ -80,7 +80,7 @@ CREATE POLICY "Members read group members"
     )
   );
 
--- Group members: el owner de un grupo puede agregar el miembro inicial (a si mismo)
+-- Group members: el owner de un grupo puede agregarse a si mismo como primer miembro
 CREATE POLICY "Group owners add initial member"
   ON public.group_members FOR INSERT
   WITH CHECK (
@@ -91,7 +91,19 @@ CREATE POLICY "Group owners add initial member"
     )
   );
 
--- Group members: solo owner/admin puede actualizar/eliminar miembros existentes
+-- Group members: owner/admin puede invitar/agregar a otros miembros
+CREATE POLICY "Owners and admins add members"
+  ON public.group_members FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = group_members.group_id
+        AND gm.user_id = auth.uid()
+        AND gm.role IN ('owner', 'admin')
+    )
+  );
+
+-- Group members: solo owner/admin puede actualizar miembros existentes
 CREATE POLICY "Owners and admins manage members"
   ON public.group_members FOR UPDATE
   USING (
@@ -111,6 +123,7 @@ CREATE POLICY "Owners and admins manage members"
     )
   );
 
+-- Group members: solo owner/admin puede eliminar miembros
 CREATE POLICY "Owners and admins delete members"
   ON public.group_members FOR DELETE
   USING (

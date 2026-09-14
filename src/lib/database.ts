@@ -64,6 +64,8 @@ export function mapApplicationFromDb(row: DbApplication): Application {
 
 export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbServiceAlert> {
   const mapped: Partial<DbServiceAlert> = {};
+  if (service.provider_id !== undefined) mapped.provider_id = service.provider_id;
+  if (service.group_id !== undefined) mapped.group_id = service.group_id || null;
   if (service.title !== undefined) mapped.title = service.title;
   if (service.description !== undefined) mapped.description = service.description;
   if (service.origin_address !== undefined) mapped.origin_address = service.origin_address;
