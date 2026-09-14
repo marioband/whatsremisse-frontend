@@ -1,0 +1,488 @@
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  SafeAreaView,
+  Alert,
+} from 'react-native';
+
+import { ServiceCard } from '../components/ServiceCard';
+import { useAuth } from '../context/AuthContext';
+import { useMockStore } from '../context/MockStoreContext';
+import { RootStackParamList } from '../navigation/RootNavigator';
+import { ServiceAlert } from '../types';
+
+type HomeNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
+
+const BLUE = '#3F51B5';
+const LIGHT_BG = '#F0F2F5';
+const BADGE_RED = '#ff3b30';
+
+type StatusFilter = 'Todos' | 'En proceso' | 'Reservas';
+
+const STATUS_FILTERS: StatusFilter[] = ['Todos', 'En proceso', 'Reservas'];
+
+export function DriverHomeScreen() {
+  const navigation = useNavigation<HomeNav>();
+  const { session } = useAuth();
+  const {
+    role,
+    services,
+    applications,
+    groups,
+    userProfile,
+    archiveService,
+    unarchiveService,
+    applyToService,
+    cancelApplication,
+    updateServiceStatus,
+    driverDebt,
+    debtThreshold,
+    emitChatNotification,
+  } = useMockStore();
+
+  const [activeStatus, setActiveStatus] = useState<StatusFilter>('Todos');
+  const [showArchived, setShowArchived] = useState(false);
+
+  const currentDriverId = session?.user?.id ?? '';
+
+  const getApplication = (serviceId: string) =>
+    applications.find(
+      (a) => a.serviceId === serviceId && a.driverId === currentDriverId && a.status === 'PENDING'
+    );
+
+  const getDriverNotification = (serviceId: string): number => {
+    const app = applications.find(
+      (a) => a.serviceId === serviceId && a.driverId === currentDriverId && a.status === 'PENDING'
+    );
+    if (app?.providerChatStarted && !app.seenByDriver) return 1;
+    return 0;
+  };
+
+  const getDisplayGroupName = (serviceId: string): string | undefined => {
+    const groupIds = services.filter((s) => s.id === serviceId).map((s) => s.group_id);
+    if (groupIds.length === 0) return undefined;
+
+    const priority: Record<'owner' | 'admin' | 'member', number> = {
+      owner: 3,
+      admin: 2,
+      member: 1,
+    };
+    let best = groups.find((g) => g.id === groupIds[0]);
+
+    groupIds.forEach((gid) => {
+      const g = groups.find((gg) => gg.id === gid);
+      if (g && best && priority[g.role] > priority[best.role]) {
+        best = g;
+      }
+    });
+
+    return best?.name;
+  };
+
+  const isScheduledService = (service: ServiceAlert) => {
+    const dispatch = service.dispatch_type || 'Al momento';
+    return dispatch.toLowerCase() !== 'al momento' && dispatch.trim().length > 0;
+  };
+
+  const isAcceptedByMe = (service: ServiceAlert) =>
+    service.assigned_driver_id === currentDriverId &&
+    (service.status === 'STATUS_EN_ROUTE_ORIGIN' || service.status === 'STATUS_AT_ORIGIN');
+
+  const isReserva = (service: ServiceAlert) =>
+    isAcceptedByMe(service) && isScheduledService(service);
+  const isEnProceso = (service: ServiceAlert) =>
+    (isAcceptedByMe(service) && !isScheduledService(service)) ||
+    service.status === 'STATUS_IN_PROGRESS';
+
+  const isOpenAndAvailable = (service: ServiceAlert) =>
+    service.status === 'STATUS_OPEN' && !service.assigned_driver_id && !getApplication(service.id);
+
+  const driverVehicleType = userProfile?.vehicleType || 'Auto';
+
+  const matchesVehicleType = (service: ServiceAlert) => {
+    const required = service.vehicle_requirements?.vehicle_type;
+    if (!required || required === 'Todos') return true;
+    return required === driverVehicleType;
+  };
+
+  const myActiveServices = useMemo(() => {
+    // Deduplicación estricta por service_id (anti-spam cuando un proveedor comparte la misma alerta en varios grupos)
+    const seen = new Set<string>();
+    const filtered = services.filter((s) => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      if (showArchived) return s.archived;
+      if (s.archived) return false;
+      if (s.status === 'STATUS_CANCELLED') return false;
+      if (s.assigned_driver_id && s.assigned_driver_id !== currentDriverId) return false;
+      if (!matchesVehicleType(s)) return false;
+      return true;
+    });
+    return filtered;
+  }, [services, showArchived, driverVehicleType]);
+
+  // "Todos": alertas nuevas, postuladas y aceptadas (la tarjeta verde permanece aquí hasta tocarla)
+  const todosServices = useMemo(
+    () =>
+      myActiveServices.filter(
+        (s) => isOpenAndAvailable(s) || !!getApplication(s.id) || isAcceptedByMe(s)
+      ),
+    [myActiveServices, applications]
+  );
+
+  // Ordenamiento estricto en "Todos": Aceptados > Postulados > Nuevos
+  const sortedServices = useMemo(() => {
+    const accepted: ServiceAlert[] = [];
+    const applied: ServiceAlert[] = [];
+    const news: ServiceAlert[] = [];
+
+    todosServices.forEach((s) => {
+      if (isAcceptedByMe(s)) accepted.push(s);
+      else if (getApplication(s.id)) applied.push(s);
+      else news.push(s);
+    });
+
+    const sortByDateDesc = (a: ServiceAlert, b: ServiceAlert) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+
+    return [
+      ...accepted.sort(sortByDateDesc),
+      ...applied.sort(sortByDateDesc),
+      ...news.sort(sortByDateDesc),
+    ];
+  }, [todosServices, applications]);
+
+  // Contadores para badges
+  const enProcesoCount = useMemo(
+    () => myActiveServices.filter((s) => isEnProceso(s) && s.status !== 'STATUS_COMPLETED').length,
+    [myActiveServices]
+  );
+
+  const reservasCount = useMemo(
+    () => myActiveServices.filter((s) => isReserva(s)).length,
+    [myActiveServices]
+  );
+
+  const handleCardPress = (service: ServiceAlert) => {
+    const application = getApplication(service.id);
+    const notificationCount = getDriverNotification(service.id);
+
+    // Postulado: toque habilitado solo si el proveedor envió mensaje
+    if (application) {
+      if (notificationCount > 0) {
+        navigation.navigate('Chat', {
+          serviceId: service.id,
+          driverId: currentDriverId,
+          driverName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim(),
+        });
+      }
+      return;
+    }
+
+    const driverName =
+      `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Conductor';
+
+    // Servicio aceptado (verde): abrir chat y mover a En Proceso
+    if (isAcceptedByMe(service)) {
+      updateServiceStatus(service.id, 'STATUS_IN_PROGRESS');
+      navigation.navigate('Chat', {
+        serviceId: service.id,
+        driverId: currentDriverId,
+        driverName,
+      });
+      return;
+    }
+
+    // Servicio ya en proceso: solo abrir chat
+    if (service.status === 'STATUS_IN_PROGRESS') {
+      navigation.navigate('Chat', {
+        serviceId: service.id,
+        driverId: currentDriverId,
+        driverName,
+      });
+      return;
+    }
+
+    // Servicio completado: abrir chat para ver cuadre
+    if (service.status === 'STATUS_COMPLETED') {
+      navigation.navigate('Chat', {
+        serviceId: service.id,
+        driverId: currentDriverId,
+        driverName,
+      });
+      return;
+    }
+
+    // Alerta nueva disponible
+    if (isBlocked) {
+      Alert.alert('Postulación bloqueada', 'Tu deuda supera el límite permitido.');
+      return;
+    }
+
+    applyToService(service.id, currentDriverId);
+    emitChatNotification(
+      'Nueva postulaci\u00f3n',
+      `Un conductor postul\u00f3 al servicio: ${service.title}`,
+      { serviceId: service.id, type: 'NEW_APPLICATION' }
+    );
+  };
+
+  const handleArchive = (serviceId: string) => {
+    archiveService(serviceId);
+  };
+
+  const handleUnarchive = (serviceId: string) => {
+    unarchiveService(serviceId);
+  };
+
+  const handleCancelApplication = (serviceId: string) => {
+    cancelApplication(serviceId, currentDriverId);
+    Alert.alert('Postulación anulada', 'Ya no estás postulado a este servicio.');
+  };
+
+  const isDriver = role === 'DRIVER';
+  const isBlocked = driverDebt > debtThreshold;
+
+  const displayServices = useMemo(() => {
+    if (showArchived) {
+      return myActiveServices
+        .filter((s) => s.archived)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
+    if (activeStatus === 'En proceso') {
+      return myActiveServices
+        .filter((s) => s.status === 'STATUS_IN_PROGRESS')
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    if (activeStatus === 'Reservas') {
+      return myActiveServices
+        .filter((s) => isReserva(s))
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    return sortedServices;
+  }, [sortedServices, myActiveServices, activeStatus, showArchived]);
+
+  const renderBadge = (count: number) => {
+    if (count <= 0) return null;
+    return (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Secondary filters */}
+      <View style={styles.filterBar}>
+        <View style={styles.statusPills}>
+          {STATUS_FILTERS.map((status) => {
+            const count =
+              status === 'En proceso' ? enProcesoCount : status === 'Reservas' ? reservasCount : 0;
+            return (
+              <TouchableOpacity
+                key={status}
+                style={[styles.statusPill, activeStatus === status && styles.statusPillActive]}
+                onPress={() => setActiveStatus(status)}
+              >
+                <Text
+                  style={[
+                    styles.statusPillText,
+                    activeStatus === status && styles.statusPillTextActive,
+                  ]}
+                >
+                  {status}
+                </Text>
+                {renderBadge(count)}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <TouchableOpacity style={styles.filterBtn}>
+          <Text style={styles.filterIcon}>▼</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Archived link */}
+      <TouchableOpacity style={styles.archivedLink} onPress={() => setShowArchived((v) => !v)}>
+        <Text style={styles.archivedText}>{showArchived ? 'Ver activos' : 'Archivados'}</Text>
+      </TouchableOpacity>
+
+      {/* Debt warning */}
+      {isDriver && isBlocked && (
+        <View style={styles.debtBanner}>
+          <Text style={styles.debtBannerText}>
+            ⚠️ Postulación bloqueada: deuda S/ {driverDebt} &gt; límite S/ {debtThreshold}
+          </Text>
+        </View>
+      )}
+
+      {/* List */}
+      <FlatList
+        data={displayServices}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const application = getApplication(item.id);
+          const accepted = isAcceptedByMe(item);
+          const inEnProceso = activeStatus === 'En proceso';
+          const inReservas = activeStatus === 'Reservas';
+          const notificationCount = getDriverNotification(item.id);
+          const displayGroupName = getDisplayGroupName(item.id);
+
+          return (
+            <ServiceCard
+              service={item}
+              onPress={() => handleCardPress(item)}
+              onArchive={() => handleArchive(item.id)}
+              onUnarchive={() => handleUnarchive(item.id)}
+              onCancelApplication={application ? () => handleCancelApplication(item.id) : undefined}
+              showArchived={showArchived}
+              disableSwipe={inEnProceso || inReservas || accepted}
+              showReservaIndicator={inReservas}
+              isApplied={!!application}
+              isAccepted={accepted}
+              applicationOrder={application?.order || null}
+              notificationCount={notificationCount}
+              groupName={displayGroupName}
+            />
+          );
+        }}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {showArchived ? 'No hay servicios archivados' : 'No hay servicios disponibles'}
+          </Text>
+        }
+      />
+
+      {/* FAB para crear servicio (solo proveedor) */}
+      {role === 'PROVIDER' && (
+        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateService')}>
+          <Text style={styles.fabIcon}>+</Text>
+        </TouchableOpacity>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: LIGHT_BG,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#ddd',
+  },
+  statusPills: {
+    flexDirection: 'row',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f0f2f5',
+    marginRight: 8,
+    position: 'relative',
+  },
+  statusPillActive: {
+    backgroundColor: BLUE,
+  },
+  statusPillText: {
+    fontSize: 12,
+    color: '#555',
+    fontWeight: '600',
+  },
+  statusPillTextActive: {
+    color: '#fff',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: BADGE_RED,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  filterBtn: {
+    padding: 8,
+    backgroundColor: '#f0f2f5',
+    borderRadius: 8,
+  },
+  filterIcon: {
+    fontSize: 14,
+  },
+  archivedLink: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#eee',
+  },
+  archivedText: {
+    color: BLUE,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  debtBanner: {
+    backgroundColor: '#ffebee',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  debtBannerText: {
+    color: '#c62828',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  list: {
+    paddingTop: 12,
+    paddingBottom: 90,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#888',
+    marginTop: 40,
+    fontSize: 14,
+  },
+  fab: {
+    position: 'absolute',
+    right: 18,
+    bottom: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#25D366',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+  fabIcon: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+});

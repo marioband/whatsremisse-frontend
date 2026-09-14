@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "WhatsRemisse",
+    "slug": "whats-remisse",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.whatsremisse.app"
+    },
+    "android": {
+      "package": "com.whatsremisse.app",
+      "permissions": [
+        "NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "notification": {
+      "androidMode": "default",
+      "androidCollapsedTitle": "#{unread_notifications} nuevas alertas"
+    },
+    "plugins": [
+      "expo-notifications"
+    ],
+    "web": {},
+    "extra": {
+      "supabaseUrl": "YOUR_SUPABASE_URL",
+      "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY"
+    }
+  }
+}
