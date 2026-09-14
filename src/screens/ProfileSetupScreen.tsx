@@ -41,6 +41,8 @@ export function ProfileSetupScreen() {
   const [providerName, setProviderName] = useState(userProfile?.providerName || '');
   const [driverPhotoUrl, setDriverPhotoUrl] = useState(userProfile?.driverPhotoUrl || '');
   const [providerPhotoUrl, setProviderPhotoUrl] = useState(userProfile?.providerPhotoUrl || '');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handlePickDriverPhoto = () => {
     Alert.alert('Foto de perfil', 'Selecciona una foto de perfil.', [
@@ -71,40 +73,70 @@ export function ProfileSetupScreen() {
   };
 
   const handleSave = async () => {
-    setUserProfile({
-      firstName,
-      lastName,
-      dni,
-      phone: phone || userProfile?.phone || '',
-      vehicleType,
-      brand,
-      model,
-      year,
-      color,
-      plate,
-      providerName,
-      driverPhotoUrl,
-      providerPhotoUrl,
-      yapeNumber: userProfile?.yapeNumber,
-      bcpAccount: userProfile?.bcpAccount,
-      bcpCci: userProfile?.bcpCci,
-    });
+    setSaveError(null);
 
-    if (requiresProfileSetup) {
-      await completeProfileSetup({
-        full_name: `${firstName} ${lastName}`.trim() || null,
-        role,
-        vehicle_data: {
-          vehicle_type: vehicleType,
-          brand,
-          model,
-          year: year ? parseInt(year, 10) : undefined,
-          plate,
-        },
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !dni.trim() ||
+      !brand.trim() ||
+      !model.trim() ||
+      !plate.trim()
+    ) {
+      setSaveError(
+        'Completa los campos obligatorios: nombres, apellidos, DNI, marca, modelo y placa.'
+      );
+      return;
+    }
+
+    setSaving(true);
+    try {
+      setUserProfile({
+        firstName,
+        lastName,
+        dni,
+        phone: phone || userProfile?.phone || '',
+        vehicleType,
+        brand,
+        model,
+        year,
+        color,
+        plate,
+        providerName,
+        driverPhotoUrl,
+        providerPhotoUrl,
+        yapeNumber: userProfile?.yapeNumber,
+        bcpAccount: userProfile?.bcpAccount,
+        bcpCci: userProfile?.bcpCci,
       });
-      navigation.replace('PaymentDetails', { fromOnboarding: true });
-    } else {
-      navigation.goBack();
+
+      // eslint-disable-next-line no-console
+      console.log('[ProfileSetup] requiresProfileSetup:', requiresProfileSetup);
+
+      if (requiresProfileSetup) {
+        await completeProfileSetup({
+          full_name: `${firstName} ${lastName}`.trim() || null,
+          role,
+          vehicle_data: {
+            vehicle_type: vehicleType,
+            brand,
+            model,
+            year: year ? parseInt(year, 10) : undefined,
+            plate,
+          },
+        });
+        navigation.replace('PaymentDetails', { fromOnboarding: true });
+      } else {
+        navigation.goBack();
+      }
+    } catch (err: any) {
+      const message = err?.message || 'No se pudo guardar el perfil.';
+      // eslint-disable-next-line no-console
+      console.error('[ProfileSetup] Error guardando:', err);
+      setSaveError(message);
+      Alert.alert('Error al guardar', message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -241,8 +273,13 @@ export function ProfileSetupScreen() {
 
         {/* Save button */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveText}>Guardar</Text>
+          {saveError && <Text style={styles.saveErrorText}>{saveError}</Text>}
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Text style={styles.saveText}>{saving ? 'Guardando...' : 'Guardar'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -398,6 +435,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  saveBtnDisabled: {
+    opacity: 0.7,
+  },
+  saveErrorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
   },
   saveText: {
     color: '#fff',
