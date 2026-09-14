@@ -78,7 +78,14 @@ export function RootNavigator() {
             <Stack.Screen name="Login" component={LoginScreen} />
           </>
         ) : requiresProfileSetup ? (
-          <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+          <>
+            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+            <Stack.Screen
+              name="PaymentDetails"
+              component={PaymentDetailsScreen}
+              options={{ headerShown: false }}
+            />
+          </>
         ) : (
           <>
             <Stack.Screen name="Main" component={HomeScreen} />
