@@ -194,7 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const completeProfileSetup = async (updates?: Partial<Profile>) => {
-    if (!session?.user) return;
+    if (!session?.user) {
+      // eslint-disable-next-line no-console
+      console.error('[Auth] completeProfileSetup: no hay sesión');
+      return;
+    }
 
     const nextProfile: Profile = {
       ...(profile || {
@@ -217,16 +221,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from('profiles').upsert({
+    const payload = {
       id: session.user.id,
       phone: nextProfile.phone,
       role: nextProfile.role,
       full_name: nextProfile.full_name,
       vehicle_data: nextProfile.vehicle_data,
       license_data: nextProfile.license_data,
-    });
+    };
 
-    if (error) throw error;
+    // eslint-disable-next-line no-console
+    console.log('[Auth] completeProfileSetup payload:', payload);
+
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', session.user.id)
+      .maybeSingle();
+    // eslint-disable-next-line no-console
+    console.log('[Auth] completeProfileSetup existing profile:', existing);
+
+    const { error } = await supabase.from('profiles').upsert(payload);
+
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[Auth] completeProfileSetup upsert error:', error);
+      throw error;
+    }
 
     setProfile(nextProfile);
     setRequiresProfileSetup(false);
