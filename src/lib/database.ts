@@ -1,6 +1,6 @@
 import { isSupabaseConfigured, supabase } from './supabase';
 import { GroupItem, GroupMember } from '../context/MockStoreContext';
-import { Application, ServiceAlert, ServiceStatus } from '../types';
+import { Application, ServiceAlert, ServiceStatus, VehicleData } from '../types';
 import {
   DbApplication,
   DbServiceAlert,
@@ -474,6 +474,36 @@ export async function searchProfiles(query: string, limit = 20): Promise<Searcha
   return ((page || []) as SearchableProfile[])
     .filter((profile) => matchesQuery(profile, raw.toLowerCase(), digits))
     .slice(0, limit);
+}
+
+export interface ProfilePatch {
+  full_name?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  vehicle_data?: VehicleData | null;
+  yape_number?: string | null;
+  bcp_account?: string | null;
+  bcp_cci?: string | null;
+}
+
+/**
+ * Guarda (UPDATE) los datos del perfil del usuario autenticado en `profiles`.
+ * Comprueba que realmente se haya actualizado una fila: con RLS, un UPDATE sin
+ * permisos o sin fila devuelve 0 filas SIN lanzar error, y eso debe verse.
+ */
+export async function saveProfileData(userId: string, patch: ProfilePatch): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('Supabase no está configurado en esta build.');
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(patch)
+    .eq('id', userId)
+    .select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      'Supabase no actualizó ninguna fila de profiles (revisa la sesión y la política RLS de UPDATE).'
+    );
+  }
 }
 
 export interface PublicProfile {

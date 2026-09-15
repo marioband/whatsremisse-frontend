@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
+import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type PaymentNav = StackNavigationProp<RootStackParamList, 'PaymentDetails'>;
@@ -24,26 +25,54 @@ const BLUE = '#3F51B5';
 export function PaymentDetailsScreen() {
   const navigation = useNavigation<PaymentNav>();
   const route = useRoute<PaymentRoute>();
-  const { userProfile, setUserProfile } = useMockStore();
+  const { userProfile, persistUserProfile } = useMockStore();
   const fromOnboarding = route.params?.fromOnboarding ?? false;
 
   const [yape, setYape] = useState(userProfile?.yapeNumber || '');
   const [bcpAccount, setBcpAccount] = useState(userProfile?.bcpAccount || '');
   const [bcpCci, setBcpCci] = useState(userProfile?.bcpCci || '');
+  const [saving, setSaving] = useState(false);
+  const [hydratedFields, setHydratedFields] = useState(false);
 
-  const handleSave = () => {
-    if (!userProfile) return;
-    setUserProfile({
-      ...userProfile,
-      yapeNumber: yape,
-      bcpAccount,
-      bcpCci,
-    });
-    Alert.alert('Guardado', 'Tus datos de pago han sido actualizados.');
-    if (fromOnboarding) {
-      navigation.replace('Main');
-    } else {
-      navigation.goBack();
+  // Los datos de pago llegan desde Supabase después del primer render.
+  useEffect(() => {
+    if (!userProfile || hydratedFields) return;
+    setYape(userProfile.yapeNumber || '');
+    setBcpAccount(userProfile.bcpAccount || '');
+    setBcpCci(userProfile.bcpCci || '');
+    setHydratedFields(true);
+  }, [userProfile, hydratedFields]);
+
+  const handleSave = async () => {
+    if (!userProfile) {
+      Alert.alert(
+        'Perfil incompleto',
+        'Completa primero tus datos de perfil antes de guardar los datos de pago.'
+      );
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Persiste en Supabase (profiles.bcp_*/yape_number); antes solo quedaba en memoria.
+      await persistUserProfile({
+        ...userProfile,
+        yapeNumber: yape,
+        bcpAccount,
+        bcpCci,
+      });
+      Alert.alert('Guardado', 'Tus datos de pago han sido actualizados.');
+      if (fromOnboarding) {
+        navigation.replace('Main');
+      } else {
+        navigation.goBack();
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[PaymentDetails] Error guardando datos de pago:', err);
+      Alert.alert('No se pudieron guardar los datos de pago', describeError(err));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -94,8 +123,12 @@ export function PaymentDetailsScreen() {
           />
         </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Guardar</Text>
+        <TouchableOpacity
+          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -143,5 +176,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
   },
+  saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

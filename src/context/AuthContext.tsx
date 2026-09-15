@@ -37,6 +37,9 @@ function mapProfile(row: Record<string, unknown>): Profile {
     current_debt: 0,
     vehicle_data: (row.vehicle_data as Profile['vehicle_data']) || null,
     license_data: (row.license_data as Profile['license_data']) || null,
+    yape_number: row.yape_number ? String(row.yape_number) : null,
+    bcp_account: row.bcp_account ? String(row.bcp_account) : null,
+    bcp_cci: row.bcp_cci ? String(row.bcp_cci) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -229,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updated_at: new Date().toISOString(),
     };
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       id: session.user.id,
       phone: nextProfile.phone,
       role: nextProfile.role,
@@ -237,6 +240,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       vehicle_data: nextProfile.vehicle_data,
       license_data: nextProfile.license_data,
     };
+
+    // No pisar los datos de pago con null cuando esta actualización no los trae.
+    if (nextProfile.yape_number !== undefined) payload.yape_number = nextProfile.yape_number;
+    if (nextProfile.bcp_account !== undefined) payload.bcp_account = nextProfile.bcp_account;
+    if (nextProfile.bcp_cci !== undefined) payload.bcp_cci = nextProfile.bcp_cci;
 
     // eslint-disable-next-line no-console
     console.log('[Auth] completeProfileSetup payload:', payload);

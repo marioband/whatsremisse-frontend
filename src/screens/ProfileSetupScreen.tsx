@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
-import { useMockStore } from '../context/MockStoreContext';
+import { useMockStore, UserProfile } from '../context/MockStoreContext';
+import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SetupNav = StackNavigationProp<RootStackParamList, 'ProfileSetup'>;
@@ -27,7 +28,7 @@ const VEHICLE_TYPES = ['Auto compacto', 'Auto', 'Camioneta', 'Camioneta 3 filas'
 export function ProfileSetupScreen() {
   const navigation = useNavigation<SetupNav>();
   const { phone, completeProfileSetup, requiresProfileSetup } = useAuth();
-  const { role, userProfile, setUserProfile } = useMockStore();
+  const { role, userProfile, persistUserProfile } = useMockStore();
 
   const [firstName, setFirstName] = useState(userProfile?.firstName || '');
   const [lastName, setLastName] = useState(userProfile?.lastName || '');
@@ -43,6 +44,26 @@ export function ProfileSetupScreen() {
   const [providerPhotoUrl, setProviderPhotoUrl] = useState(userProfile?.providerPhotoUrl || '');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [hydratedFields, setHydratedFields] = useState(false);
+
+  // El perfil llega desde Supabase después del primer render: rellena los campos
+  // en cuanto esté disponible, salvo que el usuario ya haya escrito algo.
+  useEffect(() => {
+    if (!userProfile || hydratedFields) return;
+    setFirstName(userProfile.firstName);
+    setLastName(userProfile.lastName);
+    setDni(userProfile.dni);
+    setVehicleType(userProfile.vehicleType || 'Auto');
+    setBrand(userProfile.brand);
+    setModel(userProfile.model);
+    setYear(userProfile.year);
+    setColor(userProfile.color);
+    setPlate(userProfile.plate);
+    setProviderName(userProfile.providerName);
+    setDriverPhotoUrl(userProfile.driverPhotoUrl || '');
+    setProviderPhotoUrl(userProfile.providerPhotoUrl || '');
+    setHydratedFields(true);
+  }, [userProfile, hydratedFields]);
 
   const handlePickDriverPhoto = () => {
     Alert.alert('Foto de perfil', 'Selecciona una foto de perfil.', [
@@ -91,7 +112,7 @@ export function ProfileSetupScreen() {
 
     setSaving(true);
     try {
-      setUserProfile({
+      const nextProfile: UserProfile = {
         firstName,
         lastName,
         dni,
@@ -108,29 +129,29 @@ export function ProfileSetupScreen() {
         yapeNumber: userProfile?.yapeNumber,
         bcpAccount: userProfile?.bcpAccount,
         bcpCci: userProfile?.bcpCci,
-      });
-
-      // eslint-disable-next-line no-console
-      console.log('[ProfileSetup] requiresProfileSetup:', requiresProfileSetup);
+      };
 
       if (requiresProfileSetup) {
+        // Primer guardado (onboarding): asegura que exista la fila en `profiles`
+        // con rol, teléfono y nombre antes de persistir el resto de los datos.
         await completeProfileSetup({
           full_name: `${firstName} ${lastName}`.trim() || null,
           role,
-          vehicle_data: {
-            vehicle_type: vehicleType,
-            brand,
-            model,
-            year: year ? parseInt(year, 10) : undefined,
-            plate,
-          },
+          vehicle_data: { vehicle_type: vehicleType, brand, model, plate },
         });
+      }
+
+      // Persiste TODO el perfil en Supabase (antes solo vivía en memoria y se
+      // perdía al recargar la app).
+      await persistUserProfile(nextProfile);
+
+      if (requiresProfileSetup) {
         navigation.replace('PaymentDetails', { fromOnboarding: true });
       } else {
         navigation.goBack();
       }
-    } catch (err: any) {
-      const message = err?.message || 'No se pudo guardar el perfil.';
+    } catch (err) {
+      const message = describeError(err);
       // eslint-disable-next-line no-console
       console.error('[ProfileSetup] Error guardando:', err);
       setSaveError(message);

@@ -18,13 +18,15 @@ import {
   insertServiceAlert,
   rejectApplicationInDb,
   removeGroupMember,
+  saveProfileData,
   updateApplication,
   updateGroupMember,
   updateServiceAlert,
+  ProfilePatch,
 } from '../lib/database';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { notifyHighPriority } from '../services/notifications';
-import { Application, ServiceAlert, ServiceStatus, Message, AppRole } from '../types';
+import { Application, ServiceAlert, ServiceStatus, Message, AppRole, Profile } from '../types';
 
 export interface GroupItem {
   id: string;
@@ -429,6 +431,7 @@ interface MockContextValue extends MockState {
   updateMemberRole: (groupId: string, memberId: string, role: 'owner' | 'admin' | 'member') => void;
   removeMember: (groupId: string, memberId: string) => void;
   setUserProfile: (profile: UserProfile) => void;
+  persistUserProfile: (profile: UserProfile) => Promise<void>;
   emitNotification: (serviceId: string, title?: string) => boolean;
   emitChatNotification: (title: string, body?: string, data?: Record<string, any>) => void;
   startProviderChat: (serviceId: string, driverId: string) => void;
@@ -438,6 +441,59 @@ interface MockContextValue extends MockState {
 }
 
 const MockContext = createContext<MockContextValue | undefined>(undefined);
+
+/** Convierte la fila de `profiles` (cargada por AuthContext) al perfil de las pantallas. */
+function userProfileFromAuthProfile(profile: Profile): UserProfile {
+  const vehicle = profile.vehicle_data || {};
+  const [firstToken, ...restTokens] = (profile.full_name || '').trim().split(/\s+/);
+  const text = (value: unknown) => (typeof value === 'string' ? value : '');
+
+  return {
+    firstName: text(vehicle.first_name) || firstToken || '',
+    lastName: text(vehicle.last_name) || restTokens.join(' '),
+    dni: text(vehicle.dni),
+    phone: profile.phone || '',
+    vehicleType: text(vehicle.vehicle_type) || 'Auto',
+    brand: text(vehicle.brand),
+    model: text(vehicle.model),
+    year: vehicle.year !== undefined && vehicle.year !== null ? String(vehicle.year) : '',
+    color: text(vehicle.color),
+    plate: text(vehicle.plate),
+    providerName: text(vehicle.provider_name),
+    driverPhotoUrl: text(vehicle.driver_photo_url) || undefined,
+    providerPhotoUrl: text(vehicle.provider_photo_url) || undefined,
+    yapeNumber: profile.yape_number || undefined,
+    bcpAccount: profile.bcp_account || undefined,
+    bcpCci: profile.bcp_cci || undefined,
+  };
+}
+
+/** Convierte el perfil de las pantallas en el patch que se guarda en `profiles`. */
+function userProfileToPatch(profile: UserProfile): ProfilePatch {
+  const year = profile.year ? Number.parseInt(profile.year, 10) : NaN;
+
+  return {
+    full_name: `${profile.firstName} ${profile.lastName}`.trim() || null,
+    phone: profile.phone || null,
+    vehicle_data: {
+      vehicle_type: profile.vehicleType,
+      brand: profile.brand,
+      model: profile.model,
+      year: Number.isNaN(year) ? undefined : year,
+      color: profile.color,
+      plate: profile.plate,
+      dni: profile.dni,
+      first_name: profile.firstName,
+      last_name: profile.lastName,
+      provider_name: profile.providerName,
+      driver_photo_url: profile.driverPhotoUrl,
+      provider_photo_url: profile.providerPhotoUrl,
+    },
+    yape_number: profile.yapeNumber || null,
+    bcp_account: profile.bcpAccount || null,
+    bcp_cci: profile.bcpCci || null,
+  };
+}
 
 export function MockStoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(mockReducer, initialState);
@@ -472,6 +528,17 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
     load();
   }, [session?.user, profile]);
+
+  // Hidrata los datos del perfil (nombres, DNI, vehículo, fotos y datos de pago)
+  // desde Supabase: antes vivían solo en memoria y se perdían al recargar la app.
+  const hydratedUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    if (hydratedUserIdRef.current === profile.id) return;
+    hydratedUserIdRef.current = profile.id;
+    dispatch({ type: 'SET_USER_PROFILE', payload: userProfileFromAuthProfile(profile) });
+  }, [profile]);
 
   // Sincronización en tiempo real
   useRealtimeServices((service) => {
@@ -664,6 +731,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     },
     setUserProfile: (profile) => dispatch({ type: 'SET_USER_PROFILE', payload: profile }),
+    persistUserProfile: async (nextProfile) => {
+      if (!isSupabaseConfigured) throw new Error('Supabase no está configurado en esta build.');
+      const userId = session?.user?.id;
+      if (!userId) throw new Error('No hay sesión activa. Vuelve a iniciar sesión.');
+      try {
+        await saveProfileData(userId, userProfileToPatch(nextProfile));
+        dispatch({ type: 'SET_USER_PROFILE', payload: nextProfile });
+      } catch (err) {
+        console.error('[MockStore] persistUserProfile error:', err);
+        throw err;
+      }
+    },
     emitNotification: (serviceId, title) => {
       if (state.notifiedServiceIds.has(serviceId)) return false;
       dispatch({ type: 'MARK_NOTIFIED', payload: { serviceId } });

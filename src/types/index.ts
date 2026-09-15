@@ -20,6 +20,15 @@ export interface VehicleData {
   brand?: string;
   model?: string;
   year?: number;
+  color?: string;
+  // Datos del conductor que viajan dentro de profiles.vehicle_data porque la
+  // tabla no tiene columnas propias para ellos.
+  dni?: string;
+  first_name?: string;
+  last_name?: string;
+  provider_name?: string;
+  driver_photo_url?: string;
+  provider_photo_url?: string;
 }
 
 export interface LicenseData {
@@ -40,6 +49,9 @@ export interface Profile {
   current_debt: number;
   vehicle_data: VehicleData | null;
   license_data: LicenseData | null;
+  yape_number?: string | null;
+  bcp_account?: string | null;
+  bcp_cci?: string | null;
   created_at: string;
   updated_at: string;
 }
