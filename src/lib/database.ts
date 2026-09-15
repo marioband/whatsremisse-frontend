@@ -534,7 +534,28 @@ export async function updateGroupMember(
 ): Promise<void> {
   if (!isSupabaseConfigured) return;
 
-  // Igual que en el borrado: la fila del creador no se degrada (0006).
+  // Cambio de rol por RPC (migración 0007): misma autorización que el borrado y
+  // devuelve las filas afectadas, así que no depende de las políticas RLS.
+  if (updates.role) {
+    try {
+      const { data, error } = await supabase.rpc('set_group_member_role', {
+        p_group_id: groupId,
+        p_user_id: userId,
+        p_role: updates.role,
+      });
+      if (error) throw error;
+      if (Number(data ?? 0) > 0) return;
+      if (!(await sigueLaFila(groupId, userId))) {
+        throw new Error('Ese usuario ya no es integrante del grupo.');
+      }
+    } catch (err) {
+      if (!esFuncionAusente(err)) throw err;
+      // eslint-disable-next-line no-console
+      console.warn('[database] RPC set_group_member_role no instalada, uso UPDATE directo:', err);
+    }
+  }
+
+  // Respaldo: UPDATE directo (queda expuesto al RLS de la tabla).
   const { data: grupo, error: grupoError } = await supabase
     .from('groups')
     .select('owner_id')
@@ -561,12 +582,61 @@ export async function updateGroupMember(
   }
 }
 
+/** ¿El error es "esa función no existe" (migración sin aplicar)? */
+function esFuncionAusente(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  const code = e?.code || '';
+  const mensaje = (e?.message || '').toLowerCase();
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    mensaje.includes('could not find the function') ||
+    mensaje.includes('does not exist')
+  );
+}
+
+/** ¿La fila del integrante sigue en la base? */
+async function sigueLaFila(groupId: string, userId: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('group_members')
+    .select('user_id', { count: 'exact', head: true })
+    .eq('group_id', groupId)
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+/**
+ * Borra al integrante y devuelve si la base lo confirmó.
+ *
+ * Primero intenta la RPC `remove_group_member` de la migración 0007: hace la
+ * autorización dentro (creador o admin, y nunca el creador) y devuelve cuántas
+ * filas borró, así que no depende del estado de las políticas RLS de la tabla —
+ * que es justo lo que dejaba el borrado en 0 filas sin error.
+ *
+ * Si esa RPC no está instalada, cae al DELETE directo con verificación.
+ */
 export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
   if (!isSupabaseConfigured) return;
 
-  // El creador del grupo no se puede eliminar: la política de la 0006 protege su
-  // fila. Se comprueba contra la base antes de intentarlo, para dar un mensaje
-  // claro en vez de un borrado condenado a 0 filas.
+  try {
+    const { data, error } = await supabase.rpc('remove_group_member', {
+      p_group_id: groupId,
+      p_user_id: userId,
+    });
+    if (error) throw error;
+    if (Number(data ?? 0) > 0) return; // borrado confirmado por la base
+    if (!(await sigueLaFila(groupId, userId))) return; // ya no estaba
+    // La RPC respondió 0 y la fila sigue: seguimos al respaldo para diagnosticar.
+  } catch (err) {
+    // El rechazo de la RPC (creador, sin permiso, grupo inexistente) es la
+    // respuesta: se muestra tal cual, no se insiste por otra vía.
+    if (!esFuncionAusente(err)) throw err;
+    // eslint-disable-next-line no-console
+    console.warn('[database] RPC remove_group_member no instalada, uso DELETE directo:', err);
+  }
+
+  // Respaldo: DELETE directo (queda expuesto al RLS de la tabla).
   const { data: grupo, error: grupoError } = await supabase
     .from('groups')
     .select('owner_id')
@@ -591,14 +661,7 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
   // Con representación confirmamos el borrado. Si viene vacío, todavía hay que
   // distinguir "no borró nada" de "borró, pero no puedo leerlo".
   if (data && data.length > 0) return;
-
-  const { count, error: countError } = await supabase
-    .from('group_members')
-    .select('user_id', { count: 'exact', head: true })
-    .eq('group_id', groupId)
-    .eq('user_id', userId);
-  if (countError) throw countError;
-  if ((count ?? 0) === 0) return; // la fila ya no está: sí se eliminó
+  if (!(await sigueLaFila(groupId, userId))) return; // la fila ya no está
 
   throw new Error(await describirBloqueoDeFila(groupId, userId, 'eliminar al integrante'));
 }
