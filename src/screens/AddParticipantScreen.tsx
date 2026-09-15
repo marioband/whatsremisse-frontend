@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
-import { searchProfiles } from '../lib/database';
+import { countVisibleProfiles, searchProfiles } from '../lib/database';
 import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -42,6 +42,7 @@ export function AddParticipantScreen() {
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const existingMemberIds = useMemo(
@@ -61,7 +62,7 @@ export function AddParticipantScreen() {
     setLoading(true);
     const timer = setTimeout(() => {
       searchProfiles(text)
-        .then((profiles) => {
+        .then(async (profiles) => {
           if (!mounted) return;
           setSearchError(null);
           setResults(
@@ -72,6 +73,25 @@ export function AddParticipantScreen() {
               role: p.role || '',
             }))
           );
+
+          if (profiles.length > 0) {
+            setDiagnostic(null);
+            return;
+          }
+
+          // Sin resultados: distingue "ese usuario no existe" de "RLS solo me
+          // deja ver mi propio perfil" (la causa más común).
+          try {
+            const visibles = await countVisibleProfiles();
+            if (!mounted) return;
+            setDiagnostic(
+              visibles <= 1
+                ? 'Supabase solo te devuelve tu propio perfil: aplica la migración 0003 (supabase/migrations/0003_search_profiles.sql) en Supabase Studio > SQL Editor, o la política RLS de lectura de profiles de la 0002. Comprueba también que el otro usuario tenga fila en profiles.'
+                : null
+            );
+          } catch {
+            if (mounted) setDiagnostic(null);
+          }
         })
         .catch((err) => {
           if (!mounted) return;
@@ -195,6 +215,8 @@ export function AddParticipantScreen() {
         ListEmptyComponent={
           searchError ? (
             <Text style={styles.errorText}>No se pudo buscar: {searchError}</Text>
+          ) : diagnostic ? (
+            <Text style={styles.errorText}>{diagnostic}</Text>
           ) : query.length >= 3 && !loading ? (
             <Text style={styles.emptyText}>
               No se encontraron usuarios con ese nombre ni teléfono

@@ -444,6 +444,21 @@ export async function searchProfiles(query: string, limit = 20): Promise<Searcha
   if (raw.length < 3) return [];
 
   const digits = normalizePhone(raw);
+
+  // 1) RPC `search_profiles` (migración 0003): busca por nombre o teléfono sin
+  //    exponer el resto de columnas de profiles (datos de pago incluidos).
+  try {
+    const { data, error } = await supabase.rpc('search_profiles', {
+      search: raw,
+      max_rows: limit,
+    });
+    if (error) throw error;
+    return (data || []) as SearchableProfile[];
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[database] RPC search_profiles no disponible, uso consulta directa:', err);
+  }
+
   const safeRaw = sanitizeFilterValue(raw);
   const filters = new Set<string>();
 
@@ -454,14 +469,21 @@ export async function searchProfiles(query: string, limit = 20): Promise<Searcha
   if (digits.length >= 3) filters.add(`phone.ilike.%${digits}%`);
 
   if (filters.size > 0) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, phone, full_name, role')
-      .or(Array.from(filters).join(','))
-      .limit(limit);
-    if (error) throw error;
-    const rows = (data || []) as SearchableProfile[];
-    if (rows.length > 0) return rows;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, phone, full_name, role')
+        .or(Array.from(filters).join(','))
+        .limit(limit);
+      if (error) throw error;
+      const rows = (data || []) as SearchableProfile[];
+      if (rows.length > 0) return rows;
+    } catch (err) {
+      // Si el filtro del servidor falla (sintaxis de or=, permisos, etc.) no
+      // abortamos la búsqueda: seguimos con la comparación en el cliente.
+      // eslint-disable-next-line no-console
+      console.warn('[database] searchProfiles server filter falló, uso respaldo:', err);
+    }
   }
 
   // Respaldo: comparación tolerante al formato del teléfono guardado.
@@ -474,6 +496,20 @@ export async function searchProfiles(query: string, limit = 20): Promise<Searcha
   return ((page || []) as SearchableProfile[])
     .filter((profile) => matchesQuery(profile, raw.toLowerCase(), digits))
     .slice(0, limit);
+}
+
+/**
+ * Cuenta cuántos perfiles puede leer el usuario autenticado. Sirve para
+ * distinguir "ese usuario no existe" de "RLS solo te deja ver tu propio
+ * perfil" (política de lectura de `profiles` sin aplicar).
+ */
+export async function countVisibleProfiles(): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+  const { count, error } = await supabase
+    .from('profiles')
+    .select('id', { count: 'exact', head: true });
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export interface ProfilePatch {
