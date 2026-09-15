@@ -2,6 +2,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import React from 'react';
 
+import { BrandLoader } from '../components/BrandLoader';
 import { useAuth } from '../context/AuthContext';
 import { AddParticipantScreen } from '../screens/AddParticipantScreen';
 import { AppLockScreen } from '../screens/AppLockScreen';
@@ -66,7 +67,9 @@ const Stack = createStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const { session, loading, requiresProfileSetup } = useAuth();
 
-  if (loading) return null;
+  // Mientras se resuelve la sesión (arranque o validación del código) mostramos
+  // la pantalla de carga de marca en lugar de un lienzo en blanco.
+  if (loading) return <BrandLoader />;
 
   return (
     <NavigationContainer>

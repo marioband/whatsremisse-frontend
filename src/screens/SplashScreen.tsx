@@ -1,9 +1,8 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useEffect } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
 
-import logoWhatsRemisse from '../../assets/logo-whatsremisse-name.png';
+import { BrandLoader } from '../components/BrandLoader';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SplashNav = StackNavigationProp<RootStackParamList, 'Splash'>;
@@ -18,22 +17,5 @@ export function SplashScreen() {
     return () => clearTimeout(timer);
   }, [navigation]);
 
-  return (
-    <View style={styles.container}>
-      <Image source={logoWhatsRemisse} style={styles.logo} resizeMode="contain" />
-    </View>
-  );
+  return <BrandLoader />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#333333',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logo: {
-    width: 240,
-    height: 240,
-  },
-});
