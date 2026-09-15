@@ -14,6 +14,7 @@ import {
 import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { isVisibleAsDriver } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 
@@ -111,6 +112,8 @@ export function DriverHomeScreen() {
     return required === driverVehicleType;
   };
 
+  const groupIdList = useMemo(() => groups.map((g) => g.id), [groups]);
+
   const myActiveServices = useMemo(() => {
     // Deduplicación estricta por service_id (anti-spam cuando un proveedor comparte la misma alerta en varios grupos)
     const seen = new Set<string>();
@@ -120,12 +123,12 @@ export function DriverHomeScreen() {
       if (showArchived) return s.archived;
       if (s.archived) return false;
       if (s.status === 'STATUS_CANCELLED') return false;
-      if (s.assigned_driver_id && s.assigned_driver_id !== currentDriverId) return false;
+      if (!isVisibleAsDriver(s, currentDriverId, groupIdList)) return false;
       if (!matchesVehicleType(s)) return false;
       return true;
     });
     return filtered;
-  }, [services, showArchived, driverVehicleType]);
+  }, [services, showArchived, driverVehicleType, currentDriverId, groupIdList]);
 
   // "Todos": alertas nuevas, postuladas y aceptadas (la tarjeta verde permanece aquí hasta tocarla)
   const todosServices = useMemo(

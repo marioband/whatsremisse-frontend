@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 
 import { ProviderServiceCard } from '../components/ProviderServiceCard';
+import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 
@@ -76,20 +78,28 @@ const getServiceStatusText = (service: ServiceAlert): string => {
 
 export function ProviderHomeScreen() {
   const navigation = useNavigation<HomeNav>();
+  const { session } = useAuth();
   const { services, applications, archiveService } = useMockStore();
 
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('Todos');
   const [showArchived, setShowArchived] = useState(false);
 
+  // En este modo solo se ven los servicios que yo publiqué como proveedor; los
+  // de otros usuarios (aunque estén abiertos o ya aceptados) no son míos.
+  const myProviderServices = useMemo(
+    () => services.filter((s) => isVisibleAsProvider(s, session?.user?.id)),
+    [services, session?.user?.id]
+  );
+
   // Servicios activos (no archivados) deduplicados por ID, base para contadores y listas
   const activeDedupedServices = useMemo(() => {
     const seen = new Set<string>();
-    return services.filter((s) => {
+    return myProviderServices.filter((s) => {
       if (seen.has(s.id)) return false;
       seen.add(s.id);
       return !s.archived;
     });
-  }, [services]);
+  }, [myProviderServices]);
 
   const { enProcesoCount, finalizadosCount } = useMemo(() => {
     const enProceso = activeDedupedServices.filter(
@@ -105,7 +115,9 @@ export function ProviderHomeScreen() {
   }, [activeDedupedServices]);
 
   const filteredServices = useMemo(() => {
-    let result = showArchived ? services.filter((s) => s.archived) : activeDedupedServices;
+    let result = showArchived
+      ? myProviderServices.filter((s) => s.archived)
+      : activeDedupedServices;
 
     // Servicios vencidos pasan a una gracia de 24h; transcurrida esa gracia se ocultan (eliminación lógica)
     result = result.filter((s) => !isExpired(s) || !isGraceExpired(s));
@@ -124,7 +136,7 @@ export function ProviderHomeScreen() {
     }
 
     return result;
-  }, [services, activeDedupedServices, activeStatus, showArchived]);
+  }, [myProviderServices, activeDedupedServices, activeStatus, showArchived]);
 
   const handleCardPress = (service: ServiceAlert) => {
     // Servicios vencidos dentro de las 24h de gracia van a edición para reprogramar
@@ -182,7 +194,9 @@ export function ProviderHomeScreen() {
               </View>
             )}
 
-            {item.status === 'STATUS_PENDING_APPROVAL' && applicantCount > 0 && (
+            {/* Cualquier postulación pendiente muestra la tarjeta: el conductor
+                que postula no cambia el estado del servicio en la base. */}
+            {applicantCount > 0 && !item.assigned_driver_id && (
               <TouchableOpacity
                 style={styles.applicantsButton}
                 onPress={() => navigation.navigate('ApplicantsScreen', { serviceId: item.id })}

@@ -8,6 +8,7 @@ import { useRealtimeServices } from '../hooks/useRealtimeServices';
 import {
   approveApplicationInDb,
   fetchApplicationsForDriver,
+  fetchApplicationsForProvider,
   fetchGroupMembers,
   fetchGroupsForUser,
   fetchServicesForDriver,
@@ -25,6 +26,7 @@ import {
   ProfilePatch,
 } from '../lib/database';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { isVisibleAsDriver, isVisibleAsProvider } from '../lib/visibility';
 import { notifyHighPriority } from '../services/notifications';
 import { Application, ServiceAlert, ServiceStatus, Message, AppRole, Profile } from '../types';
 
@@ -509,18 +511,29 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       try {
         const groups = await fetchGroupsForUser(profile.id);
         dispatch({ type: 'SET_GROUPS', payload: groups });
+        const groupIds = groups.map((g) => g.id);
 
-        if (profile.role === 'PROVIDER') {
-          const services = await fetchServicesForProvider(profile.id);
-          dispatch({ type: 'SET_SERVICES', payload: services });
-        } else if (profile.role === 'DRIVER') {
-          const [services, applications] = await Promise.all([
-            fetchServicesForDriver(profile.id),
-            fetchApplicationsForDriver(profile.id),
-          ]);
-          dispatch({ type: 'SET_SERVICES', payload: services });
-          dispatch({ type: 'SET_APPLICATIONS', payload: applications });
-        }
+        // Las dos identidades conviven en la misma cuenta: el usuario puede
+        // publicar servicios como proveedor y recibir alertas como conductor.
+        const [providerServices, driverServices] = await Promise.all([
+          fetchServicesForProvider(profile.id),
+          fetchServicesForDriver(profile.id, groupIds),
+        ]);
+        const servicesById = new Map<string, ServiceAlert>();
+        [...providerServices, ...driverServices].forEach((s) => servicesById.set(s.id, s));
+        dispatch({ type: 'SET_SERVICES', payload: [...servicesById.values()] });
+
+        // Postulaciones: las mías y las recibidas en mis servicios (así al
+        // proveedor le llega la tarjeta de quién está postulando).
+        const [myApplications, applicationsForMyServices] = await Promise.all([
+          fetchApplicationsForDriver(profile.id),
+          fetchApplicationsForProvider(providerServices.map((s) => s.id)),
+        ]);
+        const applicationsByKey = new Map<string, Application>();
+        [...myApplications, ...applicationsForMyServices].forEach((a) =>
+          applicationsByKey.set(`${a.serviceId}:${a.driverId}`, a)
+        );
+        dispatch({ type: 'SET_APPLICATIONS', payload: [...applicationsByKey.values()] });
       } catch (err) {
         console.error('[MockStore] Error loading from Supabase:', err);
       }
@@ -542,6 +555,15 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
   // Sincronización en tiempo real
   useRealtimeServices((service) => {
+    // Solo aceptamos lo que corresponde a alguna de las dos identidades (ver
+    // src/lib/visibility.ts): antes entraba cualquier fila y por eso todos veían
+    // los servicios de todos.
+    const groupIds = state.groups.map((g) => g.id);
+    const myId = profile?.id;
+    const isRelevant =
+      isVisibleAsProvider(service, myId) || isVisibleAsDriver(service, myId, groupIds);
+    if (!isRelevant) return;
+
     const exists = state.services.some((s) => s.id === service.id);
     dispatch({ type: exists ? 'UPDATE_SERVICE' : 'ADD_SERVICE', payload: service });
   });

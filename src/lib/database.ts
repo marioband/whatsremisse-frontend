@@ -116,15 +116,43 @@ export async function fetchServicesForProvider(providerId: string): Promise<Serv
   return (data || []).map(mapServiceAlertFromDb);
 }
 
-export async function fetchServicesForDriver(driverId: string): Promise<ServiceAlert[]> {
+/**
+ * Servicios que puede ver un conductor: los que siguen abiertos y se
+ * compartieron a alguno de sus grupos, mas los que ya tiene asignados. Nunca
+ * los publicados por el mismo: esos viven en la pestana Proveedor.
+ */
+export async function fetchServicesForDriver(
+  driverId: string,
+  groupIds: string[] = []
+): Promise<ServiceAlert[]> {
   if (!isSupabaseConfigured) return [];
-  const { data, error } = await supabase
+
+  const rows: DbServiceAlert[] = [];
+
+  const assigned = await supabase
     .from('service_alerts')
     .select('*')
-    .or(`status.eq.STATUS_OPEN,assigned_driver_id.eq.${driverId}`)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(mapServiceAlertFromDb);
+    .eq('assigned_driver_id', driverId);
+  if (assigned.error) throw assigned.error;
+  rows.push(...((assigned.data || []) as DbServiceAlert[]));
+
+  if (groupIds.length > 0) {
+    const shared = await supabase
+      .from('service_alerts')
+      .select('*')
+      .eq('status', 'STATUS_OPEN')
+      .in('group_id', groupIds)
+      .neq('provider_id', driverId);
+    if (shared.error) throw shared.error;
+    rows.push(...((shared.data || []) as DbServiceAlert[]));
+  }
+
+  const byId = new Map<string, ServiceAlert>();
+  rows.forEach((row) => byId.set(row.id, mapServiceAlertFromDb(row)));
+
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 }
 
 export async function fetchApplicationsForService(serviceId: string): Promise<Application[]> {
@@ -145,6 +173,18 @@ export async function fetchApplicationsForDriver(driverId: string): Promise<Appl
     .select('*')
     .eq('driver_id', driverId)
     .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapApplicationFromDb);
+}
+
+/** Postulaciones recibidas en los servicios de un proveedor. */
+export async function fetchApplicationsForProvider(serviceIds: string[]): Promise<Application[]> {
+  if (!isSupabaseConfigured || serviceIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('applications')
+    .select('*')
+    .in('service_id', serviceIds)
+    .order('order', { ascending: true });
   if (error) throw error;
   return (data || []).map(mapApplicationFromDb);
 }
