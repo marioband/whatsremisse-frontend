@@ -8,19 +8,21 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 
+import logoWhatsRemisse from '../../assets/logo-whatsremisse.png';
 import { useAuth } from '../context/AuthContext';
 import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type RegisterNav = StackNavigationProp<RootStackParamList, 'Register'>;
 
-// Diseño original de la pantalla de registro.
-const DARK_BG = '#383838';
-const BUTTON_BLUE = '#2B3B9E';
+// Colores de marca.
+const BRAND_BLACK = '#333333';
+const BRAND_BLUE = '#35458F';
 const FIELD_BG = '#F5F5F5';
 const PLACEHOLDER = '#B5B5B5';
 
@@ -67,18 +69,9 @@ export function RegisterScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Logo: globo con silueta de persona con traje */}
+      {/* Logo de marca */}
       <View style={styles.logoBlock}>
-        <View style={styles.bubbleWrapper}>
-          <View style={styles.bubbleRing} />
-          <View style={styles.bubbleTail} />
-          <View style={styles.person}>
-            <View style={styles.head} />
-            <View style={styles.torso}>
-              <View style={styles.suitCollar} />
-            </View>
-          </View>
-        </View>
+        <Image source={logoWhatsRemisse} style={styles.logo} resizeMode="contain" />
         <Text style={styles.brand}>WhatsRemisse</Text>
       </View>
 
@@ -110,84 +103,25 @@ export function RegisterScreen() {
   );
 }
 
-const BUBBLE_SIZE = 118;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: BRAND_BLACK,
     paddingHorizontal: 20,
   },
   logoBlock: {
     alignItems: 'center',
-    marginTop: 48,
+    marginTop: 44,
   },
-  bubbleWrapper: {
-    width: BUBBLE_SIZE,
-    height: BUBBLE_SIZE + 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bubbleRing: {
-    width: BUBBLE_SIZE,
-    height: BUBBLE_SIZE,
-    borderRadius: BUBBLE_SIZE / 2,
-    borderWidth: 9,
-    borderColor: '#fff',
-    position: 'absolute',
-    top: 0,
-  },
-  bubbleTail: {
-    position: 'absolute',
-    left: 22,
-    bottom: 0,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 15,
-    borderRightWidth: 15,
-    borderTopWidth: 30,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#fff',
-    transform: [{ rotate: '-12deg' }],
-  },
-  person: {
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  head: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    marginBottom: 3,
-  },
-  torso: {
-    width: 64,
-    height: 40,
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  suitCollar: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 12,
-    borderRightWidth: 12,
-    borderTopWidth: 34,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: DARK_BG,
+  logo: {
+    width: 118,
+    height: 127,
   },
   brand: {
     color: '#fff',
     fontSize: 26,
     fontWeight: 'bold',
-    marginTop: 6,
+    marginTop: 8,
     letterSpacing: 0.2,
   },
   input: {
@@ -200,15 +134,15 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
   },
+  spacer: {
+    flex: 1,
+  },
   footer: {
     alignItems: 'center',
     paddingBottom: 30,
   },
-  spacer: {
-    flex: 1,
-  },
   button: {
-    backgroundColor: BUTTON_BLUE,
+    backgroundColor: BRAND_BLUE,
     borderRadius: 5,
     paddingVertical: 7,
     paddingHorizontal: 28,
