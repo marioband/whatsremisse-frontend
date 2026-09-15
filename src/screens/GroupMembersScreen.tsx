@@ -17,23 +17,24 @@ export function GroupMembersScreen() {
   const navigation = useNavigation<MembersNav>();
   const route = useRoute<MembersRoute>();
   const { groupId, groupName } = route.params;
-  const { role, groups, members, updateMemberRole, removeMember, loadGroupMembers } =
+  const { role, groups, members, updateMemberRole, removeMember, loadGroupMembers, reloadGroups } =
     useMockStore();
   const { session } = useAuth();
 
-  // Rol del usuario en ESTE grupo: el creador (groups.owner_id) siempre cuenta
-  // como owner, y si el grupo todavía no está cargado caemos al rol de la
-  // pestaña. El + se muestra cuando puede agregar; quien autoriza de verdad el
-  // alta es Supabase (política RLS de group_members).
+  // Rol del usuario en ESTE grupo: el creador (groups.owner_id) siempre es owner;
+  // si no lo es, manda su fila de miembro. Es el mismo criterio que aplica la
+  // política RLS de group_members: solo owner y admin pueden dar de alta.
   const fallbackRole: 'owner' | 'admin' | 'member' =
     role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member';
-  // El rol se usa solo para el menú de mantener pulsado (asignar admin / quitar);
-  // el botón de añadir ya no depende de él.
   const viewerGroupRole = rolEnGrupo(groups, groupId, session?.user?.id, fallbackRole);
+  const canAddMembers = viewerGroupRole === 'owner' || viewerGroupRole === 'admin';
 
   useEffect(() => {
+    // Refrescamos grupos (rol y creador) e integrantes al abrir la pantalla: el
+    // permiso mostrado no debe depender de lo cargado al inicio de la sesión.
+    reloadGroups();
     loadGroupMembers(groupId);
-  }, [groupId, loadGroupMembers]);
+  }, [groupId, loadGroupMembers, reloadGroups]);
 
   const groupMembers = useMemo(() => members[groupId] || [], [members, groupId]);
 
@@ -121,16 +122,19 @@ export function GroupMembersScreen() {
         ListEmptyComponent={<Text style={styles.emptyText}>No hay integrantes</Text>}
       />
 
-      {/* FAB */}
-      {/* Siempre visible: quién puede dar de alta lo decide Supabase (política
-          RLS de group_members) y el error se muestra en pantalla. Ocultarlo
-          según el rol nos dejó dos veces sin forma de añadir integrantes. */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate('AddParticipant', { groupId, groupName })}
-      >
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
+      {/* FAB: solo para owner/admin, igual que la política RLS de group_members */}
+      {canAddMembers ? (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => navigation.navigate('AddParticipant', { groupId, groupName })}
+        >
+          <Text style={styles.fabIcon}>+</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.memberNote}>
+          Solo el propietario o un administrador del grupo pueden agregar integrantes
+        </Text>
+      )}
     </SafeAreaView>
   );
 }
@@ -213,6 +217,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#888',
     marginTop: 40,
+  },
+  memberNote: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 28,
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 13,
+    paddingHorizontal: 24,
   },
   fab: {
     position: 'absolute',

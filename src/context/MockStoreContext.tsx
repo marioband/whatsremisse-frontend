@@ -72,24 +72,12 @@ export function esPropietarioDelGrupo(
   return (members[groupId] || []).some((m) => m.id === memberId && m.role === 'owner');
 }
 
-/** El rol más permisivo de los dos (owner > admin > member). */
-function rolMasPermisivo(
-  a: 'owner' | 'admin' | 'member',
-  b: 'owner' | 'admin' | 'member'
-): 'owner' | 'admin' | 'member' {
-  if (a === 'owner' || b === 'owner') return 'owner';
-  if (a === 'admin' || b === 'admin') return 'admin';
-  return 'member';
-}
-
 /**
  * Rol del usuario en un grupo. El creador (groups.owner_id) siempre cuenta como
- * owner, aunque su fila de miembro diga otra cosa.
- *
- * Si todavía no tenemos el dato del creador (grupos cargados antes de que
- * existiera ese campo, o sin sesión) no podemos afirmar que el usuario no sea
- * owner: en ese caso devolvemos el rol más permisivo para no esconder acciones
- * que quizá sí puede hacer (pasó dos veces con el botón + de integrantes).
+ * owner, aunque su fila de miembro diga otra cosa; si el usuario no es el
+ * creador, manda su fila de miembro. Con eso el permiso que se muestra en la app
+ * coincide con lo que va a permitir la política RLS de group_members:
+ * solo owner y admin pueden agregar integrantes.
  */
 export function rolEnGrupo(
   groups: GroupItem[],
@@ -100,7 +88,6 @@ export function rolEnGrupo(
   const grupo = groups.find((g) => g.id === groupId);
   if (!grupo) return fallbackRole;
   if (userId && grupo.ownerId === userId) return 'owner';
-  if (!userId || !grupo.ownerId) return rolMasPermisivo(grupo.role, fallbackRole);
   return grupo.role;
 }
 
@@ -485,6 +472,7 @@ interface MockContextValue extends MockState {
   reduceDriverDebt: (amount: number) => void;
   setDebtThreshold: (amount: number) => void;
   loadGroupMembers: (groupId: string) => Promise<void>;
+  reloadGroups: () => Promise<void>;
   payCommission: (serviceId: string) => void;
   confirmDriverPayment: (serviceId: string) => void;
   toggleFavoriteGroup: (groupId: string) => void;
@@ -677,6 +665,19 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Refresca los grupos del usuario (rol dentro de cada grupo y creador). Se usa
+  // al abrir la pantalla de integrantes para que el permiso mostrado no dependa
+  // de datos cargados al inicio de la sesión.
+  const reloadGroups = useCallback(async () => {
+    if (!isSupabaseConfigured || !profile?.id) return;
+    try {
+      const groups = await fetchGroupsForUser(profile.id);
+      dispatch({ type: 'SET_GROUPS', payload: groups });
+    } catch (err) {
+      console.error('[MockStore] reloadGroups error:', err);
+    }
+  }, [profile?.id]);
+
   const value: MockContextValue = {
     ...state,
     setRole: (role) => dispatch({ type: 'SET_ROLE', payload: role }),
@@ -748,6 +749,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     reduceDriverDebt: (amount) => dispatch({ type: 'REDUCE_DRIVER_DEBT', payload: amount }),
     setDebtThreshold: (amount) => dispatch({ type: 'SET_DEBT_THRESHOLD', payload: amount }),
     loadGroupMembers,
+    reloadGroups,
     payCommission: async (serviceId) => {
       await persistService(serviceId, { commission_paid: true });
       dispatch({ type: 'PAY_COMMISSION', payload: { serviceId } });
