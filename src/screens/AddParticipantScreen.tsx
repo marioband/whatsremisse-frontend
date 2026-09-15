@@ -57,7 +57,12 @@ function mensajeDeAlta(err: unknown): string {
     minusculas.includes('42501') ||
     minusculas.includes('permission denied')
   ) {
-    return `Supabase rechazó el alta por permisos (políticas RLS de group_members). ${detalle}`;
+    return (
+      'Sin permiso para agregar integrantes en este grupo: tu fila en group_members no es owner/admin. ' +
+      'Pide al propietario que te asigne Administrador (mantener pulsado tu nombre en la lista) ' +
+      'o aplica supabase/migrations/0004_group_rls_recursion_fix.sql para que el propietario del grupo ' +
+      `pueda agregar aunque su fila de miembro falte. · ${detalle}`
+    );
   }
   return `No se pudo añadir al integrante: ${detalle}`;
 }
