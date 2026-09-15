@@ -15,6 +15,8 @@
  * funcionando con lo que escribe el usuario: eso nunca se bloquea).
  */
 
+import { registrarLlamada } from './medidor';
+
 export interface SugerenciaDireccion {
   /** Identificador del lugar (place_id) para pedir el detalle. */
   placeId: string;
@@ -144,6 +146,7 @@ export async function sugerirDirecciones(
   const texto = input.trim();
   if (!hayApiDeDirecciones() || texto.length < 4) return [];
 
+  registrarLlamada('places:autocompletado');
   const respuesta = await pedir(
     URL_AUTOCOMPLETADO,
     {
@@ -176,6 +179,7 @@ export async function detalleDeDireccion(
 ): Promise<DireccionElegida | null> {
   if (!hayApiDeDirecciones()) return null;
 
+  registrarLlamada('places:detalle');
   const url = `${URL_DETALLE}/${encodeURIComponent(placeId)}?languageCode=es&sessionToken=${encodeURIComponent(sessionToken)}`;
   const respuesta = (await pedir(
     url,

@@ -10,6 +10,13 @@
  *   - origen -> destino (lo que mide el servicio).
  */
 
+import { leerCache, guardarCache, limpiarCacheConPrefijo } from './cache';
+import {
+  redondearCoordenada,
+  TTL_RUTA_CON_POSICION_MS,
+  TTL_RUTA_ENTRE_DIRECCIONES_MS,
+} from './geo';
+import { registrarAhorro, registrarLlamada, registrarResumenEnConsola } from './medidor';
 import { claveDeGoogle, hayApiDeDirecciones } from './places';
 
 const URL_RUTA = 'https://routes.googleapis.com/directions/v2:computeRoutes';
@@ -51,6 +58,27 @@ function comoWaypoint(punto: Punto): Record<string, unknown> {
     return { location: { latLng: { latitude: punto.lat, longitude: punto.lng } } };
   }
   return { address: punto.address || '' };
+}
+
+/**
+ * Deja el punto en la forma que se va a usar (y a cachear).
+ *
+ * Las coordenadas se redondean a bloques de 500 m: mientras el conductor se
+ * mueve dentro del mismo bloque la medida se reutiliza, así que una posición GPS
+ * que cambia cada pocos metros NO genera una llamada nueva. La dirección se
+ * normaliza (sin espacios de más) para que la misma dirección comparta entrada.
+ */
+function normalizarPunto(punto: Punto): Punto {
+  if (typeof punto.lat === 'number' && typeof punto.lng === 'number') {
+    const redondeada = redondearCoordenada({ lat: punto.lat, lng: punto.lng });
+    return { lat: redondeada.lat, lng: redondeada.lng };
+  }
+  return { address: (punto.address || '').trim() };
+}
+
+/** ¿Alguno de los extremos es la posición del conductor? (caduca rápido) */
+function llevaPosicion(punto: Punto): boolean {
+  return typeof punto.lat === 'number' && typeof punto.lng === 'number';
 }
 
 /** Cuerpo de la petición (aparte, para poder probarlo sin red). */
@@ -105,7 +133,13 @@ export function formatearEstimacion(medida: MedidaRuta | null): string {
   return `(${minutos} min ${kmTexto} km)`;
 }
 
-/** Mide una ruta (con caché). Devuelve null si no hay clave o si falla. */
+/**
+ * Mide una ruta reutilizando todo lo posible.
+ *
+ * Orden: memoria -> caché persistente (sobrevive a recargar) -> Google. Las
+ * medidas que dependen de la posición del conductor caducan a los 5 minutos; las
+ * que son entre dos direcciones (fijas para un servicio) duran 30 días.
+ */
 export async function medirRuta(
   origen: Punto,
   destino: Punto,
@@ -113,17 +147,34 @@ export async function medirRuta(
 ): Promise<MedidaRuta | null> {
   if (!hayApiDeRutas()) return null;
   // Cada extremo sirve si tiene coordenadas O dirección escrita (el caso
-
   // conductor -> origen mezcla las dos cosas).
   const utilizable = (punto: Punto) =>
     Boolean(punto.address?.trim()) ||
     (typeof punto.lat === 'number' && typeof punto.lng === 'number');
   if (!utilizable(origen) || !utilizable(destino)) return null;
 
-  const clave = claveDeCache(origen, destino);
-  const guardada = cache.get(clave);
-  if (guardada) return guardada;
+  const origenListo = normalizarPunto(origen);
+  const destinoListo = normalizarPunto(destino);
+  const clave = claveDeCache(origenListo, destinoListo);
+  const ttl =
+    llevaPosicion(origenListo) || llevaPosicion(destinoListo)
+      ? TTL_RUTA_CON_POSICION_MS
+      : TTL_RUTA_ENTRE_DIRECCIONES_MS;
 
+  const enMemoria = cache.get(clave);
+  if (enMemoria) {
+    registrarAhorro('cache');
+    return enMemoria;
+  }
+
+  const persistida = await leerCache<MedidaRuta>(`ruta:${clave}`, ttl);
+  if (persistida) {
+    cache.set(clave, persistida);
+    registrarAhorro('cache');
+    return persistida;
+  }
+
+  registrarLlamada('routes:computeRoutes');
   const controlador = new AbortController();
   const temporizador = setTimeout(() => controlador.abort(), timeoutMs);
   try {
@@ -135,7 +186,7 @@ export async function medirRuta(
         'X-Goog-Api-Key': claveDeGoogle(),
         'X-Goog-FieldMask': CAMPOS_RUTA,
       },
-      body: JSON.stringify(cuerpoDeRuta(origen, destino)),
+      body: JSON.stringify(cuerpoDeRuta(origenListo, destinoListo)),
     });
     if (!respuesta.ok) {
       const detalle = await respuesta.text().catch(() => '');
@@ -144,7 +195,11 @@ export async function medirRuta(
       return null;
     }
     const medida = leerRuta(await respuesta.json());
-    if (medida) cache.set(clave, medida);
+    if (medida) {
+      cache.set(clave, medida);
+      guardarCache(`ruta:${clave}`, medida);
+      registrarResumenEnConsola();
+    }
     return medida;
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -160,7 +215,8 @@ export async function estimacionDeRuta(origen: Punto, destino: Punto): Promise<s
   return formatearEstimacion(await medirRuta(origen, destino));
 }
 
-/** Solo para pruebas: vacía la caché en memoria. */
+/** Solo para pruebas: vacía la caché en memoria y la persistente de rutas. */
 export function limpiarCacheDeRutas(): void {
   cache.clear();
+  limpiarCacheConPrefijo('ruta:');
 }

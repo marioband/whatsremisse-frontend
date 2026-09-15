@@ -2,8 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, AuthError } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
+import { configurarAlmacen } from '../lib/cache';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
+
+// El almacén del dispositivo se registra una sola vez al cargar la app: es lo que
+// usa la caché persistente de rutas (sobrevive a recargar la aplicación).
+configurarAlmacen(AsyncStorage as never);
 
 interface AuthContextValue {
   session: Session | null;

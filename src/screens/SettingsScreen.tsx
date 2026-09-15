@@ -4,6 +4,10 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
+import { limpiarCacheCompleta } from '../lib/cache';
+import { registrarResumenEnConsola, reiniciarContadores, textoDelResumen } from '../lib/medidor';
+import { limpiarCacheDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SettingsNav = StackNavigationProp<RootStackParamList, 'Settings'>;
@@ -37,6 +41,30 @@ export function SettingsScreen() {
   const handleNavigate = (route: keyof RootStackParamList, params?: Record<string, unknown>) => {
     // @ts-ignore - navegación dinámica a rutas registradas
     navigation.navigate(route, params);
+  };
+
+  /**
+   * Diagnóstico de llamadas externas (solo en desarrollo): muestra cuántas
+   * llamadas a Google se hicieron y cuántas se evitaron. Es la forma de comprobar
+   * que el crecimiento de alertas y posiciones no dispara el costo.
+   */
+  const mostrarMedidor = () => {
+    registrarResumenEnConsola();
+    Alert.alert(
+      'Llamadas externas (dev)',
+      `${textoDelResumen()}\n\nAl cerrar se reinicia el contador y se borra la caché de rutas.`,
+      [
+        { text: 'Cerrar', style: 'cancel' },
+        {
+          text: 'Reiniciar',
+          onPress: () => {
+            reiniciarContadores();
+            limpiarCacheDeRutas();
+            limpiarCacheCompleta();
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -75,6 +103,15 @@ export function SettingsScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Diagnóstico de llamadas externas: solo en desarrollo */}
+        {__DEV__ && (
+          <TouchableOpacity style={styles.devItem} onPress={mostrarMedidor} activeOpacity={0.7}>
+            <Text style={styles.menuIcon}>📉</Text>
+            <Text style={styles.menuLabel}>Llamadas a Google (dev)</Text>
+            <Text style={styles.menuArrow}>&gt;</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -178,5 +215,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#aaa',
     fontWeight: '300',
+  },
+  devItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
 });

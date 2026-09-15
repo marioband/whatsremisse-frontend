@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { elegirCandidatosPorCercania, MAXIMO_CANDIDATOS_ETA } from '../lib/geo';
 import { obtenerUbicacion, ultimaUbicacion } from '../lib/geolocation';
+import { registrarAhorro } from '../lib/medidor';
 import { formatearEstimacion, hayApiDeRutas, medirRuta } from '../lib/routes';
 import { ServiceAlert } from '../types';
 
@@ -9,19 +11,20 @@ import { ServiceAlert } from '../types';
  *   - `origen`: del conductor al punto de origen;
  *   - `destino`: del origen al destino del servicio.
  *
- * Se pide solo para los primeros servicios de la lista (`MAXIMO_POR_PANTALLA`),
- * porque cada medida es una llamada facturable a Routes API; el resultado se
- * guarda en memoria (también en `lib/routes.ts`) y no se repite.
- *
- * Si no hay premium, no hay clave de Google o el navegador no da la ubicación,
- * devuelve un objeto vacío y la tarjeta simplemente no muestra las medidas.
+ * Reglas de ahorro que aplica este hook (antes de gastar una sola llamada):
+ *   1. Nada si el conductor no es premium o no hay clave de Google.
+ *   2. Filtro propio (haversine, gratis): se eligen solo los `MAXIMO_CANDIDATOS_ETA`
+ *      servicios más cercanos; el resto se descarta sin consultar nada.
+ *   3. Las medidas se reutilizan: la posición se redondea a bloques de 500 m y la
+ *      caché persistente dura 5 minutos, así que moverse por la ciudad no genera
+ *      una consulta por cada actualización de GPS. El tramo origen→destino (fijo
+ *      para un servicio) se guarda 30 días.
  */
 export interface EstimacionesDeServicio {
   origen?: string;
   destino?: string;
 }
 
-const MAXIMO_POR_PANTALLA = 6;
 const PAUSA_ENTRE_LLAMADAS_MS = 200;
 
 export function useEstimacionesDeRuta(
@@ -31,30 +34,38 @@ export function useEstimacionesDeRuta(
   const [estimaciones, setEstimaciones] = useState<Record<string, EstimacionesDeServicio>>({});
   const yaPedidos = useRef<Set<string>>(new Set());
 
-  const objetivos = useMemo(
-    () =>
-      servicios
-        .filter((s) => Boolean(s.origin_address && s.destination_address))
-        .slice(0, MAXIMO_POR_PANTALLA),
+  // Identidad de lo que hay que medir: evita que un re-render dispare trabajo.
+  const clave = useMemo(
+    () => servicios.map((s) => `${s.id}|${s.origin_address}|${s.destination_address}`).join('~'),
     [servicios]
   );
 
-  // Identidad de lo que hay que medir: evita volver a pedir en cada render.
-  const clave = useMemo(
-    () => objetivos.map((s) => `${s.id}|${s.origin_address}|${s.destination_address}`).join('~'),
-    [objetivos]
-  );
-
   useEffect(() => {
-    if (!habilitado || objetivos.length === 0 || !hayApiDeRutas()) return;
+    if (!habilitado || servicios.length === 0 || !hayApiDeRutas()) return;
     let vigente = true;
 
     (async () => {
       // La ubicación se pide una sola vez por pantalla (y solo si hace falta).
       const ubicacion = ultimaUbicacion() || (await obtenerUbicacion());
+      const posicion = ubicacion ? { lat: ubicacion.lat, lng: ubicacion.lng } : null;
+
+      // Escalón gratis: coordenadas propias + distancia en línea recta.
+      const entradas = servicios.map((servicio) => ({
+        servicio,
+        origen:
+          typeof servicio.origin_lat === 'number' &&
+          typeof servicio.origin_lng === 'number' &&
+          servicio.origin_lat !== 0
+            ? { lat: servicio.origin_lat, lng: servicio.origin_lng }
+            : null,
+      }));
+
+      const { candidatos, descartados } = elegirCandidatosPorCercania(posicion, entradas);
+      if (descartados.length > 0) registrarAhorro('cercania', descartados.length);
+
       const nuevas: Record<string, EstimacionesDeServicio> = {};
 
-      for (const servicio of objetivos) {
+      for (const { servicio } of candidatos) {
         if (!vigente) return;
         const marca = `${servicio.id}|${servicio.origin_address}|${servicio.destination_address}`;
         if (yaPedidos.current.has(marca)) continue;
@@ -72,10 +83,8 @@ export function useEstimacionesDeRuta(
         };
 
         const haciaDestino = formatearEstimacion(await medirRuta(puntoOrigen, puntoDestino));
-        const haciaOrigen = ubicacion
-          ? formatearEstimacion(
-              await medirRuta({ lat: ubicacion.lat, lng: ubicacion.lng }, puntoOrigen)
-            )
+        const haciaOrigen = posicion
+          ? formatearEstimacion(await medirRuta(posicion, puntoOrigen))
           : '';
 
         if (!vigente) return;
@@ -101,3 +110,6 @@ export function useEstimacionesDeRuta(
 
   return estimaciones;
 }
+
+/** Cuántos servicios como máximo se miden por pantalla (se exporta para probarlo). */
+export const MAXIMO_SERVICIOS_MEDIDOS = MAXIMO_CANDIDATOS_ETA;

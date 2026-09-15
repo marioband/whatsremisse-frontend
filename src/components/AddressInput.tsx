@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { convieneBuscar, filasDeSugerencias, FilaSugerencia } from '../lib/addressSuggestions';
+import { registrarAhorro } from '../lib/medidor';
 import {
   detalleDeDireccion,
   hayApiDeDirecciones,
@@ -114,6 +115,8 @@ export function AddressInput({
   const elegirMiTexto = (texto: string) => {
     onChangeText(texto);
     onConfirmar({ texto, lat: null, lng: null, escritaPorElUsuario: true });
+    // Elegir su propia escritura no gasta ninguna llamada: no hay que geocodificar.
+    registrarAhorro('texto-del-usuario');
     cerrar();
   };
 
