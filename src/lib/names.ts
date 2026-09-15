@@ -64,3 +64,36 @@ export function memberRoleLabel(role?: string | null): string {
   const value = (role || '').trim().toLowerCase();
   return MEMBER_ROLE_LABELS[value] || '';
 }
+
+/**
+ * Nomenclatura corta que va a la derecha de la píldora del integrante, como en
+ * la referencia de diseño: el propietario primero y luego los administradores
+ * que él asignó. Los integrantes normales no llevan etiqueta.
+ */
+export function groupRoleBadgeLabel(role?: string | null): string {
+  const value = (role || '').trim().toLowerCase();
+  if (value === 'owner') return 'Propietario';
+  if (value === 'admin') return 'Admin.';
+  return '';
+}
+
+const ROLE_RANK: Record<string, number> = { owner: 0, admin: 1, member: 2 };
+
+/**
+ * Orden de la lista: propietario, luego los administradores y al final los
+ * integrantes; dentro de cada grupo, por nombre. El orden de PostgREST es
+ * arbitrario, así que no se puede confiar en el que llega.
+ */
+export function sortMembersByRole<T extends { name: string; role: 'owner' | 'admin' | 'member' }>(
+  members: T[]
+): T[] {
+  return [...members].sort((a, b) => {
+    const rankA = ROLE_RANK[a.role] ?? 3;
+    const rankB = ROLE_RANK[b.role] ?? 3;
+    if (rankA !== rankB) return rankA - rankB;
+    // Sin nombre conocido, al final del grupo (no debe colarse arriba).
+    const keyA = displayName([a.name], '\uffff');
+    const keyB = displayName([b.name], '\uffff');
+    return keyA.localeCompare(keyB, 'es');
+  });
+}

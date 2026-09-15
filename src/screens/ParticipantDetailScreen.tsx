@@ -15,7 +15,13 @@ import { useAuth } from '../context/AuthContext';
 import { esPropietarioDelGrupo, rolEnGrupo, useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { fetchPublicProfile, PublicProfile } from '../lib/database';
-import { displayName, initialOf, roleLabel } from '../lib/names';
+import {
+  displayName,
+  groupRoleBadgeLabel,
+  initialOf,
+  memberRoleLabel,
+  roleLabel,
+} from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type DetailNav = StackNavigationProp<RootStackParamList, 'ParticipantDetail'>;
@@ -169,11 +175,14 @@ export function ParticipantDetailScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
-          {/* Avatar */}
+          {/* Avatar + rol dentro del grupo */}
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initialOf(shownName)}</Text>
             </View>
+            {groupRoleBadgeLabel(currentMemberRole) ? (
+              <Text style={styles.groupRoleBadge}>{memberRoleLabel(currentMemberRole)}</Text>
+            ) : null}
           </View>
 
           {/* Diagnóstico: antes la pantalla salía vacía sin decir por qué. */}
@@ -330,6 +339,12 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
     color: DARK_BG,
+  },
+  groupRoleBadge: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '600',
+    color: BLUE,
   },
   errorBox: {
     backgroundColor: '#FDECEA',

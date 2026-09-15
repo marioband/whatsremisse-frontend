@@ -6,13 +6,15 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from
 import { useAuth } from '../context/AuthContext';
 import { useMockStore, GroupMember, rolEnGrupo } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
-import { displayName, initialOf, memberRoleLabel } from '../lib/names';
+import { displayName, groupRoleBadgeLabel, initialOf, sortMembersByRole } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type MembersNav = StackNavigationProp<RootStackParamList, 'GroupMembers'>;
 type MembersRoute = RouteProp<RootStackParamList, 'GroupMembers'>;
 
 const DARK_BG = '#2D2D2D';
+const BLUE = '#3F51B5';
+const AVATAR_BG = '#1A1A1A';
 
 export function GroupMembersScreen() {
   const navigation = useNavigation<MembersNav>();
@@ -37,7 +39,9 @@ export function GroupMembersScreen() {
     loadGroupMembers(groupId);
   }, [groupId, loadGroupMembers, reloadGroups]);
 
-  const groupMembers = useMemo(() => members[groupId] || [], [members, groupId]);
+  // Orden pedido: propietario, luego los administradores que él asignó y al
+  // final los integrantes. Dentro de cada rol, por nombre.
+  const groupMembers = useMemo(() => sortMembersByRole(members[groupId] || []), [members, groupId]);
 
   // Integrantes cuya fila de `profiles` no se pudo leer (o que todavía no
   // completaron sus datos): sin esto la pantalla mostraba UUIDs y campos vacíos
@@ -90,7 +94,10 @@ export function GroupMembersScreen() {
 
   const renderMember = ({ item }: { item: GroupMember }) => {
     const nombre = displayName([item.name]);
-    const rol = memberRoleLabel(item.role);
+    const badge = groupRoleBadgeLabel(item.role);
+    // Si no hay rol que anunciar y tampoco se pudo leer su perfil, se avisa en
+    // el lugar de la etiqueta en vez de dejar la fila muda.
+    const etiqueta = badge || (item.profileFound === false ? 'Sin datos' : '');
     return (
       <TouchableOpacity
         style={styles.memberPill}
@@ -101,20 +108,17 @@ export function GroupMembersScreen() {
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initialOf(nombre)}</Text>
         </View>
-        <View style={styles.memberInfo}>
-          <Text style={styles.memberName} numberOfLines={1}>
-            {nombre}
+        <Text style={styles.memberName} numberOfLines={1}>
+          {nombre}
+        </Text>
+        {etiqueta ? (
+          <Text
+            style={[styles.memberRole, badge ? styles.memberRoleStrong : styles.memberRoleMuted]}
+            numberOfLines={1}
+          >
+            {etiqueta}
           </Text>
-          {item.profileFound === false ? (
-            <Text style={styles.memberSub} numberOfLines={1}>
-              Sin datos de perfil
-            </Text>
-          ) : rol && rol !== 'Integrante' ? (
-            <Text style={styles.memberSub} numberOfLines={1}>
-              {rol}
-            </Text>
-          ) : null}
-        </View>
+        ) : null}
       </TouchableOpacity>
     );
   };
@@ -220,16 +224,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F2F2F2',
-    borderRadius: 30,
-    padding: 12,
-    paddingHorizontal: 16,
+    borderRadius: 23,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
     marginVertical: 8,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: DARK_BG,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: AVATAR_BG,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -238,19 +242,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  memberInfo: {
-    flex: 1,
-    marginLeft: 4,
-  },
   memberName: {
+    flex: 1,
+    marginLeft: 12,
     fontSize: 16,
     fontWeight: '600',
     color: '#111',
   },
-  memberSub: {
-    fontSize: 12,
-    color: '#777',
-    marginTop: 2,
+  // Nomenclatura de la referencia: a la derecha, en azul.
+  memberRole: {
+    marginLeft: 8,
+    fontSize: 15,
+    color: BLUE,
+  },
+  memberRoleStrong: {
+    fontWeight: '600',
+  },
+  memberRoleMuted: {
+    color: '#999',
   },
   warnText: {
     marginTop: 18,
