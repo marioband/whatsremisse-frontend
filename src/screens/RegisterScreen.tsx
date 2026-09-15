@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type RegisterNav = StackNavigationProp<RootStackParamList, 'Register'>;
@@ -46,10 +47,10 @@ export function RegisterScreen() {
       await requestOtp(phone);
       Alert.alert('Código enviado', `Se envió el código al ${phone}.`);
       navigation.navigate('Login', { phone });
-    } catch (err: any) {
-      const message = err?.message || 'Ocurrió un error inesperado.';
+    } catch (err) {
+      const message = describeError(err);
       setError(message);
-      Alert.alert('Error', message);
+      Alert.alert('No se pudo continuar', message);
     } finally {
       setLoading(false);
     }

@@ -143,23 +143,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Si el usuario no existe, lo creamos automáticamente
-    if (isInvalidCredentialsError(signInError)) {
-      const { error: signUpError } = await supabase.auth.signUp({
-        phone: inputPhone,
-        password,
-      });
-
-      if (signUpError) throw signUpError;
-
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setSession(data.session);
-        await loadProfile(data.session.user.id);
-        return true;
-      }
+    if (!isInvalidCredentialsError(signInError)) {
+      // Cualquier otro fallo (401 del gateway de Supabase, red caída, etc.) debe
+      // llegar a la pantalla con su mensaje real en lugar de devolver un error
+      // genérico que oculta la causa.
+      throw signInError;
     }
 
-    return false;
+    const { error: signUpError } = await supabase.auth.signUp({
+      phone: inputPhone,
+      password,
+    });
+
+    if (signUpError) throw signUpError;
+
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      setSession(data.session);
+      await loadProfile(data.session.user.id);
+      return true;
+    }
+
+    throw new Error(
+      'El registro no devolvió sesión: el proyecto exige confirmación por SMS. ' +
+        'Activa GOTRUE_SMS_AUTOCONFIRM o configura un proveedor de SMS en el stack de Supabase.'
+    );
   };
 
   const signIn = async (inputPhone: string, otp: string): Promise<boolean> => {

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type LoginRoute = RouteProp<RootStackParamList, 'Login'>;
@@ -42,8 +43,8 @@ export function LoginScreen() {
         );
       }
       // La navegación a Main o ProfileSetup la maneja RootNavigator según requiresProfileSetup
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err) {
+      Alert.alert('Error al iniciar sesión', describeError(err));
     } finally {
       setLoading(false);
     }

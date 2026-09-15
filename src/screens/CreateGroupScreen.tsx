@@ -12,27 +12,13 @@ import {
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
+import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type CreateGroupNav = StackNavigationProp<RootStackParamList, 'CreateGroup'>;
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
-
-/**
- * Convierte cualquier error (Supabase/PostgREST, red, etc.) en un texto legible
- * para mostrarlo en un Alert. Nunca deja el fallo en silencio.
- */
-function describeError(err: unknown): string {
-  if (err && typeof err === 'object') {
-    const e = err as { message?: string; details?: string; hint?: string; code?: string };
-    const parts = [e.message, e.code ? `Código: ${e.code}` : undefined, e.details, e.hint].filter(
-      (part): part is string => Boolean(part)
-    );
-    if (parts.length > 0) return parts.join('\n');
-  }
-  return String(err);
-}
 
 export function CreateGroupScreen() {
   const navigation = useNavigation<CreateGroupNav>();
