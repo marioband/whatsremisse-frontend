@@ -1,17 +1,10 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 

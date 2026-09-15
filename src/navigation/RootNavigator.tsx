@@ -4,6 +4,7 @@ import React from 'react';
 
 import { BrandLoader } from '../components/BrandLoader';
 import { useAuth } from '../context/AuthContext';
+import { AlertHost } from '../lib/alert';
 import { AddParticipantScreen } from '../screens/AddParticipantScreen';
 import { AppLockScreen } from '../screens/AppLockScreen';
 import { ApplicantsScreen } from '../screens/ApplicantsScreen';
@@ -72,125 +73,128 @@ export function RootNavigator() {
   if (loading) return <BrandLoader />;
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!session ? (
-          <>
-            <Stack.Screen name="Splash" component={SplashScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-          </>
-        ) : requiresProfileSetup ? (
-          <>
-            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-            <Stack.Screen
-              name="PaymentDetails"
-              component={PaymentDetailsScreen}
-              options={{ headerShown: false }}
-            />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Main" component={HomeScreen} />
-            <Stack.Screen
-              name="ProfileSetup"
-              component={ProfileSetupScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="CreateServiceAlert"
-              component={CreateServiceAlertScreen}
-              options={{ headerShown: true, title: 'Nueva alerta' }}
-            />
-            <Stack.Screen
-              name="CreateService"
-              component={CreateServiceScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="SelectGroupsForService"
-              component={SelectGroupsForServiceScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="CreateGroup"
-              component={CreateGroupScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="GroupMembers"
-              component={GroupMembersScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="AddParticipant"
-              component={AddParticipantScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="ApplicantsScreen"
-              component={ApplicantsScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="GroupChat"
-              component={GroupChatScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="ParticipantDetail"
-              component={ParticipantDetailScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="PaymentDetails"
-              component={PaymentDetailsScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="MyServices"
-              component={MyServicesScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Privacy"
-              component={PrivacyScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="BlockedDrivers"
-              component={BlockedDriversScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="BlockedProviders"
-              component={BlockedProvidersScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="BlockedUserProfile"
-              component={BlockedUserProfileScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="AppLock"
-              component={AppLockScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Membership"
-              component={MembershipScreen}
-              options={{ headerShown: false }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {!session ? (
+            <>
+              <Stack.Screen name="Splash" component={SplashScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+            </>
+          ) : requiresProfileSetup ? (
+            <>
+              <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+              <Stack.Screen
+                name="PaymentDetails"
+                component={PaymentDetailsScreen}
+                options={{ headerShown: false }}
+              />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="Main" component={HomeScreen} />
+              <Stack.Screen
+                name="ProfileSetup"
+                component={ProfileSetupScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="CreateServiceAlert"
+                component={CreateServiceAlertScreen}
+                options={{ headerShown: true, title: 'Nueva alerta' }}
+              />
+              <Stack.Screen
+                name="CreateService"
+                component={CreateServiceScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="SelectGroupsForService"
+                component={SelectGroupsForServiceScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="CreateGroup"
+                component={CreateGroupScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="GroupMembers"
+                component={GroupMembersScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="AddParticipant"
+                component={AddParticipantScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="ApplicantsScreen"
+                component={ApplicantsScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
+              <Stack.Screen
+                name="GroupChat"
+                component={GroupChatScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="ParticipantDetail"
+                component={ParticipantDetailScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="PaymentDetails"
+                component={PaymentDetailsScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="MyServices"
+                component={MyServicesScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Privacy"
+                component={PrivacyScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="BlockedDrivers"
+                component={BlockedDriversScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="BlockedProviders"
+                component={BlockedProvidersScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="BlockedUserProfile"
+                component={BlockedUserProfileScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="AppLock"
+                component={AppLockScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Membership"
+                component={MembershipScreen}
+                options={{ headerShown: false }}
+              />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+      <AlertHost />
+    </>
   );
 }

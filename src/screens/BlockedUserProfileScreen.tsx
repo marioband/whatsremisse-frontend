@@ -9,9 +9,9 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  Alert,
 } from 'react-native';
 
+import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type ProfileNav = StackNavigationProp<RootStackParamList, 'BlockedUserProfile'>;

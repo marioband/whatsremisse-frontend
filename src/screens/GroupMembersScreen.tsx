@@ -1,17 +1,10 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { useMockStore, GroupMember } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type MembersNav = StackNavigationProp<RootStackParamList, 'GroupMembers'>;
@@ -23,15 +16,20 @@ export function GroupMembersScreen() {
   const navigation = useNavigation<MembersNav>();
   const route = useRoute<MembersRoute>();
   const { groupId, groupName } = route.params;
-  const { role, members, updateMemberRole, removeMember, loadGroupMembers } = useMockStore();
+  const { groups, members, updateMemberRole, removeMember, loadGroupMembers } = useMockStore();
 
-  // Simula el rol del viewer dentro del grupo. Para la prueba inicial se usa el rol global.
+  // Manda el rol dentro de ESTE grupo, no el rol global de la app: antes el
+  // botón + aparecía también en grupos ajenos y la operación fallaba en
+  // silencio (el Alert de react-native-web no pinta nada).
   const viewerGroupRole: 'owner' | 'admin' | 'member' =
-    role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member';
+    groups.find((group) => group.id === groupId)?.role ?? 'member';
 
   useEffect(() => {
     loadGroupMembers(groupId);
-  }, [groupId, loadGroupMembers]);
+    // loadGroupMembers cambia de identidad en cada render del store; si entra en
+    // las dependencias este efecto dispara peticiones sin parar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId]);
 
   const groupMembers = useMemo(() => members[groupId] || [], [members, groupId]);
 

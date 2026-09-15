@@ -1,16 +1,9 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  Switch,
-  Alert,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Switch } from 'react-native';
 
+import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type AppLockNav = StackNavigationProp<RootStackParamList, 'AppLock'>;

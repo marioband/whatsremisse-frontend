@@ -9,10 +9,10 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  Alert,
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 

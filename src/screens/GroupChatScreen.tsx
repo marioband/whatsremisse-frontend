@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 
@@ -18,6 +17,7 @@ import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeMessages } from '../hooks/useRealtimeMessages';
+import { Alert } from '../lib/alert';
 import { ChatMessage, fetchMessagesForGroup, insertMessage } from '../lib/database';
 import { RootStackParamList } from '../navigation/RootNavigator';
 

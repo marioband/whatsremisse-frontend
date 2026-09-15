@@ -6,12 +6,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { Alert } from '../lib/alert';
 import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 

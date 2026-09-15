@@ -11,12 +11,12 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Image,
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore, UserProfile } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 

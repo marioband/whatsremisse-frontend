@@ -8,11 +8,11 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { fetchProfileById, PublicProfile } from '../lib/database';
 import { RootStackParamList } from '../navigation/RootNavigator';
 

@@ -1,8 +1,9 @@
 import { useNavigation } from '@react-navigation/native';
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, Button, ScrollView, StyleSheet } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { Alert } from '../lib/alert';
 import { invokeFunction } from '../lib/supabase';
 
 export function CreateServiceAlertScreen() {

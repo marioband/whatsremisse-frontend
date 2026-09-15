@@ -1,19 +1,12 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { isVisibleAsDriver } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';

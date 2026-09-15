@@ -8,7 +8,6 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   FlatList,
 } from 'react-native';
 
@@ -25,6 +24,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useServiceProgress } from '../hooks/useServiceProgress';
+import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type ChatNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;

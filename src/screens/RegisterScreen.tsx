@@ -7,7 +7,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +14,7 @@ import {
 
 import logoWhatsRemisse from '../../assets/logo-whatsremisse.png';
 import { useAuth } from '../context/AuthContext';
+import { Alert } from '../lib/alert';
 import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 

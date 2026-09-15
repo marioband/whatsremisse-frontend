@@ -10,11 +10,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 
