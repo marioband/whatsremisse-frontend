@@ -23,6 +23,10 @@ import {
   formatearFecha,
   formatearHora,
   formatearHora24,
+  horaCoherente,
+  inicioDelDia,
+  mismoDia,
+  primerInstanteValido,
   proximaHoraRedondeada,
 } from '../lib/datetime';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -77,6 +81,27 @@ export function CreateServiceScreen() {
   const [abriendoCalendario, setAbriendoCalendario] = useState(false);
   const [abriendoReloj, setAbriendoReloj] = useState(false);
 
+  // Bloqueo de coherencia: para hoy, la primera hora agendable es el siguiente
+  // tramo de 5 minutos (a las 11:15 a.m. ya no se pueden elegir las 11:00 a.m.).
+  const ahora = new Date();
+  const esHoy = mismoDia(fechaServicio, ahora);
+  const desdeHoy = primerInstanteValido(fechaServicio, ahora);
+  const restringeHoy = esHoy && desdeHoy.getTime() > inicioDelDia(fechaServicio).getTime();
+  const momentoProgramado = combinarFechaYHora(fechaServicio, horaServicio);
+  const coherenciaPendiente = momentoProgramado.getTime() <= ahora.getTime();
+
+  /** Al cambiar el día, la hora se ajusta si quedó en el pasado. */
+  const elegirFecha = (fecha: Date) => {
+    setFechaServicio(fecha);
+    setHoraServicio((hora) => horaCoherente(fecha, hora));
+    setAbriendoCalendario(false);
+  };
+
+  const elegirHora = (hora: Date) => {
+    setHoraServicio(horaCoherente(fechaServicio, hora));
+    setAbriendoReloj(false);
+  };
+
   const addDestination = () => {
     setDestinations([...destinations, '']);
   };
@@ -100,12 +125,15 @@ export function CreateServiceScreen() {
     }
 
     const programada = combinarFechaYHora(fechaServicio, horaServicio);
-    // Tolerancia de 5 minutos: agendar para un rato ya pasado no tiene sentido,
-    // pero publicar "para ahora mismo" sí.
-    if (programada.getTime() < Date.now() - 5 * 60 * 1000) {
+    // Coherencia (por si la pantalla quedó abierta y el momento elegido ya pasó):
+    // se ajusta la hora y se avisa, en vez de publicar algo imposible.
+    if (programada.getTime() <= Date.now()) {
+      const ajustada = horaCoherente(fechaServicio, horaServicio);
+      setHoraServicio(ajustada);
       Alert.alert(
-        'Fecha y hora en el pasado',
-        `Elegiste ${formatearFecha(programada)} ${formatearHora(programada)}. Elige una hora posterior.`
+        'Hora ajustada',
+        `La hora elegida (${formatearHora(horaServicio)}) ya pasó. La ajusté a las ` +
+          `${formatearHora(ajustada)} para hoy. Revisa y vuelve a intentarlo.`
       );
       return;
     }
@@ -339,7 +367,7 @@ export function CreateServiceScreen() {
 
         <Text style={styles.label}>Hora del servicio</Text>
         <TouchableOpacity
-          style={styles.pickerField}
+          style={[styles.pickerField, coherenciaPendiente && styles.pickerFieldError]}
           onPress={() => setAbriendoReloj(true)}
           activeOpacity={0.7}
         >
@@ -347,6 +375,11 @@ export function CreateServiceScreen() {
           <Text style={styles.pickerValue}>{formatearHora(horaServicio)}</Text>
           <Text style={styles.pickerChevron}>›</Text>
         </TouchableOpacity>
+        {restringeHoy ? (
+          <Text style={styles.helperText}>
+            Hoy solo se pueden elegir horas posteriores a las {formatearHora(desdeHoy)}.
+          </Text>
+        ) : null}
 
         {/* Observación */}
         <Text style={styles.label}>Observación</Text>
@@ -373,20 +406,15 @@ export function CreateServiceScreen() {
       <CalendarMonthPicker
         visible={abriendoCalendario}
         valor={fechaServicio}
-        onSeleccionar={(fecha) => {
-          setFechaServicio(fecha);
-          setAbriendoCalendario(false);
-        }}
+        onSeleccionar={elegirFecha}
         onCancelar={() => setAbriendoCalendario(false)}
       />
 
       <TimeWheelPicker
         visible={abriendoReloj}
+        fecha={fechaServicio}
         valor={horaServicio}
-        onConfirmar={(hora) => {
-          setHoraServicio(hora);
-          setAbriendoReloj(false);
-        }}
+        onConfirmar={elegirHora}
         onCancelar={() => setAbriendoReloj(false)}
       />
     </KeyboardAvoidingView>
@@ -471,6 +499,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: BLUE,
     fontWeight: '700',
+  },
+  pickerFieldError: {
+    borderWidth: 1,
+    borderColor: '#B00020',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#B00020',
+    marginTop: 6,
+    lineHeight: 16,
   },
   destinationRow: {
     flexDirection: 'row',

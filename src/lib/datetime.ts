@@ -166,6 +166,12 @@ export function opcionesHoras(): number[] {
   return Array.from({ length: 12 }, (_, i) => i + 1);
 }
 
+/**
+ * Las 12 horas en orden cronológico dentro de cada meridiano: 12 a.m. es
+ * medianoche y 12 p.m. es mediodía, así que el 12 va primero.
+ */
+export const ORDEN_HORAS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
 /** Minutos de 5 en 5, como en la referencia de diseño. */
 export function opcionesMinutos(paso = 5): number[] {
   const valores: number[] = [];
@@ -185,4 +191,72 @@ export function indiceMasCercano(opciones: number[], valor: number): number {
     }
   });
   return mejor;
+}
+
+/** Una hora del carrusel (lo que el usuario ve: hora, minutos y meridiano). */
+export interface SeleccionHora {
+  hora12: number;
+  minutos: number;
+  meridiano: Meridiano;
+}
+
+/**
+ * ¿Esa hora, en ese día, todavía no pasó?
+ *
+ * Es el bloqueo de coherencia: si hoy son las 11:15 a.m., las 11:00 a.m. de hoy
+ * no se pueden elegir. Para un día futuro cualquier hora vale.
+ */
+export function esCombinacionValida(
+  fecha: Date,
+  seleccion: SeleccionHora,
+  ahora: Date = new Date()
+): boolean {
+  const momento = conHora(fecha, seleccion.hora12, seleccion.minutos, seleccion.meridiano);
+  return momento.getTime() > ahora.getTime();
+}
+
+/**
+ * Deja la selección en una hora que sí se puede usar: si la elegida ya pasó,
+ * devuelve la primera válida (el siguiente tramo de 5 minutos). Si ya era
+ * válida, la devuelve igual.
+ */
+export function normalizarSeleccion(
+  fecha: Date,
+  seleccion: SeleccionHora,
+  ahora: Date = new Date()
+): SeleccionHora {
+  if (esCombinacionValida(fecha, seleccion, ahora)) return seleccion;
+
+  for (const meridiano of ['a.m.', 'p.m.'] as Meridiano[]) {
+    for (const hora12 of ORDEN_HORAS_12) {
+      for (const minutos of opcionesMinutos()) {
+        const candidato: SeleccionHora = { hora12, minutos, meridiano };
+        if (esCombinacionValida(fecha, candidato, ahora)) return candidato;
+      }
+    }
+  }
+  return seleccion; // no queda nada válido ese día (no debería ocurrir)
+}
+
+/** Lo mismo, partiendo de una hora ya armada: devuelve la hora utilizable. */
+export function horaCoherente(fecha: Date, hora: Date, ahora: Date = new Date()): Date {
+  const partes = parteDeHora(hora);
+  const ajustada = normalizarSeleccion(fecha, partes, ahora);
+  return conHora(fecha, ajustada.hora12, ajustada.minutos, ajustada.meridiano);
+}
+
+/**
+ * El primer momento agendable de ese día: ahora mismo si es un día futuro, y
+ * para hoy, el siguiente tramo de 5 minutos (lo que se muestra como
+ * "hoy, solo desde las ...").
+ */
+export function primerInstanteValido(fecha: Date, ahora: Date = new Date()): Date {
+  const candidatos = ORDEN_HORAS_12.flatMap((hora12) =>
+    (['a.m.', 'p.m.'] as Meridiano[]).flatMap((meridiano) =>
+      opcionesMinutos().map((minutos) => conHora(fecha, hora12, minutos, meridiano))
+    )
+  );
+  const futuros = candidatos.filter((momento) => momento.getTime() > ahora.getTime());
+  if (futuros.length === 0) return new Date(fecha.getTime()); // día sin horas disponibles
+  return futuros.reduce((a, b) => (a.getTime() <= b.getTime() ? a : b));
 }
