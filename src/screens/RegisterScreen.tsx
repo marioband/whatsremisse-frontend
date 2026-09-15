@@ -18,6 +18,12 @@ import { RootStackParamList } from '../navigation/RootNavigator';
 
 type RegisterNav = StackNavigationProp<RootStackParamList, 'Register'>;
 
+// Diseño original de la pantalla de registro.
+const DARK_BG = '#383838';
+const BUTTON_BLUE = '#2B3B9E';
+const FIELD_BG = '#F5F5F5';
+const PLACEHOLDER = '#B5B5B5';
+
 export function RegisterScreen() {
   const navigation = useNavigation<RegisterNav>();
   const { requestOtp, signIn, requireSmsVerification } = useAuth();
@@ -61,108 +67,152 @@ export function RegisterScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.logoContainer}>
-        <View style={styles.bubble}>
+      {/* Logo: globo con silueta de persona con traje */}
+      <View style={styles.logoBlock}>
+        <View style={styles.bubbleWrapper}>
+          <View style={styles.bubbleRing} />
           <View style={styles.bubbleTail} />
+          <View style={styles.person}>
+            <View style={styles.head} />
+            <View style={styles.torso}>
+              <View style={styles.suitCollar} />
+            </View>
+          </View>
         </View>
         <Text style={styles.brand}>WhatsRemisse</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Registro</Text>
-        <Text style={styles.subtitle}>Ingresa tu número celular</Text>
+      {/* Campo de número */}
+      <TextInput
+        style={styles.input}
+        placeholder="Número Celular"
+        placeholderTextColor={PLACEHOLDER}
+        keyboardType="phone-pad"
+        value={phone}
+        onChangeText={setPhone}
+        maxLength={12}
+      />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Número Celular"
-          placeholderTextColor="#999"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={setPhone}
-          maxLength={12}
-        />
+      <View style={styles.spacer} />
 
+      {/* Botón enviar, anclado abajo */}
+      <View style={styles.footer}>
+        {error && <Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleSend}
           disabled={loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'Enviando...' : 'enviar'}</Text>
+          <Text style={styles.buttonText}>{loading ? 'enviando...' : 'enviar'}</Text>
         </TouchableOpacity>
-
-        {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
     </KeyboardAvoidingView>
   );
 }
 
+const BUBBLE_SIZE = 118;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2D2D2D',
-    justifyContent: 'center',
-    padding: 24,
+    backgroundColor: DARK_BG,
+    paddingHorizontal: 20,
   },
-  logoContainer: {
+  logoBlock: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginTop: 48,
   },
-  bubble: {
-    width: 80,
-    height: 62,
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    justifyContent: 'center',
+  bubbleWrapper: {
+    width: BUBBLE_SIZE,
+    height: BUBBLE_SIZE + 14,
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'center',
+  },
+  bubbleRing: {
+    width: BUBBLE_SIZE,
+    height: BUBBLE_SIZE,
+    borderRadius: BUBBLE_SIZE / 2,
+    borderWidth: 9,
+    borderColor: '#fff',
+    position: 'absolute',
+    top: 0,
   },
   bubbleTail: {
     position: 'absolute',
-    bottom: -9,
-    left: 10,
+    left: 22,
+    bottom: 0,
     width: 0,
     height: 0,
-    borderLeftWidth: 9,
-    borderRightWidth: 9,
-    borderTopWidth: 16,
+    borderLeftWidth: 15,
+    borderRightWidth: 15,
+    borderTopWidth: 30,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
     borderTopColor: '#fff',
+    transform: [{ rotate: '-12deg' }],
+  },
+  person: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  head: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    marginBottom: 3,
+  },
+  torso: {
+    width: 64,
+    height: 40,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  suitCollar: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 12,
+    borderRightWidth: 12,
+    borderTopWidth: 34,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: DARK_BG,
   },
   brand: {
     color: '#fff',
     fontSize: 26,
     fontWeight: 'bold',
-  },
-  card: {
-    backgroundColor: '#2D2D2D',
-    width: '100%',
-  },
-  title: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  subtitle: {
-    color: '#bbb',
-    fontSize: 14,
-    marginBottom: 24,
-    textAlign: 'center',
+    marginTop: 6,
+    letterSpacing: 0.2,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: FIELD_BG,
     borderRadius: 8,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 20,
+    height: 36,
+    marginTop: 36,
+    paddingHorizontal: 14,
+    fontSize: 18,
+    color: '#333',
     textAlign: 'center',
   },
+  footer: {
+    alignItems: 'center',
+    paddingBottom: 30,
+  },
+  spacer: {
+    flex: 1,
+  },
   button: {
-    backgroundColor: '#3B4CCA',
-    borderRadius: 8,
-    paddingVertical: 14,
+    backgroundColor: BUTTON_BLUE,
+    borderRadius: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 28,
+    minWidth: 112,
     alignItems: 'center',
   },
   buttonDisabled: {
@@ -170,13 +220,12 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
   },
   errorText: {
-    color: '#FF6B6B',
-    fontSize: 14,
+    color: '#FF8A80',
+    fontSize: 13,
     textAlign: 'center',
-    marginTop: 16,
+    marginBottom: 12,
   },
 });
