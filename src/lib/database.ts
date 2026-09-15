@@ -1,3 +1,5 @@
+import { describeError } from './errors';
+import { displayName } from './names';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { GroupItem, GroupMember } from '../context/MockStoreContext';
 import { Application, ServiceAlert, ServiceStatus, VehicleData } from '../types';
@@ -294,7 +296,8 @@ export function mapGroupMemberFromDb(row: DbGroupMember): GroupMember {
   return {
     id: row.user_id,
     groupId: row.group_id,
-    name: row.user_id,
+    // Nunca usar el user_id como nombre: la pantalla mostraría un UUID.
+    name: displayName([(row as { full_name?: string | null }).full_name]),
     role: (row.role as GroupMember['role']) || 'member',
   };
 }
@@ -304,7 +307,9 @@ export function mapMessageFromDb(row: DbMessage): ChatMessage {
     id: row.id,
     group_id: row.group_id,
     sender_id: row.sender_id,
-    sender_name: row.sender_id,
+    // Vacío a propósito: el user_id NO es un nombre. La pantalla resuelve el
+    // nombre real con los integrantes del grupo (y nunca pinta un UUID).
+    sender_name: '',
     content: row.content,
     type: row.type as ChatMessage['type'],
     created_at: row.created_at,
@@ -334,20 +339,64 @@ export async function fetchGroupsForUser(userId: string): Promise<GroupItem[]> {
     .filter((g): g is GroupItem => Boolean(g.id));
 }
 
+/** Fila que devuelve la RPC `group_member_profiles` (migración 0005). */
+interface GroupMemberProfileRow {
+  user_id: string;
+  member_role: string | null;
+  full_name: string | null;
+  phone: string | null;
+  profile_role: string | null;
+  vehicle_data: Record<string, unknown> | null;
+}
+
 export async function fetchGroupMembers(groupId: string): Promise<GroupMember[]> {
   if (!isSupabaseConfigured) return [];
+
+  // 1) RPC con alcance limitado (migración 0005). Es la única vía que funciona
+  //    cuando la política de lectura de `profiles` solo deja ver la fila propia,
+  //    que es justo el caso que hacía aparecer los UUID como nombres.
+  try {
+    const { data, error } = await supabase.rpc('group_member_profiles', {
+      p_group_id: groupId,
+    });
+    if (error) throw error;
+    const rows = (data || []) as GroupMemberProfileRow[];
+    if (rows.length > 0) {
+      return rows.map((row) => ({
+        id: row.user_id,
+        groupId,
+        name: displayName([row.full_name], 'Integrante sin nombre'),
+        role: (row.member_role as GroupMember['role']) || 'member',
+        phone: row.phone ?? null,
+        profileRole: row.profile_role ?? null,
+        vehicleData: row.vehicle_data ?? null,
+        // Hay fila de perfil si trajo nombre o teléfono; si ambos son NULL el
+        // integrante todavía no completó sus datos en la app.
+        profileFound: Boolean(row.full_name || row.phone),
+      }));
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[database] RPC group_member_profiles no disponible, uso respaldo:', err);
+  }
+
+  // 2) Respaldo: embed de PostgREST (requiere política de lectura sobre
+  //    `profiles` para las filas de otros usuarios).
   const { data, error } = await supabase
     .from('group_members')
-    .select('group_id, user_id, role, profiles(full_name)')
+    .select('group_id, user_id, role, profiles(full_name, phone)')
     .eq('group_id', groupId);
   if (error) throw error;
   return (data || []).map((row: any) => {
-    const profile = row.profiles as { full_name: string | null } | null;
+    const profile = row.profiles as { full_name: string | null; phone: string | null } | null;
     return {
       id: row.user_id,
       groupId: row.group_id,
-      name: profile?.full_name || row.user_id,
-      role: row.role,
+      // Cadena de respaldo: nombre -> teléfono -> texto genérico. Nunca el UUID.
+      name: displayName([profile?.full_name, profile?.phone], 'Integrante sin nombre'),
+      role: row.role as GroupMember['role'],
+      phone: profile?.phone ?? null,
+      profileFound: Boolean(profile?.full_name || profile?.phone),
     };
   });
 }
@@ -427,7 +476,7 @@ export async function fetchMessagesForGroup(groupId: string): Promise<ChatMessag
       id: row.id,
       group_id: row.group_id,
       sender_id: row.sender_id,
-      sender_name: profile?.full_name || row.sender_id,
+      sender_name: displayName([profile?.full_name], ''),
       content: row.content,
       type: row.type as ChatMessage['type'],
       created_at: row.created_at,
@@ -591,16 +640,91 @@ export interface PublicProfile {
   vehicle_data: Record<string, unknown> | null;
 }
 
-export async function fetchProfileById(userId: string): Promise<PublicProfile | null> {
-  if (!isSupabaseConfigured) return null;
+/** Resultado con diagnóstico: permite distinguir "sin permisos" de "sin datos". */
+export interface PublicProfileResult {
+  profile: PublicProfile | null;
+  /** true solo si Supabase devolvió una fila (aunque sus campos estén vacíos). */
+  found: boolean;
+  source: 'rpc' | 'table' | 'none';
+  /** Error crudo de Supabase, para mostrarlo en pantalla cuando no hay datos. */
+  error: string | null;
+}
+
+/**
+ * Lee el perfil público (nombre, teléfono, rol y vehículo) de otro usuario.
+ *
+ * Orden: RPC `public_profile` de la migración 0005 —que autoriza solo si
+ * compartimos grupo o servicio— y, si no está instalada, la consulta directa
+ * a `profiles` (que depende de la política de lectura vigente).
+ *
+ * Se usa `.maybeSingle()` en vez de `.single()`: con RLS, 0 filas no es un
+ * error, y antes eso se confundía con un fallo de red.
+ */
+export async function fetchPublicProfile(userId: string): Promise<PublicProfileResult> {
+  if (!isSupabaseConfigured) {
+    return {
+      profile: null,
+      found: false,
+      source: 'none',
+      error: 'Supabase no está configurado en esta build.',
+    };
+  }
+
+  let rpcError: string | null = null;
+  try {
+    const { data, error } = await supabase.rpc('public_profile', { p_user_id: userId });
+    if (error) throw error;
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | {
+          id: string;
+          full_name: string | null;
+          phone: string | null;
+          profile_role: string | null;
+          vehicle_data: Record<string, unknown> | null;
+        }
+      | null
+      | undefined;
+    if (row) {
+      return {
+        profile: {
+          id: row.id,
+          phone: row.phone ?? null,
+          full_name: row.full_name ?? null,
+          role: row.profile_role ?? null,
+          vehicle_data: row.vehicle_data ?? null,
+        },
+        found: true,
+        source: 'rpc',
+        error: null,
+      };
+    }
+  } catch (err) {
+    rpcError = describeError(err);
+    // eslint-disable-next-line no-console
+    console.warn('[database] RPC public_profile no disponible, uso consulta directa:', err);
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .select('id, phone, full_name, role, vehicle_data')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
+
   if (error) {
-    console.error('[database] fetchProfileById error:', error);
-    return null;
+    return { profile: null, found: false, source: 'none', error: describeError(error) };
   }
-  return data as PublicProfile;
+  if (!data) {
+    return {
+      profile: null,
+      found: false,
+      source: 'none',
+      error: rpcError,
+    };
+  }
+  return { profile: data as PublicProfile, found: true, source: 'table', error: null };
+}
+
+export async function fetchProfileById(userId: string): Promise<PublicProfile | null> {
+  const result = await fetchPublicProfile(userId);
+  return result.profile;
 }

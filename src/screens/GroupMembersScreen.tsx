@@ -6,6 +6,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from
 import { useAuth } from '../context/AuthContext';
 import { useMockStore, GroupMember, rolEnGrupo } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import { displayName, initialOf, memberRoleLabel } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type MembersNav = StackNavigationProp<RootStackParamList, 'GroupMembers'>;
@@ -38,11 +39,16 @@ export function GroupMembersScreen() {
 
   const groupMembers = useMemo(() => members[groupId] || [], [members, groupId]);
 
+  // Integrantes cuya fila de `profiles` no se pudo leer (o que todavía no
+  // completaron sus datos): sin esto la pantalla mostraba UUIDs y campos vacíos
+  // sin decir por qué.
+  const membersSinPerfil = groupMembers.filter((m) => m.profileFound === false).length;
+
   const handlePress = (member: GroupMember) => {
     navigation.navigate('ParticipantDetail', {
       groupId,
       memberId: member.id,
-      memberName: member.name,
+      memberName: displayName([member.name]),
       memberRole: member.role,
     });
   };
@@ -82,21 +88,36 @@ export function GroupMembersScreen() {
     }
   };
 
-  const renderMember = ({ item }: { item: GroupMember }) => (
-    <TouchableOpacity
-      style={styles.memberPill}
-      onPress={() => handlePress(item)}
-      onLongPress={() => handleLongPress(item.id, item.name, item.role)}
-      activeOpacity={0.8}
-    >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
-      </View>
-      <Text style={styles.memberName} numberOfLines={1}>
-        {item.name}
-      </Text>
-    </TouchableOpacity>
-  );
+  const renderMember = ({ item }: { item: GroupMember }) => {
+    const nombre = displayName([item.name]);
+    const rol = memberRoleLabel(item.role);
+    return (
+      <TouchableOpacity
+        style={styles.memberPill}
+        onPress={() => handlePress(item)}
+        onLongPress={() => handleLongPress(item.id, nombre, item.role)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initialOf(nombre)}</Text>
+        </View>
+        <View style={styles.memberInfo}>
+          <Text style={styles.memberName} numberOfLines={1}>
+            {nombre}
+          </Text>
+          {item.profileFound === false ? (
+            <Text style={styles.memberSub} numberOfLines={1}>
+              Sin datos de perfil
+            </Text>
+          ) : rol && rol !== 'Integrante' ? (
+            <Text style={styles.memberSub} numberOfLines={1}>
+              {rol}
+            </Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -120,6 +141,17 @@ export function GroupMembersScreen() {
         renderItem={renderMember}
         contentContainerStyle={styles.list}
         ListEmptyComponent={<Text style={styles.emptyText}>No hay integrantes</Text>}
+        ListFooterComponent={
+          membersSinPerfil > 0 ? (
+            <Text style={styles.warnText}>
+              {membersSinPerfil === 1
+                ? '1 integrante todavía no tiene nombre ni teléfono en su perfil.'
+                : `${membersSinPerfil} integrantes todavía no tienen nombre ni teléfono en su perfil.`}{' '}
+              Si sus datos sí están guardados, falta aplicar la migración 0005 en Supabase
+              (funciones group_member_profiles / public_profile).
+            </Text>
+          ) : null
+        }
       />
 
       {/* FAB: solo para owner/admin, igual que la política RLS de group_members */}
@@ -206,12 +238,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  memberName: {
+  memberInfo: {
     flex: 1,
-    textAlign: 'center',
+    marginLeft: 4,
+  },
+  memberName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111',
+  },
+  memberSub: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 2,
+  },
+  warnText: {
+    marginTop: 18,
+    color: '#B00020',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
   },
   emptyText: {
     textAlign: 'center',

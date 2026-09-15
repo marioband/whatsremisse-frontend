@@ -26,7 +26,9 @@ export function useRealtimeMessages(
             id: row.id,
             group_id: row.group_id,
             sender_id: row.sender_id,
-            sender_name: row.sender_id,
+            // Sin nombre todavía: la pantalla lo resuelve con los integrantes
+            // del grupo. Antes se pintaba el UUID del remitente.
+            sender_name: '',
             content: row.content,
             type: row.type,
             created_at: row.created_at,

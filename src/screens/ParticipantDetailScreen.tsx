@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { esPropietarioDelGrupo, rolEnGrupo, useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
-import { fetchProfileById, PublicProfile } from '../lib/database';
+import { fetchPublicProfile, PublicProfile } from '../lib/database';
+import { displayName, initialOf, roleLabel } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type DetailNav = StackNavigationProp<RootStackParamList, 'ParticipantDetail'>;
@@ -30,6 +31,12 @@ function parseName(fullName: string | null): { firstName: string; lastName: stri
   return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] };
 }
 
+/** Todo valor de `vehicle_data` es JSONB: puede venir número, null o no venir. */
+function textOf(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
 export function ParticipantDetailScreen() {
   const navigation = useNavigation<DetailNav>();
   const route = useRoute<DetailRoute>();
@@ -38,30 +45,41 @@ export function ParticipantDetailScreen() {
   const { session } = useAuth();
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [profileFound, setProfileFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let mounted = true;
-    fetchProfileById(memberId)
-      .then((data) => {
-        if (mounted) setProfile(data);
-      })
-      .catch((err) => {
-        console.error('[ParticipantDetail] fetchProfileById error:', err);
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
+  // El integrante ya está en el store (nombre, teléfono y vehículo que trajo la
+  // lista). Se usa como respaldo para no dejar la ficha en blanco si la lectura
+  // individual falla, y para mostrar el nombre cuando Supabase no lo devuelve.
+  const member = members[groupId]?.find((m) => m.id === memberId);
+
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await fetchPublicProfile(memberId);
+      setProfile(result.profile);
+      setProfileFound(result.found);
+      setLoadError(result.error);
+    } catch (err) {
+      setProfile(null);
+      setProfileFound(false);
+      setLoadError(String(err));
+      // eslint-disable-next-line no-console
+      console.error('[ParticipantDetail] fetchPublicProfile error:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [memberId]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const fallbackRole: 'owner' | 'admin' | 'member' =
     role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member';
   const viewerGroupRole = rolEnGrupo(groups, groupId, session?.user?.id, fallbackRole);
 
-  const member = members[groupId]?.find((m) => m.id === memberId);
   const currentMemberRole = member?.role || memberRole;
 
   // El creador del grupo no se degrada ni se elimina: si queda como 'member' o
@@ -69,8 +87,25 @@ export function ParticipantDetailScreen() {
   const esElPropietario =
     esPropietarioDelGrupo(groups, members, groupId, memberId) || currentMemberRole === 'owner';
 
-  const { firstName, lastName } = parseName(profile?.full_name || memberName);
-  const vehicle = (profile?.vehicle_data || {}) as Record<string, string>;
+  // Nunca mostrar un UUID donde va un nombre: perfil -> lista de integrantes ->
+  // parámetro de navegación -> texto genérico.
+  const shownName = displayName([profile?.full_name, member?.name, memberName]);
+  const { firstName, lastName } = parseName(profile?.full_name || shownName);
+
+  const phone = textOf(profile?.phone) || textOf(member?.phone);
+  const profileRole = profile?.role || member?.profileRole || '';
+
+  const vehicle = (profile?.vehicle_data || member?.vehicleData || {}) as Record<string, unknown>;
+  const vehicleRows: [string, string][] = [
+    ['Tipo', textOf(vehicle.vehicle_type)],
+    ['Marca', textOf(vehicle.brand)],
+    ['Modelo', textOf(vehicle.model)],
+    ['Año', textOf(vehicle.year)],
+    ['Color', textOf(vehicle.color)],
+    ['Placa', textOf(vehicle.plate)],
+  ];
+  const tieneVehiculo = vehicleRows.some(([, value]) => value.length > 0);
+  const dni = textOf(vehicle.dni);
 
   const handleToggleAdmin = () => {
     if (esElPropietario) {
@@ -84,7 +119,7 @@ export function ParticipantDetailScreen() {
     updateMemberRole(groupId, memberId, newRole);
     Alert.alert(
       'Rol actualizado',
-      `${memberName} ahora es ${newRole === 'admin' ? 'Administrador' : 'Integrante'}.`
+      `${shownName} ahora es ${newRole === 'admin' ? 'Administrador' : 'Integrante'}.`
     );
   };
 
@@ -93,7 +128,7 @@ export function ParticipantDetailScreen() {
       Alert.alert('No permitido', 'No puedes eliminar al propietario del grupo.');
       return;
     }
-    Alert.alert('Eliminar integrante', `\u00bfSeguro que deseas eliminar a ${memberName}?`, [
+    Alert.alert('Eliminar integrante', `¿Seguro que deseas eliminar a ${shownName}?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Eliminar',
@@ -123,7 +158,7 @@ export function ParticipantDetailScreen() {
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {memberName}
+          {shownName}
         </Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -137,27 +172,61 @@ export function ParticipantDetailScreen() {
           {/* Avatar */}
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{memberName.charAt(0)}</Text>
+              <Text style={styles.avatarText}>{initialOf(shownName)}</Text>
             </View>
           </View>
+
+          {/* Diagnóstico: antes la pantalla salía vacía sin decir por qué. */}
+          {loadError ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorTitle}>No se pudieron leer los datos del integrante</Text>
+              <Text style={styles.errorText}>{loadError}</Text>
+              <Text style={styles.errorHint}>
+                Es el error que devolvió Supabase. Si dice que la función no existe, falta aplicar
+                la migración 0005 (public_profile) en el SQL Editor.
+              </Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={loadProfile}>
+                <Text style={styles.retryText}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : !profileFound ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorTitle}>Sin datos de este integrante</Text>
+              <Text style={styles.errorText}>
+                Supabase no devolvió la ficha de este integrante. O bien todavía no completó su
+                perfil en la app (nombre, teléfono y vehículo se guardan al completar el perfil), o
+                falta aplicar la migración 0005 para autorizar la lectura entre integrantes del
+                grupo.
+              </Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={loadProfile}>
+                <Text style={styles.retryText}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           {/* Driver data */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Datos del conductor</Text>
             {renderRow('Nombres', firstName)}
             {renderRow('Apellidos', lastName)}
-            {renderRow('N\u00famero Celular', profile?.phone || '')}
-            {renderRow('Rol', profile?.role || '')}
+            {renderRow('DNI', dni)}
+            {renderRow('Número Celular', phone)}
+            {renderRow('Rol', roleLabel(profileRole))}
           </View>
 
           {/* Vehicle data */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Datos del Veh\u00edculo</Text>
-            {renderRow('Marca', vehicle.brand || '')}
-            {renderRow('Modelo', vehicle.model || '')}
-            {renderRow('A\u00f1o', vehicle.year || '')}
-            {renderRow('Color', vehicle.color || '')}
-            {renderRow('Placa', vehicle.plate || '')}
+            <Text style={styles.sectionTitle}>Datos del Vehículo</Text>
+            {tieneVehiculo ? (
+              vehicleRows.map(([label, value]) => (
+                <View key={label}>{renderRow(label, value)}</View>
+              ))
+            ) : (
+              <Text style={styles.sectionNote}>
+                Este integrante todavía no registró los datos de su vehículo. Se guardan cuando
+                completa su perfil en la app.
+              </Text>
+            )}
           </View>
 
           <View style={styles.spacer} />
@@ -262,6 +331,44 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: DARK_BG,
   },
+  errorBox: {
+    backgroundColor: '#FDECEA',
+    borderColor: '#B00020',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 24,
+  },
+  errorTitle: {
+    color: '#B00020',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  errorText: {
+    color: '#7F1D1D',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  errorHint: {
+    color: '#7F1D1D',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 8,
+  },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: DARK_BG,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginTop: 12,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
   section: {
     marginBottom: 28,
   },
@@ -270,6 +377,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#111',
     marginBottom: 14,
+  },
+  sectionNote: {
+    fontSize: 13,
+    color: '#777',
+    lineHeight: 18,
   },
   row: {
     flexDirection: 'row',

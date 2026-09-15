@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeMessages } from '../hooks/useRealtimeMessages';
 import { Alert } from '../lib/alert';
 import { ChatMessage, fetchMessagesForGroup, insertMessage } from '../lib/database';
+import { displayName } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type GroupChatNav = StackNavigationProp<RootStackParamList, 'GroupChat' | 'Settings'>;
@@ -31,13 +32,27 @@ export function GroupChatScreen() {
   const route = useRoute<GroupChatRoute>();
   const { groupId, groupName } = route.params;
   const { session } = useAuth();
-  const { emitChatNotification } = useMockStore();
+  const { emitChatNotification, members, loadGroupMembers } = useMockStore();
 
   const userId = session?.user?.id ?? '';
 
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Nombre real por integrante: `messages` solo guarda el user_id del
+  // remitente, así que antes el chat mostraba UUIDs como nombre.
+  const memberNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    (members[groupId] || []).forEach((member) => {
+      map[member.id] = displayName([member.name]);
+    });
+    return map;
+  }, [members, groupId]);
+
+  useEffect(() => {
+    loadGroupMembers(groupId);
+  }, [groupId, loadGroupMembers]);
 
   useEffect(() => {
     let mounted = true;
@@ -139,9 +154,10 @@ export function GroupChatScreen() {
     }
 
     const isMe = item.sender_id === userId;
+    const senderLabel = memberNames[item.sender_id] || displayName([item.sender_name]);
     return (
       <View style={[styles.bubbleRow, isMe ? styles.rowRight : styles.rowLeft]}>
-        {!isMe && <Text style={styles.senderName}>{item.sender_name}</Text>}
+        {!isMe && <Text style={styles.senderName}>{senderLabel}</Text>}
         <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
           <Text style={styles.bubbleText}>{item.content}</Text>
           <Text style={styles.bubbleTime}>

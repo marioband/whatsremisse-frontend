@@ -166,7 +166,7 @@ export function SwipeStatusButton(props: Props) {
             style={[styles.thumb, { transform: [{ translateX }] }]}
             {...panResponder.panHandlers}
           >
-            <Text style={styles.thumbIcon}>\u2192</Text>
+            <Text style={styles.thumbIcon}>→</Text>
           </Animated.View>
         )}
       </View>

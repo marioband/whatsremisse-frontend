@@ -54,6 +54,17 @@ export interface GroupMember {
   groupId: string;
   name: string;
   role: 'owner' | 'admin' | 'member';
+  /** Teléfono del integrante, si Supabase lo devolvió. */
+  phone?: string | null;
+  /** Rol de `profiles.role` (DRIVER, PROVIDER, ...), si se pudo leer. */
+  profileRole?: string | null;
+  /** `profiles.vehicle_data` del integrante, si se pudo leer. */
+  vehicleData?: Record<string, unknown> | null;
+  /**
+   * ¿Se pudo leer la fila del integrante en `profiles`? Si es false, la app
+   * muestra un aviso en vez de dejar los datos en blanco sin explicación.
+   */
+  profileFound?: boolean;
 }
 
 /**

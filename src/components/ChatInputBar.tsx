@@ -79,7 +79,7 @@ export function ChatInputBar({
           onPress={() => handleAttachment('camera')}
           activeOpacity={0.7}
         >
-          <Text style={styles.cameraIcon}>\ud83d\udcf7</Text>
+          <Text style={styles.cameraIcon}>📷</Text>
         </TouchableOpacity>
 
         {hasText ? (
@@ -88,7 +88,7 @@ export function ChatInputBar({
             onPress={onSend}
             activeOpacity={0.7}
           >
-            <Text style={styles.actionIcon}>\u25b6</Text>
+            <Text style={styles.actionIcon}>▶</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -96,7 +96,7 @@ export function ChatInputBar({
             onPress={onSendVoice}
             activeOpacity={0.7}
           >
-            <Text style={styles.actionIcon}>\ud83c\udfa4</Text>
+            <Text style={styles.actionIcon}>🎤</Text>
           </TouchableOpacity>
         )}
       </View>
