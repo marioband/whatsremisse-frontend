@@ -19,12 +19,20 @@ export function GroupMembersScreen() {
   const { role, groups, members, updateMemberRole, removeMember, loadGroupMembers } =
     useMockStore();
 
-  // El rol dentro de ESTE grupo manda, pero si el grupo todavía no está en el
-  // store caemos al comportamiento anterior: así el botón de añadir nunca
-  // desaparece por un dato que aún no llegó.
+  // El botón + y el menú de integrante se muestran si CUALQUIERA de las dos
+  // fuentes dice owner/admin: el rol dentro del grupo (dato real) o el rol de la
+  // pestaña actual. Antes solo miraba el segundo; al pasarlo al rol del grupo el
+  // botón + desapareció en grupos cuyo dato no decía owner. Quien autoriza de
+  // verdad el alta es Supabase (RLS de group_members), así que el criterio de la
+  // UI debe ser permisible, nunca más restrictivo que antes.
   const groupRole = groups.find((group) => group.id === groupId)?.role;
-  const viewerGroupRole: 'owner' | 'admin' | 'member' =
-    groupRole ?? (role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member');
+  const globalRole: 'owner' | 'admin' | 'member' =
+    role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member';
+  const viewerGroupRole: 'owner' | 'admin' | 'member' = [groupRole, globalRole].includes('owner')
+    ? 'owner'
+    : [groupRole, globalRole].includes('admin')
+      ? 'admin'
+      : 'member';
 
   useEffect(() => {
     loadGroupMembers(groupId);
