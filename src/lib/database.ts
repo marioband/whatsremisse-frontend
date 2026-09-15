@@ -417,16 +417,63 @@ export interface SearchableProfile {
   role: string | null;
 }
 
-export async function searchProfilesByPhone(query: string): Promise<SearchableProfile[]> {
+/** Quita los caracteres que rompen la sintaxis de filtros de PostgREST (or=...). */
+function sanitizeFilterValue(value: string): string {
+  return value.replace(/[,()%*]/g, '').trim();
+}
+
+function normalizePhone(value: string | null | undefined): string {
+  return (value || '').replace(/\D/g, '');
+}
+
+function matchesQuery(profile: SearchableProfile, rawQuery: string, digits: string): boolean {
+  const name = (profile.full_name || '').toLowerCase();
+  if (name.includes(rawQuery)) return true;
+  const phoneDigits = normalizePhone(profile.phone);
+  return digits.length >= 3 && phoneDigits.includes(digits);
+}
+
+/**
+ * Busca usuarios por nombre o por teléfono (parcial, tolerante al formato:
+ * +51, espacios, guiones). Primero filtra en el servidor y, si no hay
+ * coincidencias, compara en el cliente sobre la primera página de perfiles.
+ */
+export async function searchProfiles(query: string, limit = 20): Promise<SearchableProfile[]> {
   if (!isSupabaseConfigured) return [];
-  const clean = query.replace(/\s/g, '');
-  const { data, error } = await supabase
+  const raw = query.trim();
+  if (raw.length < 3) return [];
+
+  const digits = normalizePhone(raw);
+  const safeRaw = sanitizeFilterValue(raw);
+  const filters = new Set<string>();
+
+  if (safeRaw) {
+    filters.add(`full_name.ilike.%${safeRaw}%`);
+    filters.add(`phone.ilike.%${safeRaw}%`);
+  }
+  if (digits.length >= 3) filters.add(`phone.ilike.%${digits}%`);
+
+  if (filters.size > 0) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, phone, full_name, role')
+      .or(Array.from(filters).join(','))
+      .limit(limit);
+    if (error) throw error;
+    const rows = (data || []) as SearchableProfile[];
+    if (rows.length > 0) return rows;
+  }
+
+  // Respaldo: comparación tolerante al formato del teléfono guardado.
+  const { data: page, error: pageError } = await supabase
     .from('profiles')
     .select('id, phone, full_name, role')
-    .ilike('phone', `%${clean}%`)
-    .limit(20);
-  if (error) throw error;
-  return (data || []) as SearchableProfile[];
+    .limit(200);
+  if (pageError) throw pageError;
+
+  return ((page || []) as SearchableProfile[])
+    .filter((profile) => matchesQuery(profile, raw.toLowerCase(), digits))
+    .slice(0, limit);
 }
 
 export interface PublicProfile {

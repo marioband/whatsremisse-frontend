@@ -10,10 +10,12 @@ import {
   FlatList,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
-import { searchProfilesByPhone } from '../lib/database';
+import { searchProfiles } from '../lib/database';
+import { describeError } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type AddNav = StackNavigationProp<RootStackParamList, 'AddParticipant'>;
@@ -38,6 +40,8 @@ export function AddParticipantScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchableContact[]>([]);
   const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const existingMemberIds = useMemo(
@@ -50,14 +54,16 @@ export function AddParticipantScreen() {
     const text = query.trim();
     if (text.length < 3) {
       setResults([]);
+      setSearchError(null);
       return;
     }
 
     setLoading(true);
     const timer = setTimeout(() => {
-      searchProfilesByPhone(text)
+      searchProfiles(text)
         .then((profiles) => {
           if (!mounted) return;
+          setSearchError(null);
           setResults(
             profiles.map((p) => ({
               id: p.id,
@@ -68,7 +74,11 @@ export function AddParticipantScreen() {
           );
         })
         .catch((err) => {
-          console.error('[AddParticipant] searchProfilesByPhone error:', err);
+          if (!mounted) return;
+          // eslint-disable-next-line no-console
+          console.error('[AddParticipant] searchProfiles error:', err);
+          setSearchError(describeError(err));
+          setResults([]);
         })
         .finally(() => {
           if (mounted) setLoading(false);
@@ -90,19 +100,29 @@ export function AddParticipantScreen() {
     });
   };
 
-  const handleAdd = () => {
-    selectedIds.forEach((id) => {
-      const contact = results.find((c) => c.id === id);
-      if (contact && !existingMemberIds.has(contact.id)) {
-        addMember({
-          id: contact.id,
-          groupId,
-          name: contact.name,
-          role: 'member',
-        });
+  const handleAdd = async () => {
+    if (adding) return;
+    setAdding(true);
+    try {
+      for (const id of selectedIds) {
+        const contact = results.find((c) => c.id === id);
+        if (contact && !existingMemberIds.has(contact.id)) {
+          await addMember({
+            id: contact.id,
+            groupId,
+            name: contact.name,
+            role: 'member',
+          });
+        }
       }
-    });
-    navigation.goBack();
+      navigation.goBack();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[AddParticipant] addMember error:', err);
+      Alert.alert('No se pudo añadir al integrante', describeError(err));
+    } finally {
+      setAdding(false);
+    }
   };
 
   const renderContact = ({ item }: { item: SearchableContact }) => {
@@ -154,12 +174,12 @@ export function AddParticipantScreen() {
           <Text style={styles.searchIcon}>⌕</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por teléfono"
+            placeholder="Buscar por nombre o teléfono"
             placeholderTextColor="#999"
             value={query}
             onChangeText={setQuery}
-            keyboardType="phone-pad"
             autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
       </View>
@@ -173,18 +193,30 @@ export function AddParticipantScreen() {
         renderItem={renderContact}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          query.length >= 3 && !loading ? (
-            <Text style={styles.emptyText}>No se encontraron usuarios</Text>
+          searchError ? (
+            <Text style={styles.errorText}>No se pudo buscar: {searchError}</Text>
+          ) : query.length >= 3 && !loading ? (
+            <Text style={styles.emptyText}>
+              No se encontraron usuarios con ese nombre ni teléfono
+            </Text>
           ) : (
-            <Text style={styles.emptyText}>Escribe al menos 3 dígitos del teléfono</Text>
+            <Text style={styles.emptyText}>
+              Escribe al menos 3 caracteres del nombre o del teléfono
+            </Text>
           )
         }
       />
 
       {/* Add button */}
       {selectedIds.size > 0 && (
-        <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-          <Text style={styles.addButtonText}>Añadir ({selectedIds.size})</Text>
+        <TouchableOpacity
+          style={[styles.addButton, adding && styles.addButtonDisabled]}
+          onPress={handleAdd}
+          disabled={adding}
+        >
+          <Text style={styles.addButtonText}>
+            {adding ? 'Añadiendo...' : `Añadir (${selectedIds.size})`}
+          </Text>
         </TouchableOpacity>
       )}
     </SafeAreaView>
@@ -325,6 +357,12 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 40,
   },
+  errorText: {
+    textAlign: 'center',
+    color: '#D32F2F',
+    marginTop: 40,
+    paddingHorizontal: 16,
+  },
   addButton: {
     position: 'absolute',
     left: 20,
@@ -334,6 +372,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  addButtonDisabled: {
+    opacity: 0.6,
   },
   addButtonText: {
     color: '#fff',

@@ -644,6 +644,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_MEMBER', payload: member });
       } catch (err) {
         console.error('[MockStore] addMember error:', err);
+        throw err;
       }
     },
     updateMemberRole: async (groupId, memberId, role) => {
