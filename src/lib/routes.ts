@@ -32,6 +32,16 @@ const cache = new Map<string, MedidaRuta>();
 /** Campos mínimos (menos campos, menos coste). */
 export const CAMPOS_RUTA = 'routes.duration,routes.distanceMeters';
 
+/**
+ * Preferencia de ruta: cambia el precio (y la calidad del dato).
+ *  - 'TRAFFIC_UNAWARE' -> SKU **Essentials** (Compute Routes: $5 por 1000).
+ *  - 'TRAFFIC_AWARE'   -> SKU **Pro** ($10 por 1000): tiene en cuenta el tráfico;
+ *    la duración es realista y sirve para que el conductor elija servicio.
+ * Con 10.000 llamadas/mes la diferencia es de unos $50 mensuales, así que es una
+ * decisión de producto: aquí queda encendido el tráfico.
+ */
+export const PREFERENCIA_DE_RUTA: 'TRAFFIC_UNAWARE' | 'TRAFFIC_AWARE' = 'TRAFFIC_AWARE';
+
 export function hayApiDeRutas(): boolean {
   return hayApiDeDirecciones();
 }
@@ -49,7 +59,7 @@ export function cuerpoDeRuta(origen: Punto, destino: Punto): Record<string, unkn
     origin: comoWaypoint(origen),
     destination: comoWaypoint(destino),
     travelMode: 'DRIVE',
-    routingPreference: 'TRAFFIC_AWARE',
+    routingPreference: PREFERENCIA_DE_RUTA,
     languageCode: 'es',
     units: 'METRIC',
   };
