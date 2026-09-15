@@ -13,8 +13,10 @@ import {
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
+import { Alert } from '../lib/alert';
 import { countVisibleProfiles, searchProfiles } from '../lib/database';
 import { describeError } from '../lib/errors';
+import { initialOf } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type AddNav = StackNavigationProp<RootStackParamList, 'AddParticipant'>;
@@ -80,7 +82,12 @@ export function AddParticipantScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Se guardan los CONTACTOS elegidos, no solo sus ids: `results` se reemplaza
+  // en cada búsqueda, así que buscar un segundo número borraba al primero de la
+  // lista y al pulsar "Añadir (2)" solo se agregaba el que seguía a la vista.
+  const [selected, setSelected] = useState<Record<string, SearchableContact>>({});
+  const selectedList = useMemo(() => Object.values(selected), [selected]);
+  const selectedCount = selectedList.length;
 
   const existingMemberIds = useMemo(
     () => new Set((members[groupId] || []).map((m) => m.id)),
@@ -148,64 +155,94 @@ export function AddParticipantScreen() {
     };
   }, [query]);
 
-  const toggleSelection = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  const toggleSelection = (contact: SearchableContact) => {
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (next[contact.id]) delete next[contact.id];
+      else next[contact.id] = contact;
       return next;
     });
   };
 
   const handleAdd = async () => {
-    if (adding) return;
+    if (adding || selectedCount === 0) return;
     setAdding(true);
     setAddError(null);
+
+    const added: string[] = [];
+    const addedIds: string[] = [];
+    const fallidos: string[] = [];
+    const yaEstaban: string[] = [];
+
     try {
-      const added: string[] = [];
-      for (const id of selectedIds) {
-        const contact = results.find((c) => c.id === id);
-        if (contact && !existingMemberIds.has(contact.id)) {
+      for (const contact of selectedList) {
+        if (existingMemberIds.has(contact.id)) {
+          yaEstaban.push(contact.name || contact.phone);
+          continue;
+        }
+        try {
           await addMember({
             id: contact.id,
             groupId,
             name: contact.name,
             role: 'member',
           });
-          added.push(contact.name);
+          added.push(contact.name || contact.phone);
+          addedIds.push(contact.id);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[AddParticipant] addMember error:', err);
+          // Un contacto que falla no debe abortar los siguientes.
+          fallidos.push(`${contact.name || contact.phone}: ${mensajeDeAlta(err)}`);
         }
       }
 
-      if (added.length === 0) {
-        setAddError('Ese usuario ya es integrante del grupo.');
+      // Los que sí entraron salen de la selección: si algo falló, el botón queda
+      // con los que faltan en lugar de repetir todo.
+      setSelected((prev) => {
+        const next = { ...prev };
+        addedIds.forEach((id) => {
+          delete next[id];
+        });
+        return next;
+      });
+
+      if (fallidos.length > 0) {
+        setAddError(
+          `${added.length > 0 ? `Se agregaron ${added.length}: ${added.join(', ')}. ` : ''}` +
+            `No se pudieron agregar ${fallidos.length}:\n${fallidos.join('\n')}`
+        );
         return;
       }
 
+      if (added.length === 0) {
+        setAddError('Esos usuarios ya son integrantes del grupo.');
+        return;
+      }
+
+      Alert.alert(
+        added.length === 1 ? 'Integrante añadido' : 'Integrantes añadidos',
+        `${added.join('\n')}${yaEstaban.length > 0 ? `\n(Ya estaba en el grupo: ${yaEstaban.join(', ')})` : ''}`
+      );
       navigation.goBack();
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[AddParticipant] addMember error:', err);
-      // Se muestra en pantalla a propósito: en web Alert.alert no pinta nada y
-      // el fallo parecía "no hacer nada".
-      setAddError(mensajeDeAlta(err));
     } finally {
       setAdding(false);
     }
   };
 
   const renderContact = ({ item }: { item: SearchableContact }) => {
-    const selected = selectedIds.has(item.id);
+    const estaSeleccionado = Boolean(selected[item.id]);
     const alreadyMember = existingMemberIds.has(item.id);
 
     return (
       <TouchableOpacity
         style={[styles.contactPill, alreadyMember && styles.disabledPill]}
-        onPress={() => !alreadyMember && toggleSelection(item.id)}
+        onPress={() => !alreadyMember && toggleSelection(item)}
         activeOpacity={alreadyMember ? 1 : 0.7}
       >
         <View style={styles.leftContent}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
+            <Text style={styles.avatarText}>{initialOf(item.name)}</Text>
           </View>
           <View>
             <Text style={[styles.contactName, alreadyMember && styles.disabledText]}>
@@ -217,8 +254,8 @@ export function AddParticipantScreen() {
         </View>
 
         {!alreadyMember && (
-          <View style={[styles.selector, selected && styles.selectorActive]}>
-            {selected && <Text style={styles.check}>✓</Text>}
+          <View style={[styles.selector, estaSeleccionado && styles.selectorActive]}>
+            {estaSeleccionado && <Text style={styles.check}>✓</Text>}
           </View>
         )}
       </TouchableOpacity>
@@ -259,6 +296,7 @@ export function AddParticipantScreen() {
         data={results}
         keyExtractor={(item) => item.id}
         renderItem={renderContact}
+        style={styles.listFlex}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           searchError ? (
@@ -277,21 +315,50 @@ export function AddParticipantScreen() {
         }
       />
 
-      {/* Error en pantalla: en web Alert.alert no muestra nada */}
-      {!!addError && <Text style={styles.errorBox}>{addError}</Text>}
+      {/* Zona inferior: selección pendiente + error + botón, siempre visible */}
+      <View style={styles.bottomArea}>
+        {/* Error en pantalla: en web Alert.alert no muestra nada */}
+        {!!addError && <Text style={styles.errorBox}>{addError}</Text>}
 
-      {/* Add button */}
-      {selectedIds.size > 0 && (
-        <TouchableOpacity
-          style={[styles.addButton, adding && styles.addButtonDisabled]}
-          onPress={handleAdd}
-          disabled={adding}
-        >
-          <Text style={styles.addButtonText}>
-            {adding ? 'Añadiendo...' : `Añadir (${selectedIds.size})`}
-          </Text>
-        </TouchableOpacity>
-      )}
+        {/* Selección pendiente: sin esto, al buscar otro número el botón decía
+            "Añadir (2)" sin que se viera quién era el segundo. */}
+        {selectedCount > 0 && (
+          <View style={styles.selectedBar}>
+            <Text style={styles.selectedTitle}>
+              {selectedCount === 1 ? '1 seleccionado' : `${selectedCount} seleccionados`}
+            </Text>
+            <View style={styles.chipsRow}>
+              {selectedList.map((contacto) => (
+                <TouchableOpacity
+                  key={contacto.id}
+                  style={styles.chip}
+                  onPress={() => toggleSelection(contacto)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.chipText} numberOfLines={1}>
+                    {contacto.name || contacto.phone}
+                  </Text>
+                  <Text style={styles.chipX}>×</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {selectedCount > 0 && (
+          <TouchableOpacity
+            style={[styles.addButton, adding && styles.addButtonDisabled]}
+            onPress={handleAdd}
+            disabled={adding}
+          >
+            <Text style={styles.addButtonText}>
+              {adding
+                ? 'Añadiendo...'
+                : `Añadir (${selectedCount})${selectedCount > 1 ? ' integrantes' : ''}`}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -352,10 +419,54 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: 12,
   },
+  listFlex: {
+    flex: 1,
+  },
   list: {
     padding: 16,
     paddingTop: 0,
-    paddingBottom: 100,
+    paddingBottom: 16,
+  },
+  bottomArea: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: 4,
+    backgroundColor: '#fff',
+  },
+  selectedBar: {
+    marginBottom: 12,
+  },
+  selectedTitle: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF0FA',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 8,
+    marginBottom: 8,
+    maxWidth: '100%',
+  },
+  chipText: {
+    color: '#3F51B5',
+    fontSize: 13,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  chipX: {
+    color: '#3F51B5',
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
   contactPill: {
     flexDirection: 'row',
@@ -437,23 +548,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   errorBox: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 88,
     backgroundColor: '#FDECEA',
     borderColor: '#F5C6C2',
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
+    marginBottom: 12,
     color: '#B3261E',
     fontSize: 13,
   },
   addButton: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 24,
     backgroundColor: BLUE,
     borderRadius: 12,
     paddingVertical: 16,
