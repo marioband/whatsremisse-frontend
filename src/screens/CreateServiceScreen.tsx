@@ -276,13 +276,15 @@ export function CreateServiceScreen() {
       <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
         {/* Origen */}
         <Text style={styles.label}>Distrito de origen</Text>
-        <AddressInput
-          valor={origin}
-          placeholder="Distrito de origen"
-          premium={premium}
-          onChangeText={setOrigin}
-          onConfirmar={confirmarOrigen}
-        />
+        <View style={styles.campoConSugerencias}>
+          <AddressInput
+            valor={origin}
+            placeholder="Distrito de origen"
+            premium={premium}
+            onChangeText={setOrigin}
+            onConfirmar={confirmarOrigen}
+          />
+        </View>
         {!premium && (
           <Text style={styles.notaPremium}>
             Las sugerencias de dirección son parte de Premium. Puedes escribir tu dirección y
@@ -575,6 +577,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+    // La fila entera se levanta: así el desplegable de sugerencias de este
+    // destino queda por encima de los campos que vienen después (tarifa, fecha,
+    // hora...) en lugar de quedar tapado por ellos.
+    position: 'relative',
+    zIndex: 1000,
+  },
+  campoConSugerencias: {
+    position: 'relative',
+    zIndex: 1000,
   },
   destinationInput: {
     flex: 1,

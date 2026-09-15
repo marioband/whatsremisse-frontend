@@ -271,7 +271,10 @@ export function DriverHomeScreen() {
   // Medidas de distancia y tiempo (función Premium): del conductor al origen y
   // del origen al destino. Sin premium (o sin clave de Google) no se pide nada.
   const premium = esPremium(profile);
-  const estimaciones = useEstimacionesDeRuta(displayServices, premium && hayApiDeRutas());
+  const { estimaciones, avisoDeUbicacion, reintentar } = useEstimacionesDeRuta(
+    displayServices,
+    premium && hayApiDeRutas()
+  );
 
   const renderBadge = (count: number) => {
     if (count <= 0) return null;
@@ -325,6 +328,16 @@ export function DriverHomeScreen() {
           <Text style={styles.debtBannerText}>
             ⚠️ Postulación bloqueada: deuda S/ {driverDebt} &gt; límite S/ {debtThreshold}
           </Text>
+        </View>
+      )}
+
+      {/* Sin ubicación no hay distancia al origen: se explica y se puede reintentar */}
+      {premium && avisoDeUbicacion && displayServices.length > 0 && (
+        <View style={styles.locationBanner}>
+          <Text style={styles.locationBannerText}>📍 {avisoDeUbicacion}</Text>
+          <TouchableOpacity onPress={reintentar} style={styles.locationBannerBtn}>
+            <Text style={styles.locationBannerBtnText}>Reintentar</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -460,6 +473,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffebee',
     paddingHorizontal: 16,
     paddingVertical: 8,
+  },
+  locationBanner: {
+    backgroundColor: '#EEF1FB',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  locationBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#3F51B5',
+    marginRight: 10,
+  },
+  locationBannerBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#3F51B5',
+  },
+  locationBannerBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   debtBannerText: {
     color: '#c62828',

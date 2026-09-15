@@ -5,7 +5,6 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   StyleProp,
   ViewStyle,
 } from 'react-native';
@@ -194,8 +193,8 @@ export function AddressInput({
   };
 
   return (
-    <View style={styles.contenedor}>
-      <View style={[styles.campo, estilo]}>
+    <View style={[styles.contenedor, estilo]}>
+      <View style={styles.campo}>
         <TextInput
           style={styles.entrada}
           placeholder={placeholder}
@@ -224,9 +223,7 @@ export function AddressInput({
 
       {filas.length > 0 && (
         <View style={styles.desplegable}>
-          <ScrollView keyboardShouldPersistTaps="handled" style={styles.lista}>
-            {filas.map((fila, indice) => renderFila(fila, indice))}
-          </ScrollView>
+          {filas.map((fila, indice) => renderFila(fila, indice))}
           <TouchableOpacity style={styles.cerrarBtn} onPress={cerrar} activeOpacity={0.7}>
             <Text style={styles.cerrarTexto}>Ocultar sugerencias</Text>
           </TouchableOpacity>
@@ -243,8 +240,11 @@ export function necesitaPremium(): boolean {
 
 const styles = StyleSheet.create({
   contenedor: {
+    // Cada campo con sugerencias levanta su propia "capa" (zIndex) para que el
+    // desplegable quede por encima de los campos que vienen después (tarifa,
+    // fecha, hora...) y no tapado por ellos.
     position: 'relative',
-    zIndex: 10,
+    zIndex: 1000,
   },
   campo: {
     flexDirection: 'row',
@@ -278,6 +278,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     marginTop: 4,
+    zIndex: 1001,
     backgroundColor: '#fff',
     borderRadius: 10,
     borderWidth: 1,
@@ -290,7 +291,10 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   lista: {
-    maxHeight: 210,
+    // Sin lista con scroll propio: en web un ScrollView dentro de una caja
+    // absoluta se recorta justo donde empieza el campo siguiente y las
+    // sugerencias parecen "tapadas". Se muestran todas las filas.
+    maxHeight: 320,
   },
   fila: {
     flexDirection: 'row',
