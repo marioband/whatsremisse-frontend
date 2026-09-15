@@ -32,8 +32,12 @@ function mapProfile(row: Record<string, unknown>): Profile {
     phone: row.phone ? String(row.phone) : null,
     role: (row.role as Profile['role']) || 'DRIVER',
     group_id: null,
-    tier: 'PREMIUM',
-    subscription_expires_at: null,
+    // La membresía vive en `profiles.tier` (migración 0008). Si la columna no
+    // existe todavía, `esPremium` la trata como premium en esta etapa de pruebas.
+    tier: (row.tier as Profile['tier']) || 'PREMIUM',
+    subscription_expires_at: row.subscription_expires_at
+      ? String(row.subscription_expires_at)
+      : null,
     current_debt: 0,
     vehicle_data: (row.vehicle_data as Profile['vehicle_data']) || null,
     license_data: (row.license_data as Profile['license_data']) || null,

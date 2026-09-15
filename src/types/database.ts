@@ -3,6 +3,8 @@ export interface DbProfile {
   phone: string | null;
   role: 'GROUP_OWNER' | 'ADMIN' | 'PROVIDER' | 'DRIVER';
   full_name: string | null;
+  tier: 'FREE' | 'PREMIUM' | null;
+  subscription_expires_at: string | null;
   vehicle_data: Record<string, unknown> | null;
   license_data: Record<string, unknown> | null;
   yape_number: string | null;

@@ -6,7 +6,10 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from
 import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { Alert } from '../lib/alert';
+import { esPremium } from '../lib/premium';
+import { hayApiDeRutas } from '../lib/routes';
 import { isVisibleAsDriver } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
@@ -23,7 +26,7 @@ const STATUS_FILTERS: StatusFilter[] = ['Todos', 'En proceso', 'Reservas'];
 
 export function DriverHomeScreen() {
   const navigation = useNavigation<HomeNav>();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const {
     role,
     services,
@@ -265,6 +268,11 @@ export function DriverHomeScreen() {
     return sortedServices;
   }, [sortedServices, myActiveServices, activeStatus, showArchived]);
 
+  // Medidas de distancia y tiempo (función Premium): del conductor al origen y
+  // del origen al destino. Sin premium (o sin clave de Google) no se pide nada.
+  const premium = esPremium(profile);
+  const estimaciones = useEstimacionesDeRuta(displayServices, premium && hayApiDeRutas());
+
   const renderBadge = (count: number) => {
     if (count <= 0) return null;
     return (
@@ -334,7 +342,11 @@ export function DriverHomeScreen() {
 
           return (
             <ServiceCard
-              service={item}
+              service={{
+                ...item,
+                origin_estimate: estimaciones[item.id]?.origen || item.origin_estimate,
+                destination_estimate: estimaciones[item.id]?.destino || item.destination_estimate,
+              }}
               onPress={() => handleCardPress(item)}
               onArchive={() => handleArchive(item.id)}
               onUnarchive={() => handleUnarchive(item.id)}

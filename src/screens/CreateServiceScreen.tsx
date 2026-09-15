@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 
+import { AddressInput, DireccionConfirmada } from '../components/AddressInput';
 import { CalendarMonthPicker } from '../components/CalendarMonthPicker';
 import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +30,8 @@ import {
   primerInstanteValido,
   proximaHoraRedondeada,
 } from '../lib/datetime';
+import { hayApiDeDirecciones } from '../lib/places';
+import { esPremium } from '../lib/premium';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 
@@ -69,6 +72,14 @@ export function CreateServiceScreen() {
   const [destinations, setDestinations] = useState<string[]>(
     editingService?.origin_address ? [editingService.destination_address] : ['']
   );
+  // Coordenadas cuando la dirección sale de una sugerencia: hacen la medición de
+  // distancia/tiempo exacta (y evitan que Google tenga que geocodificar).
+  const [coordsOrigen, setCoordsOrigen] = useState<{ lat: number; lng: number } | null>(null);
+  const [coordsDestinos, setCoordsDestinos] = useState<
+    Record<number, { lat: number; lng: number } | null>
+  >({});
+  const premium = esPremium(profile);
+  const faltanSugerencias = premium && !hayApiDeDirecciones();
   const [fare, setFare] = useState(editingService ? String(editingService.fare) : '');
   const [paymentType, setPaymentType] = useState(editingService?.payment_method || 'BCP');
   const [otherPayment, setOtherPayment] = useState('');
@@ -116,6 +127,35 @@ export function CreateServiceScreen() {
     if (destinations.length <= 1) return;
     const updated = destinations.filter((_, i) => i !== index);
     setDestinations(updated);
+    setCoordsDestinos((actuales) => {
+      const siguientes: Record<number, { lat: number; lng: number } | null> = {};
+      Object.entries(actuales).forEach(([clave, valor]) => {
+        const posicion = Number(clave);
+        if (posicion < index) siguientes[posicion] = valor;
+        else if (posicion > index) siguientes[posicion - 1] = valor;
+      });
+      return siguientes;
+    });
+  };
+
+  const confirmarOrigen = (direccion: DireccionConfirmada) => {
+    setOrigin(direccion.texto);
+    setCoordsOrigen(
+      direccion.lat !== null && direccion.lng !== null
+        ? { lat: direccion.lat, lng: direccion.lng }
+        : null
+    );
+  };
+
+  const confirmarDestino = (index: number, direccion: DireccionConfirmada) => {
+    updateDestination(index, direccion.texto);
+    setCoordsDestinos((actuales) => ({
+      ...actuales,
+      [index]:
+        direccion.lat !== null && direccion.lng !== null
+          ? { lat: direccion.lat, lng: direccion.lng }
+          : null,
+    }));
   };
 
   const handleSubmit = () => {
@@ -140,6 +180,7 @@ export function CreateServiceScreen() {
 
     const mainDestination = destinations[destinations.length - 1];
     const intermediateStops = destinations.slice(0, -1).filter(Boolean);
+    const coordsPrincipal = coordsDestinos[destinations.length - 1] || null;
 
     const finalPaymentType = paymentType === 'Otro' && otherPayment ? otherPayment : paymentType;
     const finalPaymentDate =
@@ -191,11 +232,11 @@ export function CreateServiceScreen() {
       title: `${origin} -> ${mainDestination}`,
       description: `Unidad: ${unitType}${observation ? ` • ${observation}` : ''}`,
       origin_address: origin,
-      origin_lat: 0,
-      origin_lng: 0,
+      origin_lat: coordsOrigen?.lat ?? 0,
+      origin_lng: coordsOrigen?.lng ?? 0,
       destination_address: mainDestination,
-      destination_lat: 0,
-      destination_lng: 0,
+      destination_lat: coordsPrincipal?.lat ?? 0,
+      destination_lng: coordsPrincipal?.lng ?? 0,
       vehicle_requirements: { vehicle_type: unitType },
       fare: parseFloat(fare) || 0,
       status: 'STATUS_OPEN',
@@ -235,25 +276,39 @@ export function CreateServiceScreen() {
       <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
         {/* Origen */}
         <Text style={styles.label}>Distrito de origen</Text>
-        <TextInput
-          style={styles.input}
+        <AddressInput
+          valor={origin}
           placeholder="Distrito de origen"
-          placeholderTextColor="#999"
-          value={origin}
+          premium={premium}
           onChangeText={setOrigin}
+          onConfirmar={confirmarOrigen}
         />
+        {!premium && (
+          <Text style={styles.notaPremium}>
+            Las sugerencias de dirección son parte de Premium. Puedes escribir tu dirección y
+            elegirla igual: aparecerá como primera opción.
+          </Text>
+        )}
+        {faltanSugerencias && (
+          <Text style={styles.notaPremium}>
+            Falta la clave de Google Maps (EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) para mostrar
+            sugerencias.
+          </Text>
+        )}
 
         {/* Destinos */}
         <Text style={styles.label}>Distrito de destino</Text>
         {destinations.map((dest, index) => (
           <View key={index} style={styles.destinationRow}>
-            <TextInput
-              style={[styles.input, styles.destinationInput]}
-              placeholder={`Destino ${index + 1}`}
-              placeholderTextColor="#999"
-              value={dest}
-              onChangeText={(text) => updateDestination(index, text)}
-            />
+            <View style={styles.destinationInput}>
+              <AddressInput
+                valor={dest}
+                placeholder={`Destino ${index + 1}`}
+                premium={premium}
+                onChangeText={(texto) => updateDestination(index, texto)}
+                onConfirmar={(direccion) => confirmarDestino(index, direccion)}
+              />
+            </View>
             {destinations.length > 1 && (
               <TouchableOpacity onPress={() => removeDestination(index)} style={styles.removeBtn}>
                 <Text style={styles.removeText}>✕</Text>
@@ -471,6 +526,12 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 15,
     color: '#333',
+  },
+  notaPremium: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 6,
+    lineHeight: 16,
   },
   pickerField: {
     flexDirection: 'row',
