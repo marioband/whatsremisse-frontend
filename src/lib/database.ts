@@ -250,6 +250,30 @@ export async function rejectApplicationInDb(serviceId: string): Promise<void> {
   if (serviceError) throw serviceError;
 }
 
+/**
+ * Rechaza la postulación de UN conductor concreto.
+ *
+ * `rejectApplicationInDb` rechaza TODAS las postulaciones del servicio (y lo
+ * reabre): eso está bien cuando el proveedor descarta el servicio entero, pero no
+ * cuando solo quiere sacar a un postulante de la lista, que es el caso de la
+ * tarjeta de postulantes.
+ */
+export async function rejectApplicationFromDb(serviceId: string, driverId: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { data, error } = await supabase
+    .from('applications')
+    .update({ status: 'REJECTED' })
+    .eq('service_id', serviceId)
+    .eq('driver_id', driverId)
+    .select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      'Supabase no actualizó ninguna fila de applications (revisa la sesión y la política RLS de UPDATE).'
+    );
+  }
+}
+
 export async function updateServiceAlert(
   serviceId: string,
   updates: Partial<ServiceAlert>
@@ -931,4 +955,65 @@ export async function fetchPublicProfile(userId: string): Promise<PublicProfileR
 export async function fetchProfileById(userId: string): Promise<PublicProfile | null> {
   const result = await fetchPublicProfile(userId);
   return result.profile;
+}
+
+/** Posición publicada por un conductor (la última que envió su dispositivo). */
+export interface PosicionDeConductor {
+  lat: number;
+  lng: number;
+  /** Instante en que el dispositivo la publicó (ISO), si vino. */
+  visto: string;
+}
+
+/**
+ * Publica mi última posición conocida.
+ *
+ * La escribe mi propio dispositivo y sirve para que un proveedor pueda ver a qué
+ * distancia estoy de su punto de origen. Si la función todavía no existe
+ * (migración 0009 sin aplicar) no es un error: se devuelve false en silencio.
+ */
+export async function publicarMiPosicion(lat: number, lng: number): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { error } = await supabase.rpc('publish_my_position', { p_lat: lat, p_lng: lng });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    if (esFuncionAusente(err)) return false;
+    throw err;
+  }
+}
+
+/**
+ * Posiciones de los postulantes pendientes de un servicio.
+ *
+ * Solo la puede leer el proveedor del servicio (lo decide la función
+ * `service_applicant_positions`), y solo devuelve posiciones recientes.
+ */
+export async function fetchPosicionesDePostulantes(
+  serviceId: string
+): Promise<Record<string, PosicionDeConductor>> {
+  if (!isSupabaseConfigured) return {};
+  try {
+    const { data, error } = await supabase.rpc('service_applicant_positions', {
+      p_service_id: serviceId,
+    });
+    if (error) throw error;
+    const posiciones: Record<string, PosicionDeConductor> = {};
+    const filas = (Array.isArray(data) ? data : []) as {
+      user_id?: string | null;
+      lat?: number | null;
+      lng?: number | null;
+      seen_at?: string | null;
+    }[];
+    for (const fila of filas) {
+      if (!fila.user_id) continue;
+      if (typeof fila.lat !== 'number' || typeof fila.lng !== 'number') continue;
+      posiciones[fila.user_id] = { lat: fila.lat, lng: fila.lng, visto: fila.seen_at || '' };
+    }
+    return posiciones;
+  } catch (err) {
+    if (esFuncionAusente(err)) return {};
+    throw err;
+  }
 }

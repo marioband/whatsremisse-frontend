@@ -58,7 +58,7 @@ export function ChatScreen() {
     chats,
     addMessage,
     approveApplication,
-    rejectApplication,
+    rejectApplicationFrom,
     updateServiceStatus,
     payCommission,
     confirmDriverPayment,
@@ -161,7 +161,9 @@ export function ChatScreen() {
 
   const handleReject = () => {
     if (!service) return;
-    rejectApplication(service.id);
+    // Solo a este conductor: `rejectApplication` (sin conductor) descarta todas
+    // las postulaciones del servicio, que no es lo que el proveedor quiere aquí.
+    rejectApplicationFrom(service.id, effectiveDriverId);
     addSystemMessage('Postulación rechazada.');
     Alert.alert('Postulación rechazada', 'El conductor ha sido descartado.');
     navigation.goBack();

@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
+import { ROJO_ACCION, VERDE_ACCION } from '../../lib/colors';
+
 interface EvaluationBarProps {
   onAccept: () => void;
   onReject: () => void;
@@ -32,7 +34,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
   },
-  acceptBtn: { backgroundColor: '#25D366', marginRight: 8 },
-  rejectBtn: { backgroundColor: '#ff3b30', marginLeft: 8 },
+  acceptBtn: { backgroundColor: VERDE_ACCION, marginRight: 8 },
+  rejectBtn: { backgroundColor: ROJO_ACCION, marginLeft: 8 },
   buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 });

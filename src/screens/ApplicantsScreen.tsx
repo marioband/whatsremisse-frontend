@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,47 +11,48 @@ import {
   Image,
 } from 'react-native';
 
+import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { useEstimacionesDePostulantes } from '../hooks/useEstimacionesDePostulantes';
+import {
+  AZUL,
+  FONDO_TARJETA,
+  OSCURO,
+  ROJO_ACCION,
+  TEXTO,
+  TEXTO_SUAVE,
+  VERDE_ACCION,
+} from '../lib/colors';
+import { fetchPublicProfile } from '../lib/database';
+import { conGuion, DatosPublicos, datosDesdePerfilPublico, inicialDe } from '../lib/perfilPublico';
+import { esPremium } from '../lib/premium';
+import { hayApiDeRutas, Punto } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type ApplicantsNav = StackNavigationProp<RootStackParamList, 'ApplicantsScreen' | 'Settings'>;
 type ApplicantsRoute = RouteProp<RootStackParamList, 'ApplicantsScreen'>;
 
-const DARK_BG = '#2D2D2D';
-const BLUE = '#3F51B5';
-
-interface DriverProfile {
-  id: string;
-  firstName: string;
-  lastName: string;
-  dni: string;
-  phone: string;
-  brand: string;
-  model: string;
-  color: string;
-  plate: string;
-  photoUrl?: string;
-}
-
-const emptyDriverProfile = (driverId: string): DriverProfile => ({
-  id: driverId,
-  firstName: 'Conductor',
-  lastName: '',
-  dni: '-',
-  phone: '-',
-  brand: '-',
-  model: '-',
-  color: '-',
-  plate: '-',
-  photoUrl: undefined,
-});
-
+/**
+ * Postulantes del servicio, con el formato de la referencia del usuario:
+ * avatar, "Datos del conductor" (nombres y apellidos), "Datos del vehículo"
+ * (marca, modelo y color) con el tiempo y la distancia del postulante al punto
+ * de origen a la derecha, y tres acciones al pie:
+ *   - Aceptar  (verde): acepta el servicio y lleva al chat ya aceptado.
+ *   - Conversar (azul): lleva al chat sin aceptar (el botón de aceptar está allí).
+ *   - Rechazar (rojo): descarta a ese postulante.
+ */
 export function ApplicantsScreen() {
   const navigation = useNavigation<ApplicantsNav>();
   const route = useRoute<ApplicantsRoute>();
   const { serviceId } = route.params;
-  const { applications, approveApplication, rejectApplication, services, emitChatNotification } =
-    useMockStore();
+  const { profile } = useAuth();
+  const {
+    applications,
+    approveApplication,
+    rejectApplicationFrom,
+    services,
+    emitChatNotification,
+  } = useMockStore();
 
   const serviceApplicants = useMemo(
     () =>
@@ -61,119 +62,144 @@ export function ApplicantsScreen() {
     [applications, serviceId]
   );
 
-  const handleSelect = (serviceId: string, driverId: string) => {
-    approveApplication(serviceId, driverId);
-    const svc = services.find((s) => s.id === serviceId);
-    emitChatNotification(
-      '\u00a1Postulaci\u00f3n aceptada!',
-      `Fuiste seleccionado para el servicio: ${svc?.title || serviceId}. El chat ya est\u00e1 disponible.`,
-      { serviceId, driverId, type: 'APPLICATION_ACCEPTED' }
-    );
-    navigation.goBack();
-  };
+  const service = useMemo(
+    () => services.find((s) => s.id === serviceId) || null,
+    [services, serviceId]
+  );
 
-  const handleReject = (id: string) => {
-    rejectApplication(id);
-  };
+  // Datos reales de cada postulante (nombre y vehículo). Los lee la función
+  // `public_profile`, que autoriza al proveedor del servicio con sus postulantes.
+  const [perfiles, setPerfiles] = useState<Record<string, DatosPublicos>>({});
+  const idsPostulantes = useMemo(
+    () => serviceApplicants.map((a) => a.driverId),
+    [serviceApplicants]
+  );
+  const clavePostulantes = idsPostulantes.join(',');
 
-  const handleChat = (applicantServiceId: string, applicantDriverId: string, name: string) => {
+  useEffect(() => {
+    if (idsPostulantes.length === 0) return;
+    let vigente = true;
+
+    (async () => {
+      for (const id of idsPostulantes) {
+        if (perfiles[id]) continue;
+        try {
+          const resultado = await fetchPublicProfile(id);
+          if (!vigente) return;
+          if (resultado.profile) {
+            const datos = datosDesdePerfilPublico(resultado.profile);
+            setPerfiles((actuales) => ({ ...actuales, [id]: datos }));
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[postulantes] no se pudo leer el perfil', id, err);
+        }
+      }
+    })();
+
+    return () => {
+      vigente = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clavePostulantes]);
+
+  // Tiempo y distancia del postulante al origen (función Premium).
+  const premium = esPremium(profile);
+  const origen: Punto | null = useMemo(() => {
+    if (!service) return null;
+    return {
+      address: service.origin_address,
+      lat: service.origin_lat || null,
+      lng: service.origin_lng || null,
+    };
+  }, [service]);
+  const { estimaciones } = useEstimacionesDePostulantes(
+    serviceId,
+    idsPostulantes,
+    origen,
+    premium && hayApiDeRutas()
+  );
+
+  const datosDe = (driverId: string): DatosPublicos =>
+    perfiles[driverId] || datosDesdePerfilPublico(null);
+
+  const irAlChat = (driverId: string) => {
+    const datos = datosDe(driverId);
     navigation.navigate('Chat', {
-      serviceId: applicantServiceId,
-      driverId: applicantDriverId,
-      driverName: name,
+      serviceId,
+      driverId,
+      driverName: `${datos.nombres} ${datos.apellidos}`.trim(),
     });
   };
 
-  const getProfile = (driverId: string) => emptyDriverProfile(driverId);
+  const handleAceptar = (driverId: string) => {
+    approveApplication(serviceId, driverId);
+    emitChatNotification(
+      '¡Postulación aceptada!',
+      `Fuiste seleccionado para el servicio: ${service?.title || serviceId}. El chat ya está disponible.`,
+      { serviceId, driverId, type: 'APPLICATION_ACCEPTED' }
+    );
+    irAlChat(driverId);
+  };
 
-  const renderApplicant = ({
-    item,
-  }: {
-    item: { serviceId: string; driverId: string; status: string };
-  }) => {
-    const profile = getProfile(item.driverId);
+  const handleRechazar = (driverId: string) => {
+    rejectApplicationFrom(serviceId, driverId);
+  };
+
+  const renderApplicant = ({ item }: { item: { serviceId: string; driverId: string } }) => {
+    const datos = datosDe(item.driverId);
+    const estimacion = estimaciones[item.driverId];
 
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.95}
-        onPress={() =>
-          handleChat(item.serviceId, item.driverId, `${profile.firstName} ${profile.lastName}`)
-        }
-      >
-        {/* Top row: avatar, driver data */}
+      <View style={styles.card}>
         <View style={styles.topRow}>
-          {profile.photoUrl ? (
-            <Image source={{ uri: profile.photoUrl }} style={styles.avatar} />
+          {datos.foto ? (
+            <Image source={{ uri: datos.foto }} style={styles.avatar} />
           ) : (
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{profile.firstName.charAt(0)}</Text>
+              <Text style={styles.avatarText}>{inicialDe(datos)}</Text>
             </View>
           )}
 
-          <View style={styles.driverSection}>
+          <View style={styles.dataColumn}>
             <Text style={styles.sectionTitle}>Datos del conductor</Text>
-            <View style={styles.fieldRow}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.fieldText}>Nombres: {profile.firstName}</Text>
+            <Text style={styles.fieldText}>Nombres: {conGuion(datos.nombres)}</Text>
+            <Text style={styles.fieldText}>Apellidos: {conGuion(datos.apellidos)}</Text>
+
+            <View style={styles.vehicleHeader}>
+              <Text style={[styles.sectionTitle, styles.vehicleTitle]}>Datos del vehículo</Text>
+              {!!estimacion && <Text style={styles.estimate}>{estimacion}</Text>}
             </View>
-            <View style={styles.fieldRow}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.fieldText}>Apellidos: {profile.lastName}</Text>
-            </View>
-            <View style={styles.fieldRow}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.fieldText}>DNI: {profile.dni}</Text>
-            </View>
-            <View style={styles.fieldRow}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.fieldText}>Celular: {profile.phone}</Text>
-            </View>
+            <Text style={styles.fieldText}>Marca: {conGuion(datos.marca)}</Text>
+            <Text style={styles.fieldText}>Modelo: {conGuion(datos.modelo)}</Text>
+            <Text style={styles.fieldText}>Color: {conGuion(datos.color)}</Text>
           </View>
         </View>
 
-        {/* Separator */}
-        <View style={styles.separator} />
-
-        {/* Vehicle data */}
-        <View style={styles.vehicleSection}>
-          <Text style={styles.sectionTitle}>Datos del vehículo</Text>
-          <View style={styles.vehicleGrid}>
-            <View style={styles.vehicleItem}>
-              <Text style={styles.vehicleLabel}>Marca</Text>
-              <Text style={styles.vehicleValue}>{profile.brand}</Text>
-            </View>
-            <View style={styles.vehicleItem}>
-              <Text style={styles.vehicleLabel}>Modelo</Text>
-              <Text style={styles.vehicleValue}>{profile.model}</Text>
-            </View>
-            <View style={styles.vehicleItem}>
-              <Text style={styles.vehicleLabel}>Color</Text>
-              <Text style={styles.vehicleValue}>{profile.color}</Text>
-            </View>
-            <View style={styles.vehicleItem}>
-              <Text style={styles.vehicleLabel}>Placa</Text>
-              <Text style={styles.vehicleValue}>{profile.plate}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Bottom actions */}
         <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.selectBtn]}
-            onPress={() => handleSelect(item.serviceId, item.driverId)}
+            style={[styles.actionBtn, styles.acceptBtn]}
+            onPress={() => handleAceptar(item.driverId)}
+            activeOpacity={0.85}
           >
-            <Text style={styles.actionBtnText}>Seleccionar</Text>
+            <Text style={styles.actionBtnText}>Aceptar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.chatBtn]}
+            onPress={() => irAlChat(item.driverId)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.actionBtnText}>Conversar</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.rejectBtn]}
-            onPress={() => handleReject(item.serviceId)}
+            onPress={() => handleRechazar(item.driverId)}
+            activeOpacity={0.85}
           >
             <Text style={styles.actionBtnText}>Rechazar</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -214,7 +240,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: DARK_BG,
+    backgroundColor: OSCURO,
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
@@ -249,94 +275,61 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   card: {
-    backgroundColor: '#F2F2F2',
+    backgroundColor: FONDO_TARJETA,
     borderRadius: 16,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     marginBottom: 16,
   },
   topRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: DARK_BG,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: OSCURO,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-    marginTop: 4,
+    marginRight: 20,
   },
   avatarText: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
   },
-  driverSection: {
+  dataColumn: {
     flex: 1,
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#111',
-    marginBottom: 8,
+    color: TEXTO,
+    marginBottom: 6,
   },
-  fieldRow: {
+  vehicleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    marginTop: 14,
   },
-  bullet: {
+  vehicleTitle: {
+    marginBottom: 6,
+  },
+  estimate: {
     fontSize: 14,
-    color: BLUE,
-    marginRight: 6,
-  },
-  fieldText: {
-    fontSize: 13,
-    color: '#444',
-  },
-  chatBtn: {
-    backgroundColor: BLUE,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    color: TEXTO_SUAVE,
     marginLeft: 8,
   },
-  chatBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#ddd',
-    marginVertical: 14,
-  },
-  vehicleSection: {
-    marginBottom: 12,
-  },
-  vehicleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  vehicleItem: {
-    width: '50%',
-    marginBottom: 8,
-  },
-  vehicleLabel: {
-    fontSize: 12,
-    color: '#888',
-  },
-  vehicleValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
+  fieldText: {
+    fontSize: 14,
+    color: TEXTO_SUAVE,
+    marginBottom: 2,
   },
   actionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 16,
   },
   actionBtn: {
     flex: 1,
@@ -344,13 +337,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  selectBtn: {
-    backgroundColor: BLUE,
-    marginRight: 8,
+  acceptBtn: {
+    backgroundColor: VERDE_ACCION,
+    marginRight: 5,
+  },
+  chatBtn: {
+    backgroundColor: AZUL,
+    marginRight: 5,
   },
   rejectBtn: {
-    backgroundColor: '#ff3b30',
-    marginLeft: 8,
+    backgroundColor: ROJO_ACCION,
   },
   actionBtnText: {
     color: '#fff',

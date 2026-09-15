@@ -27,6 +27,7 @@ import {
   insertGroupMember,
   insertServiceAlert,
   rejectApplicationInDb,
+  rejectApplicationFromDb,
   removeGroupMember,
   saveProfileData,
   updateApplication,
@@ -148,6 +149,7 @@ type MockAction =
   | { type: 'APPLY_TO_SERVICE'; payload: { serviceId: string; driverId: string } }
   | { type: 'APPROVE_APPLICATION'; payload: { serviceId: string; driverId: string } }
   | { type: 'REJECT_APPLICATION'; payload: { serviceId: string } }
+  | { type: 'REJECT_APPLICATION_FROM'; payload: { serviceId: string; driverId: string } }
   | { type: 'CANCEL_APPLICATION'; payload: { serviceId: string; driverId: string } }
   | { type: 'UPDATE_SERVICE_STATUS'; payload: { serviceId: string; status: ServiceStatus } }
   | { type: 'ARCHIVE_SERVICE'; payload: { serviceId: string } }
@@ -281,6 +283,18 @@ function mockReducer(state: MockState, action: MockAction): MockState {
           s.id === action.payload.serviceId
             ? { ...s, status: 'STATUS_OPEN', assigned_driver_id: null }
             : s
+        ),
+      };
+
+    case 'REJECT_APPLICATION_FROM':
+      // Rechaza solo a ese postulante: el servicio sigue igual (los demás siguen
+      // en pie). `REJECT_APPLICATION` (sin conductor) los rechaza a todos.
+      return {
+        ...state,
+        applications: state.applications.map((a) =>
+          a.serviceId === action.payload.serviceId && a.driverId === action.payload.driverId
+            ? { ...a, status: 'REJECTED' }
+            : a
         ),
       };
 
@@ -474,6 +488,7 @@ interface MockContextValue extends MockState {
   applyToService: (serviceId: string, driverId: string) => void;
   approveApplication: (serviceId: string, driverId: string) => void;
   rejectApplication: (serviceId: string) => void;
+  rejectApplicationFrom: (serviceId: string, driverId: string) => void;
   cancelApplication: (serviceId: string, driverId: string) => void;
   updateServiceStatus: (serviceId: string, status: ServiceStatus) => void;
   archiveService: (serviceId: string) => void;
@@ -738,6 +753,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         }
       }
       dispatch({ type: 'REJECT_APPLICATION', payload: { serviceId } });
+    },
+    rejectApplicationFrom: async (serviceId, driverId) => {
+      if (isSupabaseConfigured) {
+        try {
+          await rejectApplicationFromDb(serviceId, driverId);
+        } catch (err) {
+          console.error('[MockStore] rejectApplicationFromDb error:', err);
+          Alert.alert('No se pudo rechazar al postulante', describeError(err));
+          return;
+        }
+      }
+      dispatch({ type: 'REJECT_APPLICATION_FROM', payload: { serviceId, driverId } });
     },
     cancelApplication: async (serviceId, driverId) => {
       await persistApplication(serviceId, driverId, { status: 'REJECTED' });

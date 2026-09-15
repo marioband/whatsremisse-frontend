@@ -7,6 +7,7 @@ import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
+import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
@@ -271,6 +272,9 @@ export function DriverHomeScreen() {
   // Medidas de distancia y tiempo (función Premium): del conductor al origen y
   // del origen al destino. Sin premium (o sin clave de Google) no se pide nada.
   const premium = esPremium(profile);
+  // El conductor publica su última posición (como mucho cada 500 m o 5 minutos)
+  // para que el proveedor pueda ver a qué distancia está de su punto de origen.
+  usePosicionPublicada(role === 'DRIVER');
   const { estimaciones, avisoDeUbicacion, reintentar } = useEstimacionesDeRuta(
     displayServices,
     premium && hayApiDeRutas()
