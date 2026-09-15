@@ -490,7 +490,8 @@ interface MockContextValue extends MockState {
   addGroup: (group: GroupItem) => Promise<void>;
   addMember: (member: GroupMember) => void;
   updateMemberRole: (groupId: string, memberId: string, role: 'owner' | 'admin' | 'member') => void;
-  removeMember: (groupId: string, memberId: string) => void;
+  /** Devuelve false si la base no confirmó el borrado (para no navegar como si hubiera funcionado). */
+  removeMember: (groupId: string, memberId: string) => Promise<boolean>;
   setUserProfile: (profile: UserProfile) => void;
   persistUserProfile: (profile: UserProfile) => Promise<void>;
   emitNotification: (serviceId: string, title?: string) => boolean;
@@ -831,14 +832,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     removeMember: async (groupId, memberId) => {
       if (esPropietarioDelGrupo(state.groups, state.members, groupId, memberId)) {
         Alert.alert('No permitido', 'No puedes eliminar al propietario del grupo.');
-        return;
+        return false;
       }
       try {
+        // removeGroupMember comprueba que la fila se haya ido de verdad: con RLS,
+        // un DELETE filtrado responde OK y el integrante reaparecía al recargar.
         await removeGroupMember(groupId, memberId);
         dispatch({ type: 'REMOVE_MEMBER', payload: { groupId, memberId } });
+        return true;
       } catch (err) {
         console.error('[MockStore] removeMember error:', err);
         Alert.alert('No se pudo eliminar al integrante', describeError(err));
+        return false;
       }
     },
     setUserProfile: (profile) => dispatch({ type: 'SET_USER_PROFILE', payload: profile }),

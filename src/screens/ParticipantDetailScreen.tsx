@@ -139,9 +139,11 @@ export function ParticipantDetailScreen() {
       {
         text: 'Eliminar',
         style: 'destructive',
-        onPress: () => {
-          removeMember(groupId, memberId);
-          navigation.goBack();
+        onPress: async () => {
+          // Solo se vuelve atrás si la base confirmó el borrado; si lo rechaza,
+          // el aviso con el motivo se muestra y el integrante sigue en la lista.
+          const borrado = await removeMember(groupId, memberId);
+          if (borrado) navigation.goBack();
         },
       },
     ]);

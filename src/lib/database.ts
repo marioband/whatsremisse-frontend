@@ -438,28 +438,97 @@ export async function insertGroupMember(
   return data;
 }
 
+/**
+ * Con RLS, un DELETE o un UPDATE que no toca ninguna fila NO es un error:
+ * PostgREST responde 204 y el cliente cree que hizo el cambio. El síntoma es
+ * "elimino al integrante, desaparece de la lista y al recargar la página vuelve".
+ *
+ * Arma el texto con lo que la base sí puede decirnos (tu rol en el grupo y quién
+ * es el creador) para que el fallo diga la causa en vez de quedar mudo.
+ */
+async function describirBloqueoDeFila(
+  groupId: string,
+  accion: 'eliminar al integrante' | 'cambiar el rol'
+): Promise<string> {
+  const partes: string[] = [];
+  try {
+    const { data: sesion } = await supabase.auth.getSession();
+    const uid = sesion?.session?.user?.id;
+    if (uid) {
+      const { data: miFila } = await supabase
+        .from('group_members')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', uid)
+        .maybeSingle();
+      partes.push(
+        miFila
+          ? `tu fila en group_members dice rol="${miFila.role}"`
+          : 'no tienes fila en group_members para este grupo'
+      );
+    }
+    const { data: grupo } = await supabase
+      .from('groups')
+      .select('owner_id')
+      .eq('id', groupId)
+      .maybeSingle();
+    if (grupo?.owner_id) partes.push(`el creador del grupo es ${grupo.owner_id}`);
+  } catch {
+    // El diagnóstico es informativo: nunca debe tapar el error original.
+  }
+
+  return (
+    `Supabase respondió OK pero la fila sigue en group_members, así que no se pudo ${accion}. ` +
+    `Solo el creador del grupo o un Administrador pueden hacerlo (${partes.join('; ') || 'sin más datos'}). ` +
+    'Aplica supabase/migrations/0006_group_member_delete_policy.sql en Supabase Studio > SQL Editor ' +
+    '(deja borrar al creador del grupo aunque su fila de miembro falte o esté mal). Después comprueba con: ' +
+    `select gm.user_id, gm.role from public.group_members gm where gm.group_id = '${groupId}';`
+  );
+}
+
 export async function updateGroupMember(
   groupId: string,
   userId: string,
   updates: Partial<Pick<DbGroupMember, 'role' | 'favorite'>>
 ): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('group_members')
     .update(updates)
     .eq('group_id', groupId)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .select('user_id');
   if (error) throw error;
+  if (!data || data.length === 0) {
+    // El UPDATE no tocó ninguna fila: o la política lo filtró (RLS) o la fila no
+    // existe. Los dos casos hay que decirlos, no tragarlos.
+    throw new Error(await describirBloqueoDeFila(groupId, 'cambiar el rol'));
+  }
 }
 
 export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('group_members')
     .delete()
     .eq('group_id', groupId)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .select('user_id');
   if (error) throw error;
+
+  // Con representación confirmamos el borrado. Si viene vacío, todavía hay que
+  // distinguir "no borró nada" de "borró, pero no puedo leerlo".
+  if (data && data.length > 0) return;
+
+  const { count, error: countError } = await supabase
+    .from('group_members')
+    .select('user_id', { count: 'exact', head: true })
+    .eq('group_id', groupId)
+    .eq('user_id', userId);
+  if (countError) throw countError;
+  if ((count ?? 0) === 0) return; // la fila ya no está: sí se eliminó
+
+  throw new Error(await describirBloqueoDeFila(groupId, 'eliminar al integrante'));
 }
 
 export async function fetchMessagesForGroup(groupId: string): Promise<ChatMessage[]> {
