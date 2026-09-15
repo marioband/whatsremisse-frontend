@@ -19,23 +19,50 @@ type CreateGroupNav = StackNavigationProp<RootStackParamList, 'CreateGroup'>;
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
 
+/**
+ * Convierte cualquier error (Supabase/PostgREST, red, etc.) en un texto legible
+ * para mostrarlo en un Alert. Nunca deja el fallo en silencio.
+ */
+function describeError(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const e = err as { message?: string; details?: string; hint?: string; code?: string };
+    const parts = [e.message, e.code ? `Código: ${e.code}` : undefined, e.details, e.hint].filter(
+      (part): part is string => Boolean(part)
+    );
+    if (parts.length > 0) return parts.join('\n');
+  }
+  return String(err);
+}
+
 export function CreateGroupScreen() {
   const navigation = useNavigation<CreateGroupNav>();
   const { addGroup } = useMockStore();
   const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name.trim()) {
       Alert.alert('Nombre requerido', 'Ingresa un nombre para el grupo.');
       return;
     }
-    addGroup({
-      id: '',
-      name: name.trim(),
-      role: 'owner',
-      favorite: false,
-    });
-    navigation.goBack();
+    if (creating) return;
+
+    setCreating(true);
+    try {
+      await addGroup({
+        id: '',
+        name: name.trim(),
+        role: 'owner',
+        favorite: false,
+      });
+      navigation.goBack();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[CreateGroup] no se pudo crear el grupo:', err);
+      Alert.alert('No se pudo crear el grupo', describeError(err));
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -73,8 +100,12 @@ export function CreateGroupScreen() {
 
       {/* Action button */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.createBtn} onPress={handleCreate}>
-          <Text style={styles.createText}>Crear</Text>
+        <TouchableOpacity
+          style={[styles.createBtn, creating && styles.createBtnDisabled]}
+          onPress={handleCreate}
+          disabled={creating}
+        >
+          <Text style={styles.createText}>{creating ? 'Creando...' : 'Crear'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -156,6 +187,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 80,
     alignItems: 'center',
+  },
+  createBtnDisabled: {
+    opacity: 0.6,
   },
   createText: {
     color: '#fff',

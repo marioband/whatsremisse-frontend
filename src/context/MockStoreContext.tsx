@@ -424,7 +424,7 @@ interface MockContextValue extends MockState {
   payCommission: (serviceId: string) => void;
   confirmDriverPayment: (serviceId: string) => void;
   toggleFavoriteGroup: (groupId: string) => void;
-  addGroup: (group: GroupItem) => void;
+  addGroup: (group: GroupItem) => Promise<void>;
   addMember: (member: GroupMember) => void;
   updateMemberRole: (groupId: string, memberId: string, role: 'owner' | 'admin' | 'member') => void;
   removeMember: (groupId: string, memberId: string) => void;
@@ -615,7 +615,12 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     },
     addGroup: async (group) => {
-      if (!session?.user) return;
+      if (!isSupabaseConfigured) {
+        throw new Error('Supabase no está configurado en esta build.');
+      }
+      if (!session?.user) {
+        throw new Error('No hay sesión activa. Vuelve a iniciar sesión.');
+      }
       try {
         const { group: dbGroup, member } = await insertGroup(group.name, session.user.id);
         dispatch({
@@ -629,6 +634,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         });
       } catch (err) {
         console.error('[MockStore] addGroup error:', err);
+        throw err;
       }
     },
     addMember: async (member) => {
