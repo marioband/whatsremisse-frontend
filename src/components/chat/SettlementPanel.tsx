@@ -85,5 +85,5 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
   },
-  closureText: { color: '#075E54', fontWeight: 'bold', fontSize: 14 },
+  closureText: { color: '#358C52', fontWeight: 'bold', fontSize: 14 },
 });

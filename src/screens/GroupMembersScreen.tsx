@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   warnText: {
     marginTop: 18,
-    color: '#B00020',
+    color: '#9B3B43',
     fontSize: 12,
     lineHeight: 17,
     textAlign: 'center',

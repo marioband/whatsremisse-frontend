@@ -80,6 +80,19 @@ export interface DbMessage {
   created_at: string;
 }
 
+/** Fila de `service_messages` (migración 0010): chat 1 a 1 del servicio. */
+export interface DbServiceMessage {
+  id: string;
+  service_id: string;
+  driver_id: string;
+  /** NULL = mensaje del sistema (hitos del viaje). */
+  sender_id: string | null;
+  content: string;
+  type: 'TEXT' | 'SYSTEM' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT';
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -112,6 +125,11 @@ export interface Database {
         Row: DbMessage;
         Insert: Partial<DbMessage>;
         Update: Partial<DbMessage>;
+      };
+      service_messages: {
+        Row: DbServiceMessage;
+        Insert: Partial<DbServiceMessage>;
+        Update: Partial<DbServiceMessage>;
       };
     };
   };

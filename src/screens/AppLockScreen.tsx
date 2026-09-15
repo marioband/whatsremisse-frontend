@@ -9,6 +9,7 @@ import { RootStackParamList } from '../navigation/RootNavigator';
 type AppLockNav = StackNavigationProp<RootStackParamList, 'AppLock'>;
 
 const DARK_BG = '#2D2D2D';
+const AZUL = '#3F51B5';
 
 export function AppLockScreen() {
   const navigation = useNavigation<AppLockNav>();
@@ -38,8 +39,8 @@ export function AppLockScreen() {
                 value ? 'Desbloqueo con rasgos activado.' : 'Desbloqueo con rasgos desactivado.'
               );
             }}
-            trackColor={{ false: '#ccc', true: '#25D366' }}
-            thumbColor={enabled ? '#075E54' : '#f4f3f4'}
+            trackColor={{ false: '#ccc', true: AZUL }}
+            thumbColor={enabled ? '#fff' : '#f4f3f4'}
           />
         </View>
 

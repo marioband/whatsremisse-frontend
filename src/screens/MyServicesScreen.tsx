@@ -5,6 +5,7 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { ROJO_ACCION, VERDE_ACCION } from '../lib/colors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert, ServiceStatus } from '../types';
 
@@ -23,14 +24,17 @@ const STATUS_LABELS: Record<ServiceStatus, string> = {
   STATUS_CANCELLED: 'Cancelado',
 };
 
+/** Color del estado del servicio, en la paleta de la app: gris (buscando),
+ *  azul (activo), oscuro (en camino/ubicado/en proceso), verde (finalizado)
+ *  y rojo (cancelado). */
 const STATUS_COLORS: Record<ServiceStatus, string> = {
   STATUS_OPEN: '#888',
   STATUS_PENDING_APPROVAL: BLUE,
-  STATUS_EN_ROUTE_ORIGIN: '#128C7E',
-  STATUS_AT_ORIGIN: '#128C7E',
-  STATUS_IN_PROGRESS: '#075E54',
-  STATUS_COMPLETED: '#25D366',
-  STATUS_CANCELLED: '#ff3b30',
+  STATUS_EN_ROUTE_ORIGIN: DARK_BG,
+  STATUS_AT_ORIGIN: DARK_BG,
+  STATUS_IN_PROGRESS: DARK_BG,
+  STATUS_COMPLETED: VERDE_ACCION,
+  STATUS_CANCELLED: ROJO_ACCION,
 };
 
 interface GroupedServices {

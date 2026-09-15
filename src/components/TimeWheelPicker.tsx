@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   },
   aviso: {
     fontSize: 12,
-    color: '#B00020',
+    color: '#9B3B43',
     marginTop: 8,
   },
   actionsRow: {

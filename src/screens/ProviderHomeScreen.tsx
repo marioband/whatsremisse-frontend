@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -6,
     right: -6,
-    backgroundColor: '#ff3b30',
+    backgroundColor: '#9B3B43',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   expiredBar: {
-    backgroundColor: '#D32F2F',
+    backgroundColor: '#9B3B43',
     marginHorizontal: 12,
     marginTop: -6,
     paddingVertical: 10,

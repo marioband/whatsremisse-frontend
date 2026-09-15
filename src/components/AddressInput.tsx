@@ -21,7 +21,7 @@ import {
 
 const BLUE = '#3F51B5';
 const DARK_BG = '#2D2D2D';
-const ROJO = '#B00020';
+const ROJO = '#9B3B43';
 
 export interface DireccionConfirmada {
   texto: string;

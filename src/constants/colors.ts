@@ -8,31 +8,31 @@ export const COLORS = {
   // Fondos
   background: '#F2F2F2',
   white: '#FFFFFF',
-  whatsappBg: '#E5DDD5',
+  chatBg: '#FFFFFF',
   inputBg: '#F0F2F5',
 
   // Tarjetas de servicio
   cardNew: '#FFFFFF',
   cardAppliedOverlay: 'rgba(139, 149, 201, 0.85)',
-  cardAccepted: '#25D366',
+  cardAccepted: '#358C52',
 
   // Acentos
   primary: '#3F51B5',
   primaryDark: '#303F9F',
-  whatsappGreen: '#075E54',
-  brightGreen: '#25D366',
+  headerDark: '#2D2D2D',
+  brightGreen: '#358C52',
   orange: '#FF9800',
 
   // Estados / sistema
-  danger: '#ff3b30',
+  danger: '#9B3B43',
   warningBg: '#FFF3E0',
   warningText: '#E65100',
   successBg: '#E8F5E9',
-  info: '#34B7F1',
+  info: '#3F51B5',
 
-  // Mensajes
-  bubbleMine: '#DCF8C6',
-  bubbleOther: '#FFFFFF',
+  // Mensajes: el que escribe en azul de marca con texto blanco, el otro en gris
+  bubbleMine: '#3F51B5',
+  bubbleOther: '#C6C6C6',
 
   // Acciones
   grayAction: '#6B7280',

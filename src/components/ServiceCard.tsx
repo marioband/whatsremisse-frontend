@@ -297,14 +297,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#34B7F1',
+    // Origen en azul de marca y destino en oscuro: los puntos de WhatsApp
+    // (azul claro y verde) no son de la paleta.
+    backgroundColor: COLORS.primary,
     marginRight: 8,
   },
   dotDestination: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#25D366',
+    backgroundColor: COLORS.headerDark,
     marginRight: 8,
   },
   dotActive: {

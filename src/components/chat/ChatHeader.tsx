@@ -1,28 +1,67 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 
 interface ChatHeaderProps {
   title: string;
   subtitle?: string;
   onBack: () => void;
   onSettings: () => void;
+  /** Búsqueda dentro del chat: la lupa abre el campo y filtra los mensajes. */
+  searchOpen?: boolean;
+  query?: string;
+  onChangeQuery?: (text: string) => void;
+  onToggleSearch?: () => void;
+  /** Cuántos mensajes coinciden (solo se muestra mientras se busca). */
+  resultCount?: number;
 }
 
 const DARK_HEADER = '#2D2D2D';
 
-export function ChatHeader({ title, subtitle, onBack, onSettings }: ChatHeaderProps) {
+export function ChatHeader({
+  title,
+  subtitle,
+  onBack,
+  onSettings,
+  searchOpen = false,
+  query = '',
+  onChangeQuery,
+  onToggleSearch,
+  resultCount,
+}: ChatHeaderProps) {
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack}>
         <Text style={styles.backArrow}>←</Text>
       </TouchableOpacity>
-      <View style={styles.headerInfo}>
-        <Text style={styles.headerTitle}>{title || 'Chat'}</Text>
-        {subtitle ? <Text style={styles.headerSubtitle}>{subtitle}</Text> : null}
-      </View>
+
+      {searchOpen ? (
+        <View style={styles.searchPill}>
+          <Text style={styles.searchIcon}>⌕</Text>
+          <TextInput
+            style={styles.searchInput}
+            value={query}
+            onChangeText={onChangeQuery}
+            placeholder="Buscar en este chat"
+            placeholderTextColor="rgba(255,255,255,0.6)"
+            autoFocus
+            returnKeyType="search"
+          />
+          {query.length > 0 && (
+            <Text style={styles.searchCount}>
+              {resultCount === 0 ? 'Sin resultados' : `${resultCount}`}
+            </Text>
+          )}
+        </View>
+      ) : (
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerTitle}>{title || 'Chat'}</Text>
+          {subtitle ? <Text style={styles.headerSubtitle}>{subtitle}</Text> : null}
+        </View>
+      )}
+
       <View style={styles.headerIcons}>
-        <TouchableOpacity>
-          <Text style={styles.headerIcon}>🔍</Text>
+        <TouchableOpacity onPress={onToggleSearch} accessibilityLabel="Buscar en el chat">
+          <Text style={styles.headerIcon}>{searchOpen ? '✕' : '🔍'}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onSettings}>
           <Text style={styles.headerIcon}>⚙️</Text>
@@ -47,4 +86,16 @@ const styles = StyleSheet.create({
   headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
   headerIcons: { flexDirection: 'row' },
   headerIcon: { color: '#fff', fontSize: 18, marginLeft: 16 },
+  searchPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    height: 36,
+  },
+  searchIcon: { color: '#fff', fontSize: 16, marginRight: 6 },
+  searchInput: { flex: 1, color: '#fff', fontSize: 14, paddingVertical: 0 },
+  searchCount: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginLeft: 6 },
 });

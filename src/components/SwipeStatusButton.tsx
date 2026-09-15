@@ -1,17 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   PanResponder,
   Animated,
-  Dimensions,
+  LayoutChangeEvent,
   PanResponderGestureState,
 } from 'react-native';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { VERDE_ACCION } from '../lib/colors';
+
 const TRACK_HEIGHT = 50;
 const THUMB_SIZE = 42;
+/** Cuánto hay que arrastrar (0-1 del ancho) para que cuente como deslizado. */
+const UMBRAL = 0.6;
 
 export interface SwipeState {
   label: string;
@@ -30,35 +33,34 @@ interface RoleProps {
   step: 'IN_PROGRESS' | 'COMMISSION_PAID' | 'PAYMENT_RECEIVED' | 'FINISHED';
   progressIndex?: number;
   onAdvance: () => void;
+  /** Sin nada más que reportar (p. ej. servicio finalizado sin cuadre). */
+  disabled?: boolean;
 }
 
 type Props = GenericProps | RoleProps;
 
-const GREEN = '#4CD964';
-
 function isGeneric(props: Props): props is GenericProps {
   return 'states' in props;
 }
+
+/** Hitos del viaje, en el vocabulario de la app: Ubicado → En proceso → Finalizado. */
+const ETAPAS = ['Ubicado', 'En proceso', 'Finalizado'];
 
 function buildRoleStates(
   role: 'DRIVER' | 'PROVIDER',
   step: 'IN_PROGRESS' | 'COMMISSION_PAID' | 'PAYMENT_RECEIVED' | 'FINISHED'
 ): SwipeState[] {
   if (step === 'IN_PROGRESS') {
-    const subLabels = ['ubicado', 'inicio', 'finalizado'];
-    return subLabels.map((sub) => ({
-      label: sub,
-      color: GREEN,
-    }));
+    return ETAPAS.map((label) => ({ label, color: VERDE_ACCION }));
   }
   if (step === 'COMMISSION_PAID') {
     return [
       {
         label:
           role === 'DRIVER'
-            ? 'Deslizar para marcar: Comisi\u00f3n entregada'
-            : 'Deslizar para marcar: Comisi\u00f3n recibida',
-        color: GREEN,
+            ? 'Deslizar para marcar: Comisión entregada'
+            : 'Deslizar para marcar: Comisión recibida',
+        color: VERDE_ACCION,
       },
     ];
   }
@@ -69,14 +71,14 @@ function buildRoleStates(
           role === 'DRIVER'
             ? 'Deslizar para marcar: Pago recibido'
             : 'Deslizar para marcar: Abonado / Finalizado',
-        color: GREEN,
+        color: VERDE_ACCION,
       },
     ];
   }
   return [
     {
       label: 'Servicio cerrado',
-      color: GREEN,
+      color: VERDE_ACCION,
     },
   ];
 }
@@ -89,48 +91,53 @@ export function SwipeStatusButton(props: Props) {
 
   const states = generic ? props.states : buildRoleStates(role!, step!);
   const currentIndex = generic ? props.currentIndex : (progressIndex ?? 0);
-  const disabled = generic ? props.disabled : role === 'PROVIDER' && step === 'IN_PROGRESS';
+  const disabledByRole = generic ? false : role === 'PROVIDER' && step === 'IN_PROGRESS';
+  const disabled = Boolean(props.disabled) || disabledByRole;
 
-  const trackWidth = SCREEN_WIDTH;
-  const maxTranslate = trackWidth - THUMB_SIZE - 8;
+  // El ancho real de la barra se mide en pantalla: antes se usaba el ancho de la
+  // ventana y el recorrido quedaba descuadrado (y con umbral de 0.7 era muy
+  // difícil que el deslizamiento contara).
+  const [trackWidth, setTrackWidth] = useState(0);
+  const maxTranslate = Math.max(trackWidth - THUMB_SIZE - 8, 1);
+
   const translateX = useRef(new Animated.Value(0)).current;
   const current = states[currentIndex] || states[states.length - 1];
   const isFinal = disabled || (generic ? currentIndex >= states.length - 1 : step === 'FINISHED');
 
   const resetThumb = () => {
-    Animated.spring(translateX, {
-      toValue: 0,
-      useNativeDriver: false,
-      friction: 7,
-    }).start();
+    translateX.setValue(0);
   };
 
   useEffect(() => {
     resetThumb();
   }, [currentIndex, states.length]);
 
-  // Refs para evitar que PanResponder capture callbacks/valores obsoletos
-  const propsRef = useRef({ generic, onAdvance: props.onAdvance, currentIndex, isFinal });
+  // Refs para que el PanResponder (creado una sola vez) no capture valores viejos
+  const propsRef = useRef({ generic, onAdvance: props.onAdvance, currentIndex, disabled });
   useEffect(() => {
-    propsRef.current = { generic, onAdvance: props.onAdvance, currentIndex, isFinal };
-  }, [generic, props.onAdvance, currentIndex, isFinal]);
+    propsRef.current = { generic, onAdvance: props.onAdvance, currentIndex, disabled };
+  }, [generic, props.onAdvance, currentIndex, disabled]);
+  const maxRef = useRef(maxTranslate);
+  useEffect(() => {
+    maxRef.current = maxTranslate;
+  }, [maxTranslate]);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !propsRef.current.isFinal,
-      onMoveShouldSetPanResponder: () => !propsRef.current.isFinal,
-      onPanResponderGrant: () => {
-        // Mueve el valor actual al offset y resetea el valor a 0 usando la API pública de Animated
-        translateX.extractOffset();
-      },
+      onStartShouldSetPanResponder: () => !propsRef.current.disabled,
+      onMoveShouldSetPanResponder: () => !propsRef.current.disabled,
+      // El deslizamiento no se cede a la lista ni al scroll mientras se arrastra.
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onPanResponderMove: (_evt, gestureState: PanResponderGestureState) => {
-        const newX = Math.max(0, Math.min(gestureState.dx, maxTranslate));
-        translateX.setValue(newX);
+        // Sin offsets: el pulgar siempre parte de 0 y vuelve a 0 al soltar.
+        const nuevo = Math.max(0, Math.min(gestureState.dx, maxRef.current));
+        translateX.setValue(nuevo);
       },
       onPanResponderRelease: (_evt, gestureState: PanResponderGestureState) => {
-        translateX.flattenOffset();
-        const progress = Math.max(0, Math.min(gestureState.dx, maxTranslate)) / maxTranslate;
-        if (progress > 0.7) {
+        const recorrido = Math.max(0, Math.min(gestureState.dx, maxRef.current));
+        const progress = recorrido / maxRef.current;
+        if (progress >= UMBRAL) {
           const { generic: isGen, onAdvance, currentIndex: idx } = propsRef.current;
           if (isGen) {
             (onAdvance as (nextIndex: number) => void)(idx + 1);
@@ -138,6 +145,9 @@ export function SwipeStatusButton(props: Props) {
             (onAdvance as () => void)();
           }
         }
+        resetThumb();
+      },
+      onPanResponderTerminate: () => {
         resetThumb();
       },
     })
@@ -149,9 +159,14 @@ export function SwipeStatusButton(props: Props) {
     extrapolate: 'clamp',
   });
 
+  const onLayout = (event: LayoutChangeEvent) => {
+    const { width } = event.nativeEvent.layout;
+    if (width && Math.abs(width - trackWidth) > 1) setTrackWidth(width);
+  };
+
   return (
     <View style={styles.container}>
-      <View style={[styles.track, { backgroundColor: current.color }]}>
+      <View style={[styles.track, { backgroundColor: current.color }]} onLayout={onLayout}>
         <Animated.View
           style={[
             styles.fill,
@@ -181,7 +196,6 @@ const styles = StyleSheet.create({
   track: {
     width: '100%',
     height: TRACK_HEIGHT,
-    borderRadius: 0,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',

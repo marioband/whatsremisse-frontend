@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     textAlign: 'center',
-    color: '#D32F2F',
+    color: '#9B3B43',
     marginTop: 40,
     paddingHorizontal: 16,
   },

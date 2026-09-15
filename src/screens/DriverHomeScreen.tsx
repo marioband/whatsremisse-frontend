@@ -19,7 +19,7 @@ type HomeNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
 
 const BLUE = '#3F51B5';
 const LIGHT_BG = '#F0F2F5';
-const BADGE_RED = '#ff3b30';
+const BADGE_RED = '#9B3B43';
 
 type StatusFilter = 'Todos' | 'En proceso' | 'Reservas';
 
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   debtBannerText: {
-    color: '#c62828',
+    color: '#9B3B43',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#25D366',
+    backgroundColor: BLUE,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   FlatList,
   TouchableOpacity,
@@ -21,6 +22,7 @@ import {
   ROJO_ACCION,
   TEXTO,
   TEXTO_SUAVE,
+  TEXTO_TENUE,
   VERDE_ACCION,
 } from '../lib/colors';
 import { fetchPublicProfile } from '../lib/database';
@@ -31,6 +33,14 @@ import { RootStackParamList } from '../navigation/RootNavigator';
 
 type ApplicantsNav = StackNavigationProp<RootStackParamList, 'ApplicantsScreen' | 'Settings'>;
 type ApplicantsRoute = RouteProp<RootStackParamList, 'ApplicantsScreen'>;
+
+/** Sin acentos ni mayúsculas, para que "jose" encuentre "José". */
+function normalizar(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 /**
  * Postulantes del servicio, con el formato de la referencia del usuario:
@@ -123,6 +133,30 @@ export function ApplicantsScreen() {
   const datosDe = (driverId: string): DatosPublicos =>
     perfiles[driverId] || datosDesdePerfilPublico(null);
 
+  // Búsqueda sobre las tarjetas de postulantes (la lupa de la cabecera): por
+  // nombre, teléfono, DNI o datos del vehículo, sin acentos ni mayúsculas.
+  const [buscarAbierto, setBuscarAbierto] = useState(false);
+  const [consulta, setConsulta] = useState('');
+
+  const postulantesVisibles = useMemo(() => {
+    const q = normalizar(consulta.trim());
+    if (!q) return serviceApplicants;
+    return serviceApplicants.filter((a) => {
+      const datos = perfiles[a.driverId] || datosDesdePerfilPublico(null);
+      const campos = [
+        datos.nombres,
+        datos.apellidos,
+        datos.telefono,
+        datos.dni,
+        datos.marca,
+        datos.modelo,
+        datos.color,
+        datos.placa,
+      ];
+      return campos.some((campo) => normalizar(campo || '').includes(q));
+    });
+  }, [serviceApplicants, consulta, perfiles]);
+
   const irAlChat = (driverId: string) => {
     const datos = datosDe(driverId);
     navigation.navigate('Chat', {
@@ -212,8 +246,15 @@ export function ApplicantsScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Postulantes</Text>
         <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Text style={styles.icon}>⌕</Text>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => {
+              setBuscarAbierto((abierto) => !abierto);
+              setConsulta('');
+            }}
+            accessibilityLabel="Buscar postulante"
+          >
+            <Text style={styles.icon}>{buscarAbierto ? '✕' : '⌕'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
             <Text style={styles.icon}>⚙</Text>
@@ -221,12 +262,34 @@ export function ApplicantsScreen() {
         </View>
       </View>
 
+      {buscarAbierto && (
+        <View style={styles.searchBar}>
+          <View style={styles.searchPill}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={consulta}
+              onChangeText={setConsulta}
+              placeholder="Buscar por nombre, teléfono o vehículo"
+              placeholderTextColor={TEXTO_TENUE}
+              autoFocus
+            />
+          </View>
+        </View>
+      )}
+
       <FlatList
-        data={serviceApplicants}
+        data={postulantesVisibles}
         keyExtractor={(item) => `${item.serviceId}-${item.driverId}`}
         renderItem={renderApplicant}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<Text style={styles.emptyText}>No hay postulantes pendientes.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {consulta.trim()
+              ? 'Ningún postulante coincide con la búsqueda.'
+              : 'No hay postulantes pendientes.'}
+          </Text>
+        }
       />
     </SafeAreaView>
   );
@@ -269,6 +332,29 @@ const styles = StyleSheet.create({
   icon: {
     color: '#fff',
     fontSize: 20,
+  },
+  searchBar: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  searchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FONDO_TARJETA,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    height: 40,
+  },
+  searchIcon: {
+    color: TEXTO_SUAVE,
+    fontSize: 18,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: TEXTO,
+    paddingVertical: 0,
   },
   list: {
     padding: 16,

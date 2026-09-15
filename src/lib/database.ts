@@ -9,6 +9,7 @@ import {
   DbGroup,
   DbGroupMember,
   DbMessage,
+  DbServiceMessage,
 } from '../types/database';
 
 export interface ChatMessage {
@@ -726,6 +727,95 @@ export async function insertMessage(
     .single();
   if (error) throw error;
   return mapMessageFromDb(data);
+}
+
+export interface ServiceMessage {
+  id: string;
+  service_id: string;
+  driver_id: string;
+  /** NULL = mensaje del sistema. */
+  sender_id: string | null;
+  content: string;
+  type: ChatMessage['type'];
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export function mapServiceMessageFromDb(row: DbServiceMessage | any): ServiceMessage {
+  return {
+    id: row.id,
+    service_id: row.service_id,
+    driver_id: row.driver_id,
+    sender_id: row.sender_id ?? null,
+    content: row.content,
+    type: row.type as ChatMessage['type'],
+    metadata: (row.metadata || {}) as Record<string, unknown>,
+    created_at: row.created_at,
+  };
+}
+
+/**
+ * ¿El error es "la tabla `service_messages` no existe"? Entonces la migración
+ * 0010 todavía no está aplicada en Supabase y hay que decirlo en pantalla en vez
+ * de dejar el chat mudo.
+ */
+export function esTablaAusente(err: unknown): boolean {
+  const e = err as { code?: string; message?: string; details?: string } | null;
+  if (!e) return false;
+  const codigo = e.code || '';
+  const texto = `${e.message || ''} ${e.details || ''}`.toLowerCase();
+  return (
+    codigo === '42P01' ||
+    codigo === 'PGRST205' ||
+    texto.includes('does not exist') ||
+    texto.includes('could not find the table') ||
+    texto.includes('schema cache')
+  );
+}
+
+/**
+ * Mensajes del chat 1 a 1 del servicio (conductor <-> proveedor). Antes este
+ * historial vivía solo en la memoria del dispositivo: `addMessage` no escribía
+ * en la base y por eso el otro lado nunca veía nada.
+ */
+export async function fetchServiceMessages(
+  serviceId: string,
+  driverId: string
+): Promise<ServiceMessage[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('service_messages')
+    .select('*')
+    .eq('service_id', serviceId)
+    .eq('driver_id', driverId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data || []).map((row: any) => mapServiceMessageFromDb(row));
+}
+
+export async function insertServiceMessage(params: {
+  serviceId: string;
+  driverId: string;
+  senderId: string | null;
+  content: string;
+  type?: ChatMessage['type'];
+  metadata?: Record<string, unknown>;
+}): Promise<ServiceMessage> {
+  if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('service_messages')
+    .insert({
+      service_id: params.serviceId,
+      driver_id: params.driverId,
+      sender_id: params.senderId,
+      content: params.content,
+      type: params.type ?? 'TEXT',
+      metadata: params.metadata ?? {},
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapServiceMessageFromDb(data);
 }
 
 export interface SearchableProfile {

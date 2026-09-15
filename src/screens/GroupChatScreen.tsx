@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeMessages } from '../hooks/useRealtimeMessages';
 import { Alert } from '../lib/alert';
+import { AZUL } from '../lib/colors';
 import { ChatMessage, fetchMessagesForGroup, insertMessage } from '../lib/database';
 import { displayName } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -159,8 +160,8 @@ export function GroupChatScreen() {
       <View style={[styles.bubbleRow, isMe ? styles.rowRight : styles.rowLeft]}>
         {!isMe && <Text style={styles.senderName}>{senderLabel}</Text>}
         <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
-          <Text style={styles.bubbleText}>{item.content}</Text>
-          <Text style={styles.bubbleTime}>
+          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMine]}>{item.content}</Text>
+          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMine]}>
             {new Date(item.created_at).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -280,13 +281,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   bubbleLeft: {
-    backgroundColor: '#fff',
+    backgroundColor: '#C6C6C6',
     borderBottomLeftRadius: 4,
-    borderWidth: 0.5,
-    borderColor: '#e5e5e5',
   },
   bubbleRight: {
-    backgroundColor: '#DCF8C6',
+    backgroundColor: AZUL,
     borderBottomRightRadius: 4,
   },
   bubbleText: {
@@ -294,11 +293,17 @@ const styles = StyleSheet.create({
     color: '#2D2D2D',
     lineHeight: 20,
   },
+  bubbleTextMine: {
+    color: '#FFFFFF',
+  },
   bubbleTime: {
     fontSize: 10,
-    color: '#888',
+    color: '#555555',
     alignSelf: 'flex-end',
     marginTop: 4,
+  },
+  bubbleTimeMine: {
+    color: 'rgba(255,255,255,0.75)',
   },
   systemBubble: {
     alignSelf: 'center',

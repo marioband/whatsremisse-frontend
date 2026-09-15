@@ -1,7 +1,36 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useRef, useState } from 'react';
+import {
+  Keyboard,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  View,
+} from 'react-native';
+
+import { AZUL, BORDE_SUAVE, FONDO_TARJETA, TEXTO, TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
 
 export type AttachmentType = 'photo' | 'camera' | 'location' | 'contact';
+
+/**
+ * Nombres de los iconos del chat (familia MaterialCommunityIcons).
+ *
+ * Son provisionales: el usuario enviará los iconos definitivos de la app. Para
+ * sustituirlos basta cambiar el `name` de cada entrada (o la familia en el
+ * import) sin tocar el resto del componente.
+ */
+const ICONS = {
+  adjuntar: 'plus',
+  teclado: 'keyboard-outline',
+  camara: 'camera',
+  enviar: 'send',
+  microfono: 'microphone',
+  fotos: 'image-multiple',
+  ubicacion: 'map-marker',
+  contacto: 'account-circle-outline',
+} as const;
 
 interface ChatInputBarProps {
   value: string;
@@ -12,11 +41,15 @@ interface ChatInputBarProps {
   placeholder?: string;
 }
 
-const ATTACHMENT_OPTIONS: { type: AttachmentType; icon: string; label: string }[] = [
-  { type: 'photo', icon: '\ud83d\uddbc\ufe0f', label: 'Fotos' },
-  { type: 'camera', icon: '\ud83d\udcf7', label: 'C\u00e1mara' },
-  { type: 'location', icon: '\ud83d\udccd', label: 'Ubicaci\u00f3n' },
-  { type: 'contact', icon: '\ud83d\udc64', label: 'Contacto' },
+const ATTACHMENT_OPTIONS: {
+  type: AttachmentType;
+  icon: keyof typeof ICONS;
+  label: string;
+}[] = [
+  { type: 'photo', icon: 'fotos', label: 'Fotos' },
+  { type: 'camera', icon: 'camara', label: 'Cámara' },
+  { type: 'location', icon: 'ubicacion', label: 'Ubicación' },
+  { type: 'contact', icon: 'contacto', label: 'Contacto' },
 ];
 
 export function ChatInputBar({
@@ -27,79 +60,93 @@ export function ChatInputBar({
   onAttachment,
   placeholder = 'Escribe un mensaje...',
 }: ChatInputBarProps) {
-  const [menuVisible, setMenuVisible] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
+  // Con texto escrito el botón derecho envía el mensaje; vacío envía audio.
   const hasText = value.trim().length > 0;
 
-  const toggleMenu = () => setMenuVisible((v) => !v);
-  const closeMenu = () => setMenuVisible(false);
+  const toggleTray = () => {
+    // La bandeja de adjuntos sustituye al teclado, igual que en la referencia.
+    if (trayOpen) {
+      setTrayOpen(false);
+      inputRef.current?.focus();
+      return;
+    }
+    Keyboard.dismiss();
+    setTrayOpen(true);
+  };
+
+  const closeTray = () => setTrayOpen(false);
 
   const handleAttachment = (type: AttachmentType) => {
     onAttachment(type);
-    closeMenu();
+    closeTray();
   };
 
   return (
     <View style={styles.wrapper}>
-      {menuVisible && (
-        <View style={styles.menu}>
+      <View style={styles.bar}>
+        {/* Adjuntar: es la única entrada a cámara/fotos/ubicación/contacto */}
+        <TouchableOpacity
+          style={styles.roundBtn}
+          onPress={toggleTray}
+          activeOpacity={0.7}
+          accessibilityLabel={trayOpen ? 'Cerrar adjuntos' : 'Adjuntar'}
+        >
+          <MaterialCommunityIcons
+            name={trayOpen ? ICONS.teclado : ICONS.adjuntar}
+            size={24}
+            color={TEXTO_SUAVE}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.inputPill}>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder={placeholder}
+            placeholderTextColor={TEXTO_TENUE}
+            value={value}
+            onChangeText={onChangeText}
+            onFocus={closeTray}
+            multiline
+            maxLength={1000}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={hasText ? onSend : onSendVoice}
+          activeOpacity={0.7}
+          accessibilityLabel={hasText ? 'Enviar mensaje' : 'Enviar audio'}
+        >
+          <MaterialCommunityIcons
+            name={hasText ? ICONS.enviar : ICONS.microfono}
+            size={24}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
+      </View>
+
+      {trayOpen && (
+        <View style={styles.tray}>
           {ATTACHMENT_OPTIONS.map((option) => (
             <TouchableOpacity
               key={option.type}
-              style={styles.menuItem}
+              style={styles.trayItem}
               onPress={() => handleAttachment(option.type)}
               activeOpacity={0.7}
+              accessibilityLabel={option.label}
             >
-              <View style={styles.menuIconCircle}>
-                <Text style={styles.menuIcon}>{option.icon}</Text>
+              <View style={styles.trayIconCircle}>
+                <MaterialCommunityIcons name={ICONS[option.icon]} size={26} color={AZUL} />
               </View>
-              <Text style={styles.menuLabel}>{option.label}</Text>
+              <Text style={styles.trayLabel}>{option.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
       )}
-
-      <View style={styles.bar}>
-        <TouchableOpacity style={styles.plusBtn} onPress={toggleMenu} activeOpacity={0.7}>
-          <Text style={styles.plusText}>+</Text>
-        </TouchableOpacity>
-
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          placeholderTextColor="#999"
-          value={value}
-          onChangeText={onChangeText}
-          multiline
-          maxLength={1000}
-        />
-
-        <TouchableOpacity
-          style={styles.cameraBtn}
-          onPress={() => handleAttachment('camera')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.cameraIcon}>📷</Text>
-        </TouchableOpacity>
-
-        {hasText ? (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.blueBtn]}
-            onPress={onSend}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.actionIcon}>▶</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.blueBtn]}
-            onPress={onSendVoice}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.actionIcon}>🎤</Text>
-          </TouchableOpacity>
-        )}
-      </View>
     </View>
   );
 }
@@ -108,103 +155,78 @@ const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
   },
-  menu: {
-    position: 'absolute',
-    bottom: 58,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-    zIndex: 100,
-  },
-  menuItem: {
-    alignItems: 'center',
-    minWidth: 64,
-  },
-  menuIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#3F51B5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  menuIcon: {
-    fontSize: 22,
-  },
-  menuLabel: {
-    fontSize: 11,
-    color: '#555',
-    fontWeight: '600',
-  },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F2',
-    paddingHorizontal: 10,
+    backgroundColor: FONDO_TARJETA,
+    paddingHorizontal: 8,
     paddingVertical: 8,
     borderTopWidth: 0.5,
-    borderTopColor: '#ddd',
+    borderTopColor: BORDE_SUAVE,
   },
-  plusBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#fff',
+  roundBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
   },
-  plusText: {
-    fontSize: 26,
-    color: '#888',
-    fontWeight: '300',
-    lineHeight: 28,
+  inputPill: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginHorizontal: 8,
+    minHeight: 40,
+    maxHeight: 104,
+    paddingHorizontal: 12,
   },
   input: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 21,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
     fontSize: 15,
-    color: '#2D2D2D',
-    maxHeight: 100,
-  },
-  cameraBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 4,
-  },
-  cameraIcon: {
-    fontSize: 20,
+    color: TEXTO,
+    maxHeight: 96,
+    // Simétrico arriba/abajo: el texto queda centrado en la píldora de una línea
+    // y crece hacia abajo cuando el mensaje es largo.
+    paddingTop: 9,
+    paddingBottom: 9,
+    ...Platform.select({ android: { textAlignVertical: 'center' as const }, default: {} }),
   },
   actionBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: AZUL,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 4,
   },
-  blueBtn: {
-    backgroundColor: '#3F51B5',
+  tray: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
+    paddingHorizontal: 8,
   },
-  actionIcon: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  trayItem: {
+    alignItems: 'center',
+    minWidth: 68,
+  },
+  trayIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: FONDO_TARJETA,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  trayLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: TEXTO_SUAVE,
   },
 });

@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     color: '#3F51B5',
   },
   destructive: {
-    color: '#D32F2F',
+    color: '#9B3B43',
   },
   cancel: {
     color: '#666',

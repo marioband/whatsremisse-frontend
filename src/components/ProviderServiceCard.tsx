@@ -131,14 +131,15 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#34B7F1',
+    // Origen en azul de marca y destino en oscuro (paleta de la app).
+    backgroundColor: '#3F51B5',
     marginRight: 8,
   },
   dotDestination: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#25D366',
+    backgroundColor: DARK_GRAY,
     marginRight: 8,
   },
   locationText: {
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   archiveAction: {
-    backgroundColor: '#ff3b30',
+    backgroundColor: '#9B3B43',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,

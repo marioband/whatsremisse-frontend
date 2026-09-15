@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 
+import { AZUL, TEXTO } from '../../lib/colors';
 import { Message } from '../../types';
 
 interface MessageListProps {
@@ -10,7 +11,27 @@ interface MessageListProps {
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
 }
 
-const WHATSAPP_GREEN = '#075E54';
+/**
+ * Colores de las burbujas (fijados con el usuario): fondo del chat blanco,
+ * azul de marca para quien escribe (texto blanco) y gris para el otro
+ * (texto oscuro). Antes eran los verdes de WhatsApp (#dcf8c6 / #fff).
+ */
+const MY_BUBBLE = AZUL;
+const OTHER_BUBBLE = '#C6C6C6';
+
+const COLORS_MINE = {
+  text: '#FFFFFF',
+  time: 'rgba(255,255,255,0.75)',
+  bar: 'rgba(255,255,255,0.30)',
+  progress: '#FFFFFF',
+};
+
+const COLORS_OTHER = {
+  text: TEXTO,
+  time: '#555555',
+  bar: 'rgba(0,0,0,0.12)',
+  progress: AZUL,
+};
 
 export function MessageList({
   messages,
@@ -21,6 +42,7 @@ export function MessageList({
   const renderItem = ({ item }: { item: Message }) => {
     const isSystem = item.type === 'SYSTEM';
     const isMine = item.sender_id === mySenderId;
+    const palette = isMine ? COLORS_MINE : COLORS_OTHER;
 
     if (isSystem) {
       return (
@@ -30,6 +52,11 @@ export function MessageList({
       );
     }
 
+    const time = new Date(item.created_at).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     if (item.type === 'VOICE') {
       return (
         <View
@@ -37,27 +64,22 @@ export function MessageList({
         >
           <View style={styles.voiceRow}>
             <Text style={styles.voiceIcon}>🎤</Text>
-            <View style={styles.voiceBar}>
-              <View style={styles.voiceProgress} />
+            <View style={[styles.voiceBar, { backgroundColor: palette.bar }]}>
+              <View style={[styles.voiceProgress, { backgroundColor: palette.progress }]} />
             </View>
-            <Text style={styles.voiceDuration}>{(item.metadata?.duration as number) || 0}s</Text>
+            <Text style={[styles.voiceDuration, { color: palette.time }]}>
+              {(item.metadata?.duration as number) || 0}s
+            </Text>
           </View>
-          <Text style={styles.time}>
-            {new Date(item.created_at).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </Text>
+          <Text style={[styles.time, { color: palette.time }]}>{time}</Text>
         </View>
       );
     }
 
     return (
       <View style={[styles.bubble, isMine ? styles.myBubble : styles.otherBubble]}>
-        <Text style={styles.messageText}>{item.content}</Text>
-        <Text style={styles.time}>
-          {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+        <Text style={[styles.messageText, { color: palette.text }]}>{item.content}</Text>
+        <Text style={[styles.time, { color: palette.time }]}>{time}</Text>
       </View>
     );
   };
@@ -84,8 +106,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     elevation: 1,
   },
-  myBubble: { alignSelf: 'flex-end', backgroundColor: '#dcf8c6' },
-  otherBubble: { alignSelf: 'flex-start', backgroundColor: '#fff' },
+  myBubble: { alignSelf: 'flex-end', backgroundColor: MY_BUBBLE },
+  otherBubble: { alignSelf: 'flex-start', backgroundColor: OTHER_BUBBLE },
   voiceBubble: { minWidth: 180 },
   voiceRow: {
     flexDirection: 'row',
@@ -95,19 +117,17 @@ const styles = StyleSheet.create({
   voiceBar: {
     flex: 1,
     height: 4,
-    backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 2,
     marginRight: 8,
   },
   voiceProgress: {
     width: '60%',
     height: '100%',
-    backgroundColor: WHATSAPP_GREEN,
     borderRadius: 2,
   },
-  voiceDuration: { fontSize: 12, color: '#666' },
-  messageText: { color: '#000', fontSize: 15 },
+  voiceDuration: { fontSize: 12 },
+  messageText: { fontSize: 15 },
   systemBubble: { alignSelf: 'center', marginVertical: 8 },
   systemText: { fontSize: 12, color: '#666', fontStyle: 'italic', textAlign: 'center' },
-  time: { fontSize: 10, color: '#888', marginTop: 4, alignSelf: 'flex-end' },
+  time: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
 });

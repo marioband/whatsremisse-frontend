@@ -565,11 +565,11 @@ const styles = StyleSheet.create({
   },
   pickerFieldError: {
     borderWidth: 1,
-    borderColor: '#B00020',
+    borderColor: '#9B3B43',
   },
   helperText: {
     fontSize: 12,
-    color: '#B00020',
+    color: '#9B3B43',
     marginTop: 6,
     lineHeight: 16,
   },
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   removeText: {
-    color: '#ff3b30',
+    color: '#9B3B43',
     fontSize: 18,
     fontWeight: 'bold',
   },
