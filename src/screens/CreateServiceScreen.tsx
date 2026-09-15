@@ -12,9 +12,19 @@ import {
   Platform,
 } from 'react-native';
 
+import { CalendarMonthPicker } from '../components/CalendarMonthPicker';
+import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import {
+  combinarFechaYHora,
+  etiquetaRelativa,
+  formatearFecha,
+  formatearHora,
+  formatearHora24,
+  proximaHoraRedondeada,
+} from '../lib/datetime';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 
@@ -42,14 +52,11 @@ export function CreateServiceScreen() {
 
   const getInitialDateTime = () => {
     if (editingService?.scheduled_at) {
-      const d = new Date(editingService.scheduled_at);
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const hours = String(d.getHours()).padStart(2, '0');
-      const minutes = String(d.getMinutes()).padStart(2, '0');
-      return { date: `${day}/${month}`, time: `${hours}:${minutes}` };
+      const programada = new Date(editingService.scheduled_at);
+      return { fecha: programada, hora: programada };
     }
-    return { date: '', time: '' };
+    // Fecha de hoy y la siguiente hora en punto (10:51 -> 11:00).
+    return { fecha: new Date(), hora: proximaHoraRedondeada() };
   };
 
   const initialDateTime = getInitialDateTime();
@@ -65,8 +72,10 @@ export function CreateServiceScreen() {
   const [customPaymentDate, setCustomPaymentDate] = useState('');
   const [unitType, setUnitType] = useState(editingService?.vehicle_type || 'Todos');
   const [observation, setObservation] = useState(editingService?.observations?.join(', ') || '');
-  const [serviceDate, setServiceDate] = useState(initialDateTime.date);
-  const [serviceTime, setServiceTime] = useState(initialDateTime.time);
+  const [fechaServicio, setFechaServicio] = useState<Date>(initialDateTime.fecha);
+  const [horaServicio, setHoraServicio] = useState<Date>(initialDateTime.hora);
+  const [abriendoCalendario, setAbriendoCalendario] = useState(false);
+  const [abriendoReloj, setAbriendoReloj] = useState(false);
 
   const addDestination = () => {
     setDestinations([...destinations, '']);
@@ -85,8 +94,19 @@ export function CreateServiceScreen() {
   };
 
   const handleSubmit = () => {
-    if (!origin || !destinations[0] || !fare || !serviceDate || !serviceTime) {
+    if (!origin || !destinations[0] || !fare) {
       Alert.alert('Campos incompletos', 'Completa origen, destino, tarifa, fecha y hora.');
+      return;
+    }
+
+    const programada = combinarFechaYHora(fechaServicio, horaServicio);
+    // Tolerancia de 5 minutos: agendar para un rato ya pasado no tiene sentido,
+    // pero publicar "para ahora mismo" sí.
+    if (programada.getTime() < Date.now() - 5 * 60 * 1000) {
+      Alert.alert(
+        'Fecha y hora en el pasado',
+        `Elegiste ${formatearFecha(programada)} ${formatearHora(programada)}. Elige una hora posterior.`
+      );
       return;
     }
 
@@ -102,22 +122,8 @@ export function CreateServiceScreen() {
       intermediateStops.length > 0 ? `Paradas: ${intermediateStops.join(', ')}` : '',
     ].filter(Boolean);
 
-    const parseScheduledDate = (dateStr: string, timeStr: string): string => {
-      const [day, month] = dateStr.split('/').map((v) => parseInt(v, 10));
-      const [hours, minutes] = timeStr.split(':').map((v) => parseInt(v, 10));
-      const now = new Date();
-      const scheduled = new Date(
-        now.getFullYear(),
-        (month || 1) - 1,
-        day || 1,
-        hours || 0,
-        minutes || 0
-      );
-      return scheduled.toISOString();
-    };
-
-    const dispatchType = `${serviceDate} ${serviceTime}hrs`;
-    const scheduledAt = parseScheduledDate(serviceDate, serviceTime);
+    const dispatchType = `${formatearFecha(programada)} ${formatearHora24(programada)} hrs`;
+    const scheduledAt = programada.toISOString();
 
     if (isEditing && editingService) {
       const updatedService: ServiceAlert = {
@@ -318,22 +324,29 @@ export function CreateServiceScreen() {
 
         {/* Fecha y hora del servicio */}
         <Text style={styles.label}>Fecha del servicio</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="DD/MM"
-          placeholderTextColor="#999"
-          value={serviceDate}
-          onChangeText={setServiceDate}
-        />
+        <TouchableOpacity
+          style={styles.pickerField}
+          onPress={() => setAbriendoCalendario(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.pickerIcon}>🗓️</Text>
+          <Text style={styles.pickerValue}>{formatearFecha(fechaServicio)}</Text>
+          {etiquetaRelativa(fechaServicio) ? (
+            <Text style={styles.pickerHint}>{etiquetaRelativa(fechaServicio)}</Text>
+          ) : null}
+          <Text style={styles.pickerChevron}>›</Text>
+        </TouchableOpacity>
 
         <Text style={styles.label}>Hora del servicio</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="HH:mm"
-          placeholderTextColor="#999"
-          value={serviceTime}
-          onChangeText={setServiceTime}
-        />
+        <TouchableOpacity
+          style={styles.pickerField}
+          onPress={() => setAbriendoReloj(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.pickerIcon}>🕐</Text>
+          <Text style={styles.pickerValue}>{formatearHora(horaServicio)}</Text>
+          <Text style={styles.pickerChevron}>›</Text>
+        </TouchableOpacity>
 
         {/* Observación */}
         <Text style={styles.label}>Observación</Text>
@@ -356,6 +369,26 @@ export function CreateServiceScreen() {
           <Text style={styles.submitText}>Siguiente</Text>
         </TouchableOpacity>
       </View>
+
+      <CalendarMonthPicker
+        visible={abriendoCalendario}
+        valor={fechaServicio}
+        onSeleccionar={(fecha) => {
+          setFechaServicio(fecha);
+          setAbriendoCalendario(false);
+        }}
+        onCancelar={() => setAbriendoCalendario(false)}
+      />
+
+      <TimeWheelPicker
+        visible={abriendoReloj}
+        valor={horaServicio}
+        onConfirmar={(hora) => {
+          setHoraServicio(hora);
+          setAbriendoReloj(false);
+        }}
+        onCancelar={() => setAbriendoReloj(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -410,6 +443,34 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 15,
     color: '#333',
+  },
+  pickerField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 14,
+  },
+  pickerIcon: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  pickerValue: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '600',
+  },
+  pickerHint: {
+    fontSize: 13,
+    color: BLUE,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  pickerChevron: {
+    fontSize: 20,
+    color: BLUE,
+    fontWeight: '700',
   },
   destinationRow: {
     flexDirection: 'row',
