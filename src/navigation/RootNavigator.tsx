@@ -39,7 +39,11 @@ export type RootStackParamList = {
   Main: undefined;
   CreateServiceAlert: undefined;
   CreateService: { service?: ServiceAlert } | undefined;
-  SelectGroupsForService: { draftService: ServiceAlert };
+  SelectGroupsForService: {
+    draftService: ServiceAlert;
+    /** Si viene, se está eligiendo grupo para una tarjeta que YA existe. */
+    serviceId?: string;
+  };
   CreateGroup: undefined;
   GroupMembers: { groupId: string; groupName: string };
   AddParticipant: { groupId: string; groupName: string };

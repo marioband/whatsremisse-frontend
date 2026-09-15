@@ -287,6 +287,33 @@ export async function updateServiceAlert(
   if (error) throw error;
 }
 
+/**
+ * Anula (elimina) una tarjeta de servicio. Sus postulaciones y mensajes caen por
+ * `ON DELETE CASCADE`.
+ *
+ * Igual que con el borrado de integrantes: con RLS, un DELETE que no toca
+ * ninguna fila NO es un error (PostgREST responde 204 y el cliente cree que
+ * borró). Se comprueba leyendo la fila después, para no dejar una tarjeta que
+ * "desaparece" y reaparece al recargar.
+ */
+export async function deleteServiceAlert(serviceId: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.from('service_alerts').delete().eq('id', serviceId);
+  if (error) throw error;
+
+  const { count, error: readError } = await supabase
+    .from('service_alerts')
+    .select('id', { count: 'exact', head: true })
+    .eq('id', serviceId);
+  if (readError) throw readError;
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      'La tarjeta sigue en la base después de anularla: revisa la política DELETE de ' +
+        'service_alerts (0001 "Providers manage own services" es FOR ALL y debería permitirlo).'
+    );
+  }
+}
+
 export async function updateApplication(
   serviceId: string,
   driverId: string,

@@ -20,6 +20,7 @@ import {
   fetchApplicationsForProvider,
   fetchGroupMembers,
   fetchGroupsForUser,
+  deleteServiceAlert,
   fetchServicesForDriver,
   fetchServicesForProvider,
   insertApplication,
@@ -152,6 +153,7 @@ type MockAction =
   | { type: 'REJECT_APPLICATION_FROM'; payload: { serviceId: string; driverId: string } }
   | { type: 'CANCEL_APPLICATION'; payload: { serviceId: string; driverId: string } }
   | { type: 'UPDATE_SERVICE_STATUS'; payload: { serviceId: string; status: ServiceStatus } }
+  | { type: 'REMOVE_SERVICE'; payload: { serviceId: string } }
   | { type: 'ARCHIVE_SERVICE'; payload: { serviceId: string } }
   | { type: 'UNARCHIVE_SERVICE'; payload: { serviceId: string } }
   | { type: 'ADD_MESSAGE'; payload: { serviceId: string; message: Message } }
@@ -271,6 +273,13 @@ function mockReducer(state: MockState, action: MockAction): MockState {
               }
             : s
         ),
+      };
+
+    case 'REMOVE_SERVICE':
+      return {
+        ...state,
+        services: state.services.filter((s) => s.id !== action.payload.serviceId),
+        applications: state.applications.filter((a) => a.serviceId !== action.payload.serviceId),
       };
 
     case 'REJECT_APPLICATION':
@@ -485,6 +494,8 @@ interface MockContextValue extends MockState {
   setRole: (role: AppRole) => void;
   addService: (service: ServiceAlert) => void;
   updateService: (service: ServiceAlert) => void;
+  /** Anula la tarjeta: la borra de la base y de la lista. */
+  deleteService: (serviceId: string) => Promise<boolean>;
   applyToService: (serviceId: string, driverId: string) => void;
   approveApplication: (serviceId: string, driverId: string) => void;
   rejectApplication: (serviceId: string) => void;
@@ -723,6 +734,17 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     updateService: async (service) => {
       await persistService(service.id, service);
       dispatch({ type: 'UPDATE_SERVICE', payload: service });
+    },
+    deleteService: async (serviceId) => {
+      try {
+        await deleteServiceAlert(serviceId);
+      } catch (err) {
+        console.error('[MockStore] deleteServiceAlert error:', err);
+        Alert.alert('No se pudo anular la tarjeta', describeError(err));
+        return false;
+      }
+      dispatch({ type: 'REMOVE_SERVICE', payload: { serviceId } });
+      return true;
     },
     applyToService: async (serviceId, driverId) => {
       if (isSupabaseConfigured) {

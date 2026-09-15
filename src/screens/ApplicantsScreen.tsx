@@ -15,8 +15,10 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDePostulantes } from '../hooks/useEstimacionesDePostulantes';
+import { Alert } from '../lib/alert';
 import {
   AZUL,
+  BORDE_SUAVE,
   FONDO_TARJETA,
   OSCURO,
   ROJO_ACCION,
@@ -31,7 +33,10 @@ import { esPremium } from '../lib/premium';
 import { hayApiDeRutas, Punto } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
-type ApplicantsNav = StackNavigationProp<RootStackParamList, 'ApplicantsScreen' | 'Settings'>;
+type ApplicantsNav = StackNavigationProp<
+  RootStackParamList,
+  'ApplicantsScreen' | 'Settings' | 'CreateService'
+>;
 type ApplicantsRoute = RouteProp<RootStackParamList, 'ApplicantsScreen'>;
 
 /** Sin acentos ni mayúsculas, para que "jose" encuentre "José". */
@@ -59,8 +64,10 @@ export function ApplicantsScreen() {
   const {
     applications,
     approveApplication,
+    rejectApplication,
     rejectApplicationFrom,
     services,
+    updateService,
     emitChatNotification,
   } = useMockStore();
 
@@ -180,6 +187,38 @@ export function ApplicantsScreen() {
     rejectApplicationFrom(serviceId, driverId);
   };
 
+  /**
+   * Cancelar búsqueda: rechaza las postulaciones pendientes y deja la tarjeta
+   * sin compartir; se vuelve a "nuevo servicio" con todos los datos guardados
+   * para editarla, anularla, guardarla o volver a elegir grupos.
+   */
+  const handleCancelarBusqueda = () => {
+    if (!service) return;
+    Alert.alert(
+      'Cancelar búsqueda',
+      'Se descartan los postulantes pendientes y la tarjeta deja de estar compartida. ' +
+        'Volverás a "nuevo servicio" para editarla, anularla, guardarla o elegir otros grupos.',
+      [
+        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Cancelar búsqueda',
+          style: 'destructive',
+          onPress: () => {
+            rejectApplication(service.id);
+            const sinCompartir = {
+              ...service,
+              group_id: '',
+              assigned_driver_id: null,
+              driver_progress_step: 0,
+            };
+            updateService(sinCompartir);
+            navigation.navigate('CreateService', { service: sinCompartir });
+          },
+        },
+      ]
+    );
+  };
+
   const renderApplicant = ({ item }: { item: { serviceId: string; driverId: string } }) => {
     const datos = datosDe(item.driverId);
     const estimacion = estimaciones[item.driverId];
@@ -291,6 +330,13 @@ export function ApplicantsScreen() {
           </Text>
         }
       />
+
+      {/* Pie: cancelar la búsqueda devuelve el servicio a "nuevo servicio" */}
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.cancelSearchBtn} onPress={handleCancelarBusqueda}>
+          <Text style={styles.cancelSearchText}>Cancelar búsqueda</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -355,6 +401,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: TEXTO,
     paddingVertical: 0,
+  },
+  footer: {
+    backgroundColor: '#fff',
+    borderTopWidth: 0.5,
+    borderTopColor: BORDE_SUAVE,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelSearchBtn: {
+    backgroundColor: ROJO_ACCION,
+    borderRadius: 22,
+    paddingVertical: 12,
+    paddingHorizontal: 36,
+  },
+  cancelSearchText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   list: {
     padding: 16,

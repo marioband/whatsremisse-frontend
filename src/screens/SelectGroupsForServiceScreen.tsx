@@ -26,8 +26,8 @@ const ROLE_TABS: RoleTab[] = ['Conductor', 'Proveedor', 'Mis Grupos', 'Ubicacion
 export function SelectGroupsForServiceScreen() {
   const navigation = useNavigation<SelectNav>();
   const route = useRoute<SelectRoute>();
-  const { draftService } = route.params;
-  const { role, setRole, groups, addService, emitNotification } = useMockStore();
+  const { draftService, serviceId } = route.params;
+  const { role, setRole, groups, addService, updateService, emitNotification } = useMockStore();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -69,6 +69,21 @@ export function SelectGroupsForServiceScreen() {
     }
 
     const selectedArray = Array.from(selectedIds);
+
+    if (serviceId) {
+      // Tarjeta que YA existe (venía de "nuevo servicio"): el primer grupo elegido
+      // pasa a ser el suyo y deja de estar "sin compartir". Si eligió más de uno,
+      // se crean tarjetas nuevas para los demás (una tarjeta = un grupo).
+      const [primero, ...resto] = selectedArray;
+      updateService({ ...draftService, id: serviceId, group_id: primero });
+      resto.forEach((groupId) =>
+        addService({ ...draftService, id: `service-${Date.now()}-${groupId}`, group_id: groupId })
+      );
+      emitNotification(serviceId, draftService.title);
+      Alert.alert('Servicio compartido', 'La tarjeta ya está publicada en el grupo elegido.');
+      navigation.navigate('Main');
+      return;
+    }
 
     selectedArray.forEach((groupId) => {
       addService({

@@ -5,37 +5,13 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
-import { ROJO_ACCION, VERDE_ACCION } from '../lib/colors';
+import { estadoDeServicio } from '../lib/estadoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
-import { ServiceAlert, ServiceStatus } from '../types';
+import { ServiceAlert } from '../types';
 
 type MyServicesNav = StackNavigationProp<RootStackParamList, 'MyServices'>;
 
 const DARK_BG = '#2D2D2D';
-const BLUE = '#3F51B5';
-
-const STATUS_LABELS: Record<ServiceStatus, string> = {
-  STATUS_OPEN: 'Buscando conductores',
-  STATUS_PENDING_APPROVAL: 'Con postulantes',
-  STATUS_EN_ROUTE_ORIGIN: 'En camino',
-  STATUS_AT_ORIGIN: 'Ubicado',
-  STATUS_IN_PROGRESS: 'En proceso',
-  STATUS_COMPLETED: 'Finalizado',
-  STATUS_CANCELLED: 'Cancelado',
-};
-
-/** Color del estado del servicio, en la paleta de la app: gris (buscando),
- *  azul (activo), oscuro (en camino/ubicado/en proceso), verde (finalizado)
- *  y rojo (cancelado). */
-const STATUS_COLORS: Record<ServiceStatus, string> = {
-  STATUS_OPEN: '#888',
-  STATUS_PENDING_APPROVAL: BLUE,
-  STATUS_EN_ROUTE_ORIGIN: DARK_BG,
-  STATUS_AT_ORIGIN: DARK_BG,
-  STATUS_IN_PROGRESS: DARK_BG,
-  STATUS_COMPLETED: VERDE_ACCION,
-  STATUS_CANCELLED: ROJO_ACCION,
-};
 
 interface GroupedServices {
   date: string;
@@ -44,7 +20,7 @@ interface GroupedServices {
 
 export function MyServicesScreen() {
   const navigation = useNavigation<MyServicesNav>();
-  const { services, role } = useMockStore();
+  const { services, applications, role } = useMockStore();
   const { session } = useAuth();
   const userId = session?.user?.id;
 
@@ -73,40 +49,49 @@ export function MyServicesScreen() {
     return Array.from(map.entries()).map(([date, services]) => ({ date, services }));
   }, [myServices]);
 
-  const renderServiceCard = (service: ServiceAlert) => (
-    <View style={styles.card}>
-      <View style={styles.cardLeft}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {(service.company_name || service.provider_name || '?').charAt(0)}
-          </Text>
-        </View>
-      </View>
+  const postulantesDe = (serviceId: string) =>
+    applications.filter((a) => a.serviceId === serviceId && a.status === 'PENDING').length;
 
-      <View style={styles.cardCenter}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.companyName} numberOfLines={1}>
-            {service.company_name || service.provider_name || 'Empresa'}
-          </Text>
-          <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[service.status] }]}>
-            <Text style={styles.statusText}>{STATUS_LABELS[service.status]}</Text>
+  const renderServiceCard = (service: ServiceAlert) => {
+    // La señal de la tarjeta sale de `estadoDeServicio`: una sola fuente de verdad
+    // (no compartido → buscando → postulantes → en camino → ubicado → proceso → finalizado).
+    const estado = estadoDeServicio(service, postulantesDe(service.id));
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardLeft}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {(service.company_name || service.provider_name || '?').charAt(0)}
+            </Text>
           </View>
         </View>
 
-        <Text style={styles.routeText}>📍 {service.origin_address}</Text>
-        <Text style={styles.routeText}>🏁 {service.destination_address}</Text>
+        <View style={styles.cardCenter}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.companyName} numberOfLines={1}>
+              {service.company_name || service.provider_name || 'Empresa'}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: estado.color }]}>
+              <Text style={styles.statusText}>{estado.etiqueta}</Text>
+            </View>
+          </View>
 
-        {service.observations && service.observations.length > 0 && (
-          <Text style={styles.obsText}>📝 {service.observations.join(' • ')}</Text>
-        )}
+          <Text style={styles.routeText}>📍 {service.origin_address}</Text>
+          <Text style={styles.routeText}>🏁 {service.destination_address}</Text>
 
-        <View style={styles.cardFooter}>
-          <Text style={styles.fare}>S/ {service.fare}</Text>
-          <Text style={styles.payment}>{service.payment_method || 'BCP'}</Text>
+          {service.observations && service.observations.length > 0 && (
+            <Text style={styles.obsText}>📝 {service.observations.join(' • ')}</Text>
+          )}
+
+          <View style={styles.cardFooter}>
+            <Text style={styles.fare}>S/ {service.fare}</Text>
+            <Text style={styles.payment}>{service.payment_method || 'BCP'}</Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderSection = ({ item }: { item: GroupedServices }) => (
     <View style={styles.section}>

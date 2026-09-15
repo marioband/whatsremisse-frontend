@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { EstadoServicioBar } from '../components/EstadoServicioBar';
 import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
@@ -58,15 +59,6 @@ const getGraceCountdown = (service: ServiceAlert): string => {
   const hours = Math.floor(remaining / (60 * 60 * 1000));
   const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
   return `${hours}h ${minutes}m`;
-};
-
-const getServiceStatusText = (service: ServiceAlert): string => {
-  const step = service.driver_progress_step ?? 0;
-  if (step === 0) return 'Proceso del servicio: conductor en camino';
-  if (step === 1) return 'Proceso del servicio: conductor ubicado';
-  if (step === 2) return 'Proceso del servicio: en proceso';
-  if (step >= 3) return 'Proceso del servicio: finalizado';
-  return 'Proceso del servicio: en camino';
 };
 
 export function ProviderHomeScreen() {
@@ -132,6 +124,13 @@ export function ProviderHomeScreen() {
   }, [myProviderServices, activeDedupedServices, activeStatus, showArchived]);
 
   const handleCardPress = (service: ServiceAlert) => {
+    // Tarjeta guardada sin compartir: se termina de configurar en "nuevo servicio"
+    // (con todos los datos guardados) y desde ahí se eligen grupos.
+    if (!service.group_id) {
+      navigation.navigate('CreateService', { service });
+      return;
+    }
+
     // Servicios vencidos dentro de las 24h de gracia van a edición para reprogramar
     if (isExpired(service) && !isGraceExpired(service)) {
       navigation.navigate('CreateService', { service });
@@ -173,41 +172,19 @@ export function ProviderHomeScreen() {
       >
         <ProviderServiceCard service={item} onArchive={() => handleArchive(item.id)} />
 
-        {/* Franja de estado: vencido toma precedencia */}
-        {isExpired(item) && !isGraceExpired(item) ? (
-          <View style={styles.expiredBar}>
-            <Text style={styles.expiredText}>Servicio vencido</Text>
-            <Text style={styles.expiredCountdown}>Se elimina en: {getGraceCountdown(item)}</Text>
-          </View>
-        ) : (
-          <>
-            {item.status === 'STATUS_OPEN' && (
-              <View style={styles.footerCenter}>
-                <Text style={styles.footerText}>Buscando conductores</Text>
-              </View>
-            )}
-
-            {/* Cualquier postulación pendiente muestra la tarjeta: el conductor
-                que postula no cambia el estado del servicio en la base. */}
-            {applicantCount > 0 && !item.assigned_driver_id && (
-              <TouchableOpacity
-                style={styles.applicantsButton}
-                onPress={() => navigation.navigate('ApplicantsScreen', { serviceId: item.id })}
-              >
-                <Text style={styles.applicantsButtonText}>({applicantCount}) Postulantes</Text>
-              </TouchableOpacity>
-            )}
-
-            {(item.status === 'STATUS_EN_ROUTE_ORIGIN' ||
-              item.status === 'STATUS_AT_ORIGIN' ||
-              item.status === 'STATUS_IN_PROGRESS' ||
-              item.status === 'STATUS_COMPLETED') && (
-              <View style={styles.progressBar}>
-                <Text style={styles.progressText}>{getServiceStatusText(item)}</Text>
-              </View>
-            )}
-          </>
-        )}
+        {/* Franja de estado: una sola señal, la que devuelve estadoDeServicio */}
+        <View style={styles.cardFooter}>
+          <EstadoServicioBar
+            service={item}
+            postulantes={applicantCount}
+            radius={16}
+            detalle={
+              isExpired(item) && !isGraceExpired(item)
+                ? `${applicantCount > 0 ? `${applicantCount} postulante${applicantCount === 1 ? '' : 's'} · ` : ''}se elimina en ${getGraceCountdown(item)}`
+                : undefined
+            }
+          />
+        </View>
       </TouchableOpacity>
     );
   };
@@ -360,6 +337,10 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     marginBottom: 12,
+  },
+  cardFooter: {
+    marginHorizontal: 12,
+    marginTop: -6,
   },
   footerCenter: {
     backgroundColor: '#f5f5f5',

@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 
+import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
 import { ServiceAlert } from '../types';
 
@@ -84,106 +85,111 @@ export function ServiceCard({
       disabled={pressDisabled}
     >
       {/* Columna izquierda: avatar */}
-      <View style={styles.avatarColumn}>
-        <View style={[styles.avatar, isActive && styles.avatarActive]}>
-          <Text
-            style={[
-              styles.avatarText,
-              isActive && { color: isAccepted ? COLORS.brightGreen : COLORS.primary },
-            ]}
-          >
-            {(service.company_name || service.provider_name || '?').charAt(0)}
-          </Text>
-        </View>
-      </View>
-
-      {/* Columna central */}
-      <View style={styles.centerColumn}>
-        <Text style={[styles.companyName, isActive && styles.textActive]} numberOfLines={1}>
-          {service.company_name || service.provider_name || 'Empresa'}
-        </Text>
-
-        {groupName && (
-          <Text style={[styles.groupName, isActive && styles.textActiveLight]} numberOfLines={1}>
-            {groupName}
-          </Text>
-        )}
-
-        <View style={styles.dispatchRow}>
-          <Text style={[styles.dispatchType, isActive && styles.textActiveLight]}>
-            {service.dispatch_type || 'Al momento'}
-          </Text>
-          {isReservation && (
-            <Text style={[styles.reservaLabel, isActive && styles.textActiveLight]}>
-              {' '}
-              (Reserva)
+      <View style={styles.cardBody}>
+        <View style={styles.avatarColumn}>
+          <View style={[styles.avatar, isActive && styles.avatarActive]}>
+            <Text
+              style={[
+                styles.avatarText,
+                isActive && { color: isAccepted ? COLORS.brightGreen : COLORS.primary },
+              ]}
+            >
+              {(service.company_name || service.provider_name || '?').charAt(0)}
             </Text>
+          </View>
+        </View>
+
+        {/* Columna central */}
+        <View style={styles.centerColumn}>
+          <Text style={[styles.companyName, isActive && styles.textActive]} numberOfLines={1}>
+            {service.company_name || service.provider_name || 'Empresa'}
+          </Text>
+
+          {groupName && (
+            <Text style={[styles.groupName, isActive && styles.textActiveLight]} numberOfLines={1}>
+              {groupName}
+            </Text>
+          )}
+
+          <View style={styles.dispatchRow}>
+            <Text style={[styles.dispatchType, isActive && styles.textActiveLight]}>
+              {service.dispatch_type || 'Al momento'}
+            </Text>
+            {isReservation && (
+              <Text style={[styles.reservaLabel, isActive && styles.textActiveLight]}>
+                {' '}
+                (Reserva)
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.locationRow}>
+            <View style={[styles.dotOrigin, isActive && styles.dotActive]} />
+            <Text style={[styles.locationText, isActive && styles.textActive]} numberOfLines={1}>
+              <Text style={[styles.estimate, isActive && styles.textActive]}>
+                {service.origin_estimate || ''}{' '}
+              </Text>
+              {service.origin_address}
+            </Text>
+          </View>
+
+          <View style={styles.locationRow}>
+            <View style={[styles.dotDestination, isActive && styles.dotActive]} />
+            <Text style={[styles.locationText, isActive && styles.textActive]} numberOfLines={1}>
+              <Text style={[styles.estimate, isActive && styles.textActive]}>
+                {service.destination_estimate || ''}{' '}
+              </Text>
+              {service.destination_address}
+            </Text>
+          </View>
+
+          {service.observations && service.observations.length > 0 && !isActive && (
+            <View style={styles.observationsRow}>
+              {service.observations.map((obs, index) => (
+                <View key={index} style={styles.observationBadge}>
+                  <Text style={styles.observationText}>{obs}</Text>
+                </View>
+              ))}
+            </View>
           )}
         </View>
 
-        <View style={styles.locationRow}>
-          <View style={[styles.dotOrigin, isActive && styles.dotActive]} />
-          <Text style={[styles.locationText, isActive && styles.textActive]} numberOfLines={1}>
-            <Text style={[styles.estimate, isActive && styles.textActive]}>
-              {service.origin_estimate || ''}{' '}
-            </Text>
-            {service.origin_address}
+        {/* Columna derecha */}
+        <View style={styles.rightColumn}>
+          <Text style={[styles.amount, isActive && styles.textActive]}>S/ {service.fare}</Text>
+          <Text style={[styles.paymentTerm, isActive && styles.textActiveLight]}>
+            {service.payment_term || 'Al término'}
+          </Text>
+          <Text style={[styles.paymentMethod, isActive && styles.textActiveLight]}>
+            {service.payment_method || 'BCP'}
           </Text>
         </View>
 
-        <View style={styles.locationRow}>
-          <View style={[styles.dotDestination, isActive && styles.dotActive]} />
-          <Text style={[styles.locationText, isActive && styles.textActive]} numberOfLines={1}>
-            <Text style={[styles.estimate, isActive && styles.textActive]}>
-              {service.destination_estimate || ''}{' '}
-            </Text>
-            {service.destination_address}
-          </Text>
-        </View>
+        {/* Overlay para postulaciones */}
+        {isApplied && applicationOrder && (
+          <View style={styles.appliedOverlay}>
+            <Text style={styles.appliedText}>Postulante N° {applicationOrder}</Text>
+          </View>
+        )}
 
-        {service.observations && service.observations.length > 0 && !isActive && (
-          <View style={styles.observationsRow}>
-            {service.observations.map((obs, index) => (
-              <View key={index} style={styles.observationBadge}>
-                <Text style={styles.observationText}>{obs}</Text>
-              </View>
-            ))}
+        {/* Overlay para servicio aceptado */}
+        {isAccepted && (
+          <View style={styles.acceptedOverlay}>
+            <Text style={styles.acceptedText}>Servicio Aceptado</Text>
+            <Text style={styles.acceptedSubtext}>Toca para iniciar</Text>
+          </View>
+        )}
+
+        {/* Indicador de reserva */}
+        {showReservaIndicator && (
+          <View style={styles.reservaBadge}>
+            <Text style={styles.reservaText}>Reserva</Text>
           </View>
         )}
       </View>
 
-      {/* Columna derecha */}
-      <View style={styles.rightColumn}>
-        <Text style={[styles.amount, isActive && styles.textActive]}>S/ {service.fare}</Text>
-        <Text style={[styles.paymentTerm, isActive && styles.textActiveLight]}>
-          {service.payment_term || 'Al término'}
-        </Text>
-        <Text style={[styles.paymentMethod, isActive && styles.textActiveLight]}>
-          {service.payment_method || 'BCP'}
-        </Text>
-      </View>
-
-      {/* Overlay para postulaciones */}
-      {isApplied && applicationOrder && (
-        <View style={styles.appliedOverlay}>
-          <Text style={styles.appliedText}>Postulante N° {applicationOrder}</Text>
-        </View>
-      )}
-
-      {/* Overlay para servicio aceptado */}
-      {isAccepted && (
-        <View style={styles.acceptedOverlay}>
-          <Text style={styles.acceptedText}>Servicio Aceptado</Text>
-          <Text style={styles.acceptedSubtext}>Toca para iniciar</Text>
-        </View>
-      )}
-
-      {/* Indicador de reserva */}
-      {showReservaIndicator && (
-        <View style={styles.reservaBadge}>
-          <Text style={styles.reservaText}>Reserva</Text>
-        </View>
-      )}
+      {/* Franja de estado del servicio (fuente única: estadoDeServicio) */}
+      <EstadoServicioBar service={service} radius={RADIUS.xl} />
     </TouchableOpacity>
   );
 
@@ -225,15 +231,17 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   card: {
-    flexDirection: 'row',
     borderRadius: RADIUS.xl,
-    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
     overflow: 'hidden',
+  },
+  cardBody: {
+    flexDirection: 'row',
+    padding: 14,
   },
   avatarColumn: {
     justifyContent: 'center',
@@ -336,7 +344,7 @@ const styles = StyleSheet.create({
   },
   acceptedOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(37, 211, 102, 0.82)',
+    backgroundColor: 'rgba(53, 140, 82, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: RADIUS.xl,

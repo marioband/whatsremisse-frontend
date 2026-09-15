@@ -30,10 +30,11 @@ import {
   primerInstanteValido,
   proximaHoraRedondeada,
 } from '../lib/datetime';
+import { estaVencido } from '../lib/estadoServicio';
 import { hayApiDeDirecciones } from '../lib/places';
 import { esPremium } from '../lib/premium';
 import { RootStackParamList } from '../navigation/RootNavigator';
-import { ServiceAlert } from '../types';
+import { ServiceAlert, ServiceStatus } from '../types';
 
 type CreateNav = StackNavigationProp<
   RootStackParamList,
@@ -44,6 +45,8 @@ type CreateRoute = RouteProp<RootStackParamList, 'CreateService'>;
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
 const LIGHT_BG = '#F0F2F5';
+const OSCURO = '#2D2D2D';
+const ROJO_ACCION = '#9B3B43';
 
 const PAYMENT_TYPES = ['BCP', 'Yape', 'Plin', 'Efectivo', 'Otro'];
 const PAYMENT_DATES = ['Al término', 'Durante el día', 'Mañana', 'Escribir'];
@@ -52,7 +55,7 @@ const UNIT_TYPES = ['Todos', 'Auto compacto', 'Auto', 'Camioneta', 'Camioneta 3 
 export function CreateServiceScreen() {
   const navigation = useNavigation<CreateNav>();
   const route = useRoute<CreateRoute>();
-  const { updateService } = useMockStore();
+  const { addService, updateService, deleteService } = useMockStore();
   const { session, profile } = useAuth();
   const editingService = route.params?.service;
   const isEditing = !!editingService;
@@ -158,15 +161,16 @@ export function CreateServiceScreen() {
     }));
   };
 
-  const handleSubmit = () => {
+  /** Valida lo que hay en pantalla y arma el servicio (null si falta algo). */
+  const construirServicio = (): ServiceAlert | null => {
     if (!origin || !destinations[0] || !fare) {
       Alert.alert('Campos incompletos', 'Completa origen, destino, tarifa, fecha y hora.');
-      return;
+      return null;
     }
 
     const programada = combinarFechaYHora(fechaServicio, horaServicio);
     // Coherencia (por si la pantalla quedó abierta y el momento elegido ya pasó):
-    // se ajusta la hora y se avisa, en vez de publicar algo imposible.
+    // se ajusta la hora y se avisa, en vez de guardar algo imposible.
     if (programada.getTime() <= Date.now()) {
       const ajustada = horaCoherente(fechaServicio, horaServicio);
       setHoraServicio(ajustada);
@@ -175,13 +179,18 @@ export function CreateServiceScreen() {
         `La hora elegida (${formatearHora(horaServicio)}) ya pasó. La ajusté a las ` +
           `${formatearHora(ajustada)} para hoy. Revisa y vuelve a intentarlo.`
       );
-      return;
+      return null;
+    }
+
+    const userId = session?.user?.id;
+    if (!userId && !editingService) {
+      Alert.alert('Sesión requerida', 'Debes iniciar sesión para publicar un servicio.');
+      return null;
     }
 
     const mainDestination = destinations[destinations.length - 1];
     const intermediateStops = destinations.slice(0, -1).filter(Boolean);
     const coordsPrincipal = coordsDestinos[destinations.length - 1] || null;
-
     const finalPaymentType = paymentType === 'Otro' && otherPayment ? otherPayment : paymentType;
     const finalPaymentDate =
       paymentDate === 'Escribir' && customPaymentDate ? customPaymentDate : paymentDate;
@@ -193,52 +202,22 @@ export function CreateServiceScreen() {
 
     const dispatchType = `${formatearFecha(programada)} ${formatearHora24(programada)} hrs`;
     const scheduledAt = programada.toISOString();
+    const providerName = profile?.full_name || editingService?.provider_name || 'Proveedor';
 
-    if (isEditing && editingService) {
-      const updatedService: ServiceAlert = {
-        ...editingService,
-        title: `${origin} -> ${mainDestination}`,
-        description: `Unidad: ${unitType}${observation ? ` • ${observation}` : ''}`,
-        origin_address: origin,
-        destination_address: mainDestination,
-        vehicle_requirements: { vehicle_type: unitType },
-        fare: parseFloat(fare) || 0,
-        status: 'STATUS_OPEN',
-        assigned_driver_id: null,
-        updated_at: new Date().toISOString(),
-        dispatch_type: dispatchType,
-        scheduled_at: scheduledAt,
-        observations: observationsList.length > 0 ? observationsList : undefined,
-        payment_term: finalPaymentDate,
-        payment_method: finalPaymentType,
-      };
-      updateService(updatedService);
-      Alert.alert('Servicio actualizado', 'El servicio fue reprogramado correctamente.');
-      navigation.goBack();
-      return;
-    }
-
-    const userId = session?.user?.id;
-    if (!userId) {
-      Alert.alert('Sesión requerida', 'Debes iniciar sesión para publicar un servicio.');
-      return;
-    }
-    const providerName = profile?.full_name || 'Proveedor';
-
-    const newService: ServiceAlert = {
+    const base: ServiceAlert = editingService ?? {
       id: `service-${Date.now()}`,
-      provider_id: userId,
+      provider_id: userId || '',
       group_id: '',
-      title: `${origin} -> ${mainDestination}`,
-      description: `Unidad: ${unitType}${observation ? ` • ${observation}` : ''}`,
-      origin_address: origin,
-      origin_lat: coordsOrigen?.lat ?? 0,
-      origin_lng: coordsOrigen?.lng ?? 0,
-      destination_address: mainDestination,
-      destination_lat: coordsPrincipal?.lat ?? 0,
-      destination_lng: coordsPrincipal?.lng ?? 0,
+      title: '',
+      description: '',
+      origin_address: '',
+      origin_lat: 0,
+      origin_lng: 0,
+      destination_address: '',
+      destination_lat: 0,
+      destination_lng: 0,
       vehicle_requirements: { vehicle_type: unitType },
-      fare: parseFloat(fare) || 0,
+      fare: 0,
       status: 'STATUS_OPEN',
       assigned_driver_id: null,
       created_at: new Date().toISOString(),
@@ -248,15 +227,109 @@ export function CreateServiceScreen() {
       distance_meters: 0,
       archived: false,
       company_name: providerName,
+    };
+
+    // Un servicio vencido que se vuelve a programar se reabre: sale de la lista
+    // de vencidos y vuelve a estar disponible (sin conductor asignado).
+    const reabrir = !!editingService && estaVencido(editingService);
+
+    return {
+      ...base,
+      title: `${origin} -> ${mainDestination}`,
+      description: `Unidad: ${unitType}${observation ? ` • ${observation}` : ''}`,
+      origin_address: origin,
+      origin_lat: coordsOrigen?.lat ?? base.origin_lat ?? 0,
+      origin_lng: coordsOrigen?.lng ?? base.origin_lng ?? 0,
+      destination_address: mainDestination,
+      destination_lat: coordsPrincipal?.lat ?? base.destination_lat ?? 0,
+      destination_lng: coordsPrincipal?.lng ?? base.destination_lng ?? 0,
+      vehicle_requirements: { vehicle_type: unitType },
+      vehicle_type: unitType,
+      fare: parseFloat(fare) || 0,
       dispatch_type: dispatchType,
       scheduled_at: scheduledAt,
-      vehicle_type: unitType,
       observations: observationsList.length > 0 ? observationsList : undefined,
       payment_term: finalPaymentDate,
       payment_method: finalPaymentType,
+      updated_at: new Date().toISOString(),
+      ...(reabrir
+        ? {
+            status: 'STATUS_OPEN' as ServiceStatus,
+            assigned_driver_id: null,
+            driver_progress_step: 0,
+            settlement_enabled: false,
+            commission_paid: false,
+            driver_payment_received: false,
+          }
+        : {}),
     };
+  };
 
-    navigation.navigate('SelectGroupsForService', { draftService: newService });
+  /** Guardar: la tarjeta queda en la lista; sin grupos, "no compartida". */
+  const handleGuardar = () => {
+    const servicio = construirServicio();
+    if (!servicio) return;
+
+    if (editingService) {
+      updateService(servicio);
+      Alert.alert(
+        'Servicio guardado',
+        editingService.group_id
+          ? 'Los cambios quedaron guardados.'
+          : 'La tarjeta sigue sin compartir. Elige grupos cuando quieras publicarla.'
+      );
+      navigation.goBack();
+      return;
+    }
+
+    addService({ ...servicio, group_id: '' });
+    Alert.alert(
+      'Servicio guardado',
+      'La tarjeta quedó en tu lista como "Servicio no compartido". Para que la vean los ' +
+        'conductores, entra a la tarjeta y elige grupos.'
+    );
+    navigation.navigate('Main');
+  };
+
+  /** Elegir grupos: es el paso que publica el servicio a los conductores. */
+  const handleElegirGrupos = () => {
+    const servicio = construirServicio();
+    if (!servicio) return;
+
+    navigation.navigate('SelectGroupsForService', {
+      draftService: servicio,
+      serviceId: editingService?.id,
+    });
+  };
+
+  /** Anular: borra la tarjeta (o descarta el borrador si aún no se guardó). */
+  const handleAnular = () => {
+    if (!editingService) {
+      Alert.alert('Descartar servicio', 'Se perderá lo que escribiste. ¿Descartarlo?', [
+        { text: 'Seguir editando', style: 'cancel' },
+        { text: 'Descartar', style: 'destructive', onPress: () => navigation.goBack() },
+      ]);
+      return;
+    }
+
+    Alert.alert(
+      'Anular tarjeta',
+      'La tarjeta se eliminará de la lista, junto con sus postulaciones y su chat.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Anular',
+          style: 'destructive',
+          onPress: async () => {
+            const anulada = await deleteService(editingService.id);
+            if (anulada) {
+              Alert.alert('Tarjeta anulada', 'El servicio se eliminó de la lista.');
+              navigation.navigate('Main');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -269,7 +342,7 @@ export function CreateServiceScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nuevo Servicio</Text>
+        <Text style={styles.headerTitle}>{isEditing ? 'Editar Servicio' : 'Nuevo Servicio'}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -453,10 +526,18 @@ export function CreateServiceScreen() {
         <View style={styles.spacer} />
       </ScrollView>
 
-      {/* Botón Siguiente */}
+      {/* Pie: Anular · Guardar · Elegir grupos (antes "Siguiente") */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-          <Text style={styles.submitText}>Siguiente</Text>
+        <TouchableOpacity style={[styles.footerBtn, styles.anularBtn]} onPress={handleAnular}>
+          <Text style={styles.anularText}>Anular</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.footerBtn, styles.guardarBtn]} onPress={handleGuardar}>
+          <Text style={styles.footerBtnText}>Guardar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.footerBtn, styles.gruposBtn]} onPress={handleElegirGrupos}>
+          <Text style={styles.footerBtnText}>Elegir grupos</Text>
         </TouchableOpacity>
       </View>
 
@@ -690,21 +771,40 @@ const styles = StyleSheet.create({
     height: 20,
   },
   footer: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderTopWidth: 0.5,
     borderTopColor: '#ddd',
   },
-  submitBtn: {
-    backgroundColor: BLUE,
+  footerBtn: {
+    flex: 1,
     borderRadius: 8,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 4,
   },
-  submitText: {
+  footerBtnText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+  anularBtn: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: ROJO_ACCION,
+  },
+  anularText: {
+    color: ROJO_ACCION,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  guardarBtn: {
+    backgroundColor: OSCURO,
+  },
+  gruposBtn: {
+    backgroundColor: BLUE,
   },
 });
