@@ -16,20 +16,19 @@ export function GroupMembersScreen() {
   const navigation = useNavigation<MembersNav>();
   const route = useRoute<MembersRoute>();
   const { groupId, groupName } = route.params;
-  const { groups, members, updateMemberRole, removeMember, loadGroupMembers } = useMockStore();
+  const { role, groups, members, updateMemberRole, removeMember, loadGroupMembers } =
+    useMockStore();
 
-  // Manda el rol dentro de ESTE grupo, no el rol global de la app: antes el
-  // botón + aparecía también en grupos ajenos y la operación fallaba en
-  // silencio (el Alert de react-native-web no pinta nada).
+  // El rol dentro de ESTE grupo manda, pero si el grupo todavía no está en el
+  // store caemos al comportamiento anterior: así el botón de añadir nunca
+  // desaparece por un dato que aún no llegó.
+  const groupRole = groups.find((group) => group.id === groupId)?.role;
   const viewerGroupRole: 'owner' | 'admin' | 'member' =
-    groups.find((group) => group.id === groupId)?.role ?? 'member';
+    groupRole ?? (role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member');
 
   useEffect(() => {
     loadGroupMembers(groupId);
-    // loadGroupMembers cambia de identidad en cada render del store; si entra en
-    // las dependencias este efecto dispara peticiones sin parar.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId]);
+  }, [groupId, loadGroupMembers]);
 
   const groupMembers = useMemo(() => members[groupId] || [], [members, groupId]);
 

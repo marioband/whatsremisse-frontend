@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useEffect, useReducer, ReactNode, useRef } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useReducer,
+  ReactNode,
+  useRef,
+} from 'react';
 import { Vibration } from 'react-native';
 
 import { useAuth } from './AuthContext';
@@ -605,6 +613,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Identidad estable: las pantallas que la usan dentro de un useEffect ya no
+  // disparan el efecto en cada render del store (antes se pedían los miembros
+  // del grupo en bucle).
+  const loadGroupMembers = useCallback(async (groupId: string) => {
+    try {
+      const members = await fetchGroupMembers(groupId);
+      dispatch({ type: 'SET_MEMBERS', payload: { groupId, members } });
+    } catch (err) {
+      console.error('[MockStore] loadGroupMembers error:', err);
+    }
+  }, []);
+
   const value: MockContextValue = {
     ...state,
     setRole: (role) => dispatch({ type: 'SET_ROLE', payload: role }),
@@ -675,14 +695,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     addDriverDebt: (amount) => dispatch({ type: 'ADD_DRIVER_DEBT', payload: amount }),
     reduceDriverDebt: (amount) => dispatch({ type: 'REDUCE_DRIVER_DEBT', payload: amount }),
     setDebtThreshold: (amount) => dispatch({ type: 'SET_DEBT_THRESHOLD', payload: amount }),
-    loadGroupMembers: async (groupId) => {
-      try {
-        const members = await fetchGroupMembers(groupId);
-        dispatch({ type: 'SET_MEMBERS', payload: { groupId, members } });
-      } catch (err) {
-        console.error('[MockStore] loadGroupMembers error:', err);
-      }
-    },
+    loadGroupMembers,
     payCommission: async (serviceId) => {
       await persistService(serviceId, { commission_paid: true });
       dispatch({ type: 'PAY_COMMISSION', payload: { serviceId } });

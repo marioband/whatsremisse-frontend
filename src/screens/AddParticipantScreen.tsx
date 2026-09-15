@@ -10,7 +10,6 @@ import {
   FlatList,
   SafeAreaView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
@@ -31,6 +30,38 @@ interface SearchableContact {
   role: string;
 }
 
+/** Texto del error con el detalle que devuelve Supabase (code/details/hint). */
+function detalleDeError(err: unknown): string {
+  const partes: string[] = [describeError(err)];
+  if (err && typeof err === 'object') {
+    (['message', 'code', 'details', 'hint'] as const).forEach((clave) => {
+      const valor = (err as Record<string, unknown>)[clave];
+      if (typeof valor === 'string' && valor) partes.push(`${clave}: ${valor}`);
+    });
+  }
+  return partes.join(' · ');
+}
+
+function mensajeDeAlta(err: unknown): string {
+  const detalle = detalleDeError(err);
+  const minusculas = detalle.toLowerCase();
+  if (
+    minusculas.includes('duplicate key') ||
+    minusculas.includes('23505') ||
+    minusculas.includes('already exists')
+  ) {
+    return 'Ese usuario ya es integrante del grupo.';
+  }
+  if (
+    minusculas.includes('row-level security') ||
+    minusculas.includes('42501') ||
+    minusculas.includes('permission denied')
+  ) {
+    return `Supabase rechazó el alta por permisos (políticas RLS de group_members). ${detalle}`;
+  }
+  return `No se pudo añadir al integrante: ${detalle}`;
+}
+
 export function AddParticipantScreen() {
   const navigation = useNavigation<AddNav>();
   const route = useRoute<AddRoute>();
@@ -43,6 +74,7 @@ export function AddParticipantScreen() {
   const [adding, setAdding] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const existingMemberIds = useMemo(
@@ -123,7 +155,9 @@ export function AddParticipantScreen() {
   const handleAdd = async () => {
     if (adding) return;
     setAdding(true);
+    setAddError(null);
     try {
+      const added: string[] = [];
       for (const id of selectedIds) {
         const contact = results.find((c) => c.id === id);
         if (contact && !existingMemberIds.has(contact.id)) {
@@ -133,13 +167,22 @@ export function AddParticipantScreen() {
             name: contact.name,
             role: 'member',
           });
+          added.push(contact.name);
         }
       }
+
+      if (added.length === 0) {
+        setAddError('Ese usuario ya es integrante del grupo.');
+        return;
+      }
+
       navigation.goBack();
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[AddParticipant] addMember error:', err);
-      Alert.alert('No se pudo añadir al integrante', describeError(err));
+      // Se muestra en pantalla a propósito: en web Alert.alert no pinta nada y
+      // el fallo parecía "no hacer nada".
+      setAddError(mensajeDeAlta(err));
     } finally {
       setAdding(false);
     }
@@ -228,6 +271,9 @@ export function AddParticipantScreen() {
           )
         }
       />
+
+      {/* Error en pantalla: en web Alert.alert no muestra nada */}
+      {!!addError && <Text style={styles.errorBox}>{addError}</Text>}
 
       {/* Add button */}
       {selectedIds.size > 0 && (
@@ -384,6 +430,19 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
     marginTop: 40,
     paddingHorizontal: 16,
+  },
+  errorBox: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 88,
+    backgroundColor: '#FDECEA',
+    borderColor: '#F5C6C2',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    color: '#B3261E',
+    fontSize: 13,
   },
   addButton: {
     position: 'absolute',
