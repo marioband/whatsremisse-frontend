@@ -27,6 +27,8 @@ export function GroupMembersScreen() {
   // alta es Supabase (política RLS de group_members).
   const fallbackRole: 'owner' | 'admin' | 'member' =
     role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member';
+  // El rol se usa solo para el menú de mantener pulsado (asignar admin / quitar);
+  // el botón de añadir ya no depende de él.
   const viewerGroupRole = rolEnGrupo(groups, groupId, session?.user?.id, fallbackRole);
 
   useEffect(() => {
@@ -95,8 +97,6 @@ export function GroupMembersScreen() {
     </TouchableOpacity>
   );
 
-  const canAddMembers = viewerGroupRole === 'owner' || viewerGroupRole === 'admin';
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -122,14 +122,15 @@ export function GroupMembersScreen() {
       />
 
       {/* FAB */}
-      {canAddMembers && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => navigation.navigate('AddParticipant', { groupId, groupName })}
-        >
-          <Text style={styles.fabIcon}>+</Text>
-        </TouchableOpacity>
-      )}
+      {/* Siempre visible: quién puede dar de alta lo decide Supabase (política
+          RLS de group_members) y el error se muestra en pantalla. Ocultarlo
+          según el rol nos dejó dos veces sin forma de añadir integrantes. */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('AddParticipant', { groupId, groupName })}
+      >
+        <Text style={styles.fabIcon}>+</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }

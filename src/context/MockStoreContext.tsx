@@ -13,6 +13,7 @@ import { useAuth } from './AuthContext';
 import { useRealtimeApplications } from '../hooks/useRealtimeApplications';
 import { useRealtimeGroups } from '../hooks/useRealtimeGroups';
 import { useRealtimeServices } from '../hooks/useRealtimeServices';
+import { Alert } from '../lib/alert';
 import {
   approveApplicationInDb,
   fetchApplicationsForDriver,
@@ -33,6 +34,7 @@ import {
   updateServiceAlert,
   ProfilePatch,
 } from '../lib/database';
+import { describeError } from '../lib/errors';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { isVisibleAsDriver, isVisibleAsProvider } from '../lib/visibility';
 import { notifyHighPriority } from '../services/notifications';
@@ -70,7 +72,25 @@ export function esPropietarioDelGrupo(
   return (members[groupId] || []).some((m) => m.id === memberId && m.role === 'owner');
 }
 
-/** Rol del usuario en un grupo; el creador (groups.owner_id) siempre es owner. */
+/** El rol más permisivo de los dos (owner > admin > member). */
+function rolMasPermisivo(
+  a: 'owner' | 'admin' | 'member',
+  b: 'owner' | 'admin' | 'member'
+): 'owner' | 'admin' | 'member' {
+  if (a === 'owner' || b === 'owner') return 'owner';
+  if (a === 'admin' || b === 'admin') return 'admin';
+  return 'member';
+}
+
+/**
+ * Rol del usuario en un grupo. El creador (groups.owner_id) siempre cuenta como
+ * owner, aunque su fila de miembro diga otra cosa.
+ *
+ * Si todavía no tenemos el dato del creador (grupos cargados antes de que
+ * existiera ese campo, o sin sesión) no podemos afirmar que el usuario no sea
+ * owner: en ese caso devolvemos el rol más permisivo para no esconder acciones
+ * que quizá sí puede hacer (pasó dos veces con el botón + de integrantes).
+ */
 export function rolEnGrupo(
   groups: GroupItem[],
   groupId: string,
@@ -79,7 +99,8 @@ export function rolEnGrupo(
 ): 'owner' | 'admin' | 'member' {
   const grupo = groups.find((g) => g.id === groupId);
   if (!grupo) return fallbackRole;
-  if (userId && grupo.ownerId && grupo.ownerId === userId) return 'owner';
+  if (userId && grupo.ownerId === userId) return 'owner';
+  if (!userId || !grupo.ownerId) return rolMasPermisivo(grupo.role, fallbackRole);
   return grupo.role;
 }
 
@@ -783,7 +804,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     },
     updateMemberRole: async (groupId, memberId, role) => {
       if (esPropietarioDelGrupo(state.groups, state.members, groupId, memberId)) {
-        console.warn('[MockStore] el propietario del grupo no puede cambiar de rol');
+        Alert.alert('No permitido', 'El propietario del grupo no puede cambiar de rol.');
         return;
       }
       try {
@@ -791,11 +812,12 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_MEMBER_ROLE', payload: { groupId, memberId, role } });
       } catch (err) {
         console.error('[MockStore] updateMemberRole error:', err);
+        Alert.alert('No se pudo cambiar el rol', describeError(err));
       }
     },
     removeMember: async (groupId, memberId) => {
       if (esPropietarioDelGrupo(state.groups, state.members, groupId, memberId)) {
-        console.warn('[MockStore] el propietario del grupo no puede eliminarse');
+        Alert.alert('No permitido', 'No puedes eliminar al propietario del grupo.');
         return;
       }
       try {
@@ -803,6 +825,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'REMOVE_MEMBER', payload: { groupId, memberId } });
       } catch (err) {
         console.error('[MockStore] removeMember error:', err);
+        Alert.alert('No se pudo eliminar al integrante', describeError(err));
       }
     },
     setUserProfile: (profile) => dispatch({ type: 'SET_USER_PROFILE', payload: profile }),
