@@ -443,14 +443,19 @@ export async function insertGroupMember(
  * PostgREST responde 204 y el cliente cree que hizo el cambio. El síntoma es
  * "elimino al integrante, desaparece de la lista y al recargar la página vuelve".
  *
- * Arma el texto con lo que la base sí puede decirnos (tu rol en el grupo y quién
- * es el creador) para que el fallo diga la causa en vez de quedar mudo.
+ * Arma el texto con lo que la base sí puede decirnos (tu rol en el grupo, si la
+ * fila del integrante sigue ahí y si ese integrante es el creador del grupo)
+ * para que el fallo diga la causa en vez de quedar mudo.
  */
 async function describirBloqueoDeFila(
   groupId: string,
+  targetUserId: string,
   accion: 'eliminar al integrante' | 'cambiar el rol'
 ): Promise<string> {
   const partes: string[] = [];
+  let objetivoEsElCreador: boolean | null = null;
+  let objetivoSigueAhi: boolean | null = null;
+
   try {
     const { data: sesion } = await supabase.auth.getSession();
     const uid = sesion?.session?.user?.id;
@@ -467,22 +472,58 @@ async function describirBloqueoDeFila(
           : 'no tienes fila en group_members para este grupo'
       );
     }
+
+    const { data: objetivo } = await supabase
+      .from('group_members')
+      .select('role')
+      .eq('group_id', groupId)
+      .eq('user_id', targetUserId)
+      .maybeSingle();
+    objetivoSigueAhi = Boolean(objetivo);
+    partes.push(
+      objetivo
+        ? `la fila del integrante SIGUE en la base (rol="${objetivo.role}")`
+        : 'la fila del integrante ya no está en la base'
+    );
+
     const { data: grupo } = await supabase
       .from('groups')
       .select('owner_id')
       .eq('id', groupId)
       .maybeSingle();
-    if (grupo?.owner_id) partes.push(`el creador del grupo es ${grupo.owner_id}`);
+    if (grupo?.owner_id) {
+      objetivoEsElCreador = grupo.owner_id === targetUserId;
+      partes.push(
+        objetivoEsElCreador
+          ? `ese integrante ES el creador del grupo (${grupo.owner_id})`
+          : `el creador del grupo es ${grupo.owner_id} y no es ese integrante`
+      );
+    }
   } catch {
     // El diagnóstico es informativo: nunca debe tapar el error original.
   }
 
+  let causa: string;
+  if (objetivoEsElCreador) {
+    causa =
+      'La app te dejó intentarlo pero la base lo rechaza a propósito: la fila del creador del grupo ' +
+      'no se puede eliminar (es quien puede volver a agregar integrantes). No hay nada que arreglar: ' +
+      'si quieres sacarlo del grupo, antes hay que transferir la propiedad del grupo.';
+  } else if (objetivoSigueAhi) {
+    causa =
+      'Tu fila es owner/admin y el integrante no es el creador, así que el borrado debería estar permitido: ' +
+      'revisa las políticas DELETE/UPD de group_members en tu base (puede quedar una política vieja o una ' +
+      'RESTRICTIVE que anule las demás), con: ' +
+      "select polname, cmd, permissive, qual::text from pg_policies where tablename = 'group_members';";
+  } else {
+    causa =
+      'La fila no está en la base, así que el borrado sí ocurrió; vuelve a abrir el grupo para refrescar la lista.';
+  }
+
   return (
-    `Supabase respondió OK pero la fila sigue en group_members, así que no se pudo ${accion}. ` +
-    `Solo el creador del grupo o un Administrador pueden hacerlo (${partes.join('; ') || 'sin más datos'}). ` +
-    'Aplica supabase/migrations/0006_group_member_delete_policy.sql en Supabase Studio > SQL Editor ' +
-    '(deja borrar al creador del grupo aunque su fila de miembro falte o esté mal). Después comprueba con: ' +
-    `select gm.user_id, gm.role from public.group_members gm where gm.group_id = '${groupId}';`
+    `Supabase respondió OK pero no se pudo ${accion}. ` +
+    `Datos de la base: ${partes.join('; ') || 'sin datos'}. ${causa} ` +
+    `Comprueba el grupo con: select gm.user_id, gm.role from public.group_members gm where gm.group_id = '${groupId}';`
   );
 }
 
@@ -492,6 +533,20 @@ export async function updateGroupMember(
   updates: Partial<Pick<DbGroupMember, 'role' | 'favorite'>>
 ): Promise<void> {
   if (!isSupabaseConfigured) return;
+
+  // Igual que en el borrado: la fila del creador no se degrada (0006).
+  const { data: grupo, error: grupoError } = await supabase
+    .from('groups')
+    .select('owner_id')
+    .eq('id', groupId)
+    .maybeSingle();
+  if (grupoError) throw grupoError;
+  if (grupo?.owner_id && grupo.owner_id === userId) {
+    throw new Error(
+      'El creador del grupo no puede cambiar de rol: es quien puede volver a agregar integrantes.'
+    );
+  }
+
   const { data, error } = await supabase
     .from('group_members')
     .update(updates)
@@ -502,12 +557,29 @@ export async function updateGroupMember(
   if (!data || data.length === 0) {
     // El UPDATE no tocó ninguna fila: o la política lo filtró (RLS) o la fila no
     // existe. Los dos casos hay que decirlos, no tragarlos.
-    throw new Error(await describirBloqueoDeFila(groupId, 'cambiar el rol'));
+    throw new Error(await describirBloqueoDeFila(groupId, userId, 'cambiar el rol'));
   }
 }
 
 export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
   if (!isSupabaseConfigured) return;
+
+  // El creador del grupo no se puede eliminar: la política de la 0006 protege su
+  // fila. Se comprueba contra la base antes de intentarlo, para dar un mensaje
+  // claro en vez de un borrado condenado a 0 filas.
+  const { data: grupo, error: grupoError } = await supabase
+    .from('groups')
+    .select('owner_id')
+    .eq('id', groupId)
+    .maybeSingle();
+  if (grupoError) throw grupoError;
+  if (grupo?.owner_id && grupo.owner_id === userId) {
+    throw new Error(
+      'Ese integrante es el creador del grupo y su fila no se puede eliminar: es quien puede volver a ' +
+        'agregar integrantes. Para sacarlo del grupo habría que transferir antes la propiedad del grupo.'
+    );
+  }
+
   const { data, error } = await supabase
     .from('group_members')
     .delete()
@@ -528,7 +600,7 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
   if (countError) throw countError;
   if ((count ?? 0) === 0) return; // la fila ya no está: sí se eliminó
 
-  throw new Error(await describirBloqueoDeFila(groupId, 'eliminar al integrante'));
+  throw new Error(await describirBloqueoDeFila(groupId, userId, 'eliminar al integrante'));
 }
 
 export async function fetchMessagesForGroup(groupId: string): Promise<ChatMessage[]> {

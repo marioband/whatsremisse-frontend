@@ -62,6 +62,17 @@ export function GroupMembersScreen() {
     memberName: string,
     memberRole: 'owner' | 'admin' | 'member'
   ) => {
+    // El creador del grupo no se elimina ni se degrada (la base lo impide): si lo
+    // sabemos, se explica en vez de ofrecer una acción condenada a fallar.
+    const grupo = groups.find((g) => g.id === groupId);
+    if (grupo?.ownerId && grupo.ownerId === memberId) {
+      Alert.alert(
+        'Propietario del grupo',
+        `${memberName} es el creador del grupo: no se puede eliminar ni cambiar de rol. Es quien puede volver a agregar integrantes.`
+      );
+      return;
+    }
+
     if (viewerGroupRole === 'owner') {
       const isAdmin = memberRole === 'admin';
       Alert.alert(memberName, 'Selecciona una acción', [
