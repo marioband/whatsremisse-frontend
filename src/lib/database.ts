@@ -286,6 +286,7 @@ export function mapGroupFromDb(row: DbGroup, memberRow?: DbGroupMember): GroupIt
     name: row.name,
     role: (memberRow?.role as GroupItem['role']) || 'member',
     favorite: memberRow?.favorite || false,
+    ownerId: row.owner_id,
   };
 }
 

@@ -43,6 +43,8 @@ export interface GroupItem {
   name: string;
   role: 'owner' | 'admin' | 'member';
   favorite: boolean;
+  /** Creador del grupo (groups.owner_id): manda por encima del rol de miembro. */
+  ownerId?: string;
 }
 
 export interface GroupMember {
@@ -50,6 +52,35 @@ export interface GroupMember {
   groupId: string;
   name: string;
   role: 'owner' | 'admin' | 'member';
+}
+
+/**
+ * ¿Es el creador del grupo? Manda por encima del rol de miembro: degradar esa
+ * fila deja al grupo sin nadie que pueda agregar integrantes, porque la política
+ * RLS de group_members exige rol owner/admin para dar de alta.
+ */
+export function esPropietarioDelGrupo(
+  groups: GroupItem[],
+  members: Record<string, GroupMember[]>,
+  groupId: string,
+  memberId: string
+): boolean {
+  const grupo = groups.find((g) => g.id === groupId);
+  if (grupo?.ownerId) return grupo.ownerId === memberId;
+  return (members[groupId] || []).some((m) => m.id === memberId && m.role === 'owner');
+}
+
+/** Rol del usuario en un grupo; el creador (groups.owner_id) siempre es owner. */
+export function rolEnGrupo(
+  groups: GroupItem[],
+  groupId: string,
+  userId: string | undefined,
+  fallbackRole: 'owner' | 'admin' | 'member' = 'member'
+): 'owner' | 'admin' | 'member' {
+  const grupo = groups.find((g) => g.id === groupId);
+  if (!grupo) return fallbackRole;
+  if (userId && grupo.ownerId && grupo.ownerId === userId) return 'owner';
+  return grupo.role;
 }
 
 export interface UserProfile {
@@ -732,6 +763,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
             name: dbGroup.name,
             role: member.role as GroupItem['role'],
             favorite: member.favorite,
+            ownerId: dbGroup.owner_id,
           },
         });
       } catch (err) {
@@ -750,6 +782,10 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     },
     updateMemberRole: async (groupId, memberId, role) => {
+      if (esPropietarioDelGrupo(state.groups, state.members, groupId, memberId)) {
+        console.warn('[MockStore] el propietario del grupo no puede cambiar de rol');
+        return;
+      }
       try {
         await updateGroupMember(groupId, memberId, { role });
         dispatch({ type: 'UPDATE_MEMBER_ROLE', payload: { groupId, memberId, role } });
@@ -758,6 +794,10 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     },
     removeMember: async (groupId, memberId) => {
+      if (esPropietarioDelGrupo(state.groups, state.members, groupId, memberId)) {
+        console.warn('[MockStore] el propietario del grupo no puede eliminarse');
+        return;
+      }
       try {
         await removeGroupMember(groupId, memberId);
         dispatch({ type: 'REMOVE_MEMBER', payload: { groupId, memberId } });

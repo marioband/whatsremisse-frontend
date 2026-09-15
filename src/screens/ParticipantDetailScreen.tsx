@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-import { useMockStore } from '../context/MockStoreContext';
+import { useAuth } from '../context/AuthContext';
+import { esPropietarioDelGrupo, rolEnGrupo, useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { fetchProfileById, PublicProfile } from '../lib/database';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -33,7 +34,8 @@ export function ParticipantDetailScreen() {
   const navigation = useNavigation<DetailNav>();
   const route = useRoute<DetailRoute>();
   const { groupId, memberId, memberName, memberRole } = route.params;
-  const { role, members, updateMemberRole, removeMember } = useMockStore();
+  const { role, groups, members, updateMemberRole, removeMember } = useMockStore();
+  const { session } = useAuth();
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,16 +57,29 @@ export function ParticipantDetailScreen() {
     };
   }, [memberId]);
 
-  const viewerGroupRole: 'owner' | 'admin' | 'member' =
+  const fallbackRole: 'owner' | 'admin' | 'member' =
     role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member';
+  const viewerGroupRole = rolEnGrupo(groups, groupId, session?.user?.id, fallbackRole);
 
   const member = members[groupId]?.find((m) => m.id === memberId);
   const currentMemberRole = member?.role || memberRole;
+
+  // El creador del grupo no se degrada ni se elimina: si queda como 'member' o
+  // 'admin', la política RLS de group_members ya no le deja agregar integrantes.
+  const esElPropietario =
+    esPropietarioDelGrupo(groups, members, groupId, memberId) || currentMemberRole === 'owner';
 
   const { firstName, lastName } = parseName(profile?.full_name || memberName);
   const vehicle = (profile?.vehicle_data || {}) as Record<string, string>;
 
   const handleToggleAdmin = () => {
+    if (esElPropietario) {
+      Alert.alert(
+        'No permitido',
+        'El propietario del grupo no se puede cambiar de rol: es quien puede agregar integrantes.'
+      );
+      return;
+    }
     const newRole = currentMemberRole === 'admin' ? 'member' : 'admin';
     updateMemberRole(groupId, memberId, newRole);
     Alert.alert(
@@ -74,6 +89,10 @@ export function ParticipantDetailScreen() {
   };
 
   const handleDelete = () => {
+    if (esElPropietario) {
+      Alert.alert('No permitido', 'No puedes eliminar al propietario del grupo.');
+      return;
+    }
     Alert.alert('Eliminar integrante', `\u00bfSeguro que deseas eliminar a ${memberName}?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -147,7 +166,11 @@ export function ParticipantDetailScreen() {
 
       {/* Bottom actions */}
       <View style={styles.footer}>
-        {viewerGroupRole === 'owner' && (
+        {esElPropietario && (
+          <Text style={styles.ownerNote}>Propietario del grupo (no se puede cambiar)</Text>
+        )}
+
+        {viewerGroupRole === 'owner' && !esElPropietario && (
           <View style={styles.actionsRow}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.adminBtn]}
@@ -163,7 +186,7 @@ export function ParticipantDetailScreen() {
           </View>
         )}
 
-        {viewerGroupRole === 'admin' && (
+        {viewerGroupRole === 'admin' && !esElPropietario && (
           <TouchableOpacity
             style={[styles.actionBtn, styles.deleteBtn, styles.centeredBtn]}
             onPress={handleDelete}
@@ -180,6 +203,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  ownerNote: {
+    textAlign: 'center',
+    color: '#777',
+    fontSize: 13,
+    marginBottom: 10,
   },
   header: {
     flexDirection: 'row',

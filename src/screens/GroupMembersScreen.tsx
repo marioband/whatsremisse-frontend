@@ -3,7 +3,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
-import { useMockStore, GroupMember } from '../context/MockStoreContext';
+import { useAuth } from '../context/AuthContext';
+import { useMockStore, GroupMember, rolEnGrupo } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -18,21 +19,15 @@ export function GroupMembersScreen() {
   const { groupId, groupName } = route.params;
   const { role, groups, members, updateMemberRole, removeMember, loadGroupMembers } =
     useMockStore();
+  const { session } = useAuth();
 
-  // El botón + y el menú de integrante se muestran si CUALQUIERA de las dos
-  // fuentes dice owner/admin: el rol dentro del grupo (dato real) o el rol de la
-  // pestaña actual. Antes solo miraba el segundo; al pasarlo al rol del grupo el
-  // botón + desapareció en grupos cuyo dato no decía owner. Quien autoriza de
-  // verdad el alta es Supabase (RLS de group_members), así que el criterio de la
-  // UI debe ser permisible, nunca más restrictivo que antes.
-  const groupRole = groups.find((group) => group.id === groupId)?.role;
-  const globalRole: 'owner' | 'admin' | 'member' =
+  // Rol del usuario en ESTE grupo: el creador (groups.owner_id) siempre cuenta
+  // como owner, y si el grupo todavía no está cargado caemos al rol de la
+  // pestaña. El + se muestra cuando puede agregar; quien autoriza de verdad el
+  // alta es Supabase (política RLS de group_members).
+  const fallbackRole: 'owner' | 'admin' | 'member' =
     role === 'GROUP_OWNER' ? 'owner' : role === 'ADMIN' ? 'admin' : 'member';
-  const viewerGroupRole: 'owner' | 'admin' | 'member' = [groupRole, globalRole].includes('owner')
-    ? 'owner'
-    : [groupRole, globalRole].includes('admin')
-      ? 'admin'
-      : 'member';
+  const viewerGroupRole = rolEnGrupo(groups, groupId, session?.user?.id, fallbackRole);
 
   useEffect(() => {
     loadGroupMembers(groupId);
