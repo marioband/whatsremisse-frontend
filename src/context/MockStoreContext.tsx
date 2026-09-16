@@ -27,6 +27,8 @@ import {
   declararPagoDelServicio as declararPagoEnDb,
   resolverDeclaracionDePago as resolverDeclaracionEnDb,
   confirmarPagoDelServicio as confirmarPagoEnDb,
+  compartirServicioConGrupos as compartirServicioEnDb,
+  fetchGruposDeServicios,
   fetchServicesForDriver,
   fetchServicesForProvider,
   fetchServiceAlertById,
@@ -44,6 +46,7 @@ import {
   ProfilePatch,
 } from '../lib/database';
 import { describeError } from '../lib/errors';
+import { conGrupos } from '../lib/gruposDeServicio';
 import {
   fusionarLista,
   fusionarServicio,
@@ -547,7 +550,18 @@ function mockReducer(state: MockState, action: MockAction): MockState {
 
 interface MockContextValue extends MockState {
   setRole: (role: AppRole) => void;
-  addService: (service: ServiceAlert) => void;
+  /**
+   * Publica una tarjeta. Con `groupIds` la comparte a TODOS esos grupos en un solo
+   * servicio (0018): antes se creaba una tarjeta por grupo y el conductor que estaba
+   * en varios grupos recibía la misma alerta varias veces. Devuelve el id real (el
+   * de la base) o `null` si no se pudo publicar.
+   */
+  addService: (service: ServiceAlert, groupIds?: string[]) => Promise<string | null>;
+  /**
+   * Comparte una tarjeta que ya existe con los grupos elegidos (0018). Reemplaza el
+   * conjunto completo: un array vacío deja la tarjeta como "Servicio no compartido".
+   */
+  compartirServicio: (serviceId: string, groupIds: string[]) => Promise<boolean>;
   updateService: (service: ServiceAlert) => void;
   /** Anula la tarjeta: la borra de la base y de la lista. */
   deleteService: (serviceId: string) => Promise<boolean>;
@@ -761,7 +775,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
   // Sincronización en tiempo real: las tarjetas aparecen y desaparecen en los
   // dos dispositivos sin recargar.
-  useRealtimeServices((cambio) => {
+  useRealtimeServices(async (cambio) => {
     // La tarjeta anulada llega como DELETE y sin `new`: si no se mira `old`, el
     // evento se descarta y la tarjeta se queda en el otro dispositivo.
     if (cambio.evento === 'DELETE') {
@@ -773,19 +787,39 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     // Solo aceptamos lo que corresponde a alguna de las dos identidades (ver
     // src/lib/visibility.ts): antes entraba cualquier fila y por eso todos veían
     // los servicios de todos.
+    //
+    // La fila del canal NO trae a qué grupos está compartida (0018): se resuelve con
+    // la que ya tenemos en memoria o, si el servicio es nuevo para este dispositivo,
+    // preguntando a la base. Sin esto, una alerta compartida a un grupo que no es el
+    // principal se descartaría y el conductor no se enteraría hasta el respaldo.
     const groupIds = state.groups.map((g) => g.id);
     const myId = profile?.id;
-    const isRelevant =
-      isVisibleAsProvider(service, myId) || isVisibleAsDriver(service, myId, groupIds);
+    const enMemoria = state.services.find((s) => s.id === service.id);
+    let fila = service;
+
+    if (enMemoria?.shared_group_ids?.length) {
+      fila = conGrupos(service, enMemoria.shared_group_ids);
+    } else if (!enMemoria && service.status === 'STATUS_OPEN') {
+      try {
+        const mapa = await fetchGruposDeServicios([service.id]);
+        const ids = mapa.get(service.id);
+        if (ids && ids.length > 0) fila = conGrupos(service, ids);
+      } catch (err) {
+        console.warn('[MockStore] no se pudieron leer los grupos del servicio nuevo:', err);
+      }
+    }
+
+    const isRelevant = isVisibleAsProvider(fila, myId) || isVisibleAsDriver(fila, myId, groupIds);
     if (!isRelevant) return;
 
-    const exists = state.services.some((s) => s.id === service.id);
-    dispatch({ type: exists ? 'UPDATE_SERVICE' : 'ADD_SERVICE', payload: service });
+    const exists = !!enMemoria;
+    dispatch({ type: exists ? 'UPDATE_SERVICE' : 'ADD_SERVICE', payload: fila });
 
     // Al conductor le acaban de compartir un servicio: se le avisa en el momento.
-    if (cambio.evento === 'INSERT' && service.provider_id !== myId) {
-      notifyHighPriority('Nuevo servicio compartido', service.title, {
-        serviceId: service.id,
+    // (Una alerta compartida a varios grupos es UNA fila: un solo aviso.)
+    if (cambio.evento === 'INSERT' && fila.provider_id !== myId) {
+      notifyHighPriority('Nuevo servicio compartido', fila.title, {
+        serviceId: fila.id,
         type: 'NEW_SERVICE',
       });
     }
@@ -823,6 +857,19 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Comparte la tarjeta con esos grupos (RPC de la 0018) y devuelve la fila ya
+   * releída CON su lista de grupos: la UI no adivina a qué grupos quedó compartida,
+   * y el grupo principal (`group_id`) lo decide la base.
+   */
+  const compartirYLeer = async (serviceId: string, groupIds: string[]): Promise<ServiceAlert> => {
+    await compartirServicioEnDb(serviceId, groupIds);
+    const fila = await fetchServiceAlertById(serviceId);
+    if (!fila) throw new Error('La base no devolvió el servicio después de compartirlo.');
+    const mapa = await fetchGruposDeServicios([serviceId]);
+    return conGrupos(fila, mapa.get(serviceId) ?? []);
+  };
+
   const persistApplication = async (
     serviceId: string,
     driverId: string,
@@ -850,15 +897,14 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     return !!service && service.provider_id === profile?.id;
   };
 
-  const avisoDeMigracion =
-    'El backend no encontró la función. Si la migración 0012 ' +
-    '(supabase/migrations/0012_reporte_del_conductor.sql) ya está aplicada, espera unos segundos ' +
+  const avisoDeMigracion = (archivo: string) =>
+    `El backend no encontró la función. Si la migración ${archivo} ya está aplicada, espera unos segundos ` +
     "y reintenta: PostgREST recarga su esquema solo (o fuérzalo con NOTIFY pgrst, 'reload schema';).";
 
   /** Texto del aviso: el detalle crudo del backend va siempre, para diagnosticar. */
-  const detalleDe = (err: unknown, titulo: string) =>
+  const detalleDe = (err: unknown, titulo: string, archivo = '0012_reporte_del_conductor.sql') =>
     esFuncionAusente(err)
-      ? `${avisoDeMigracion}\n\nDetalle: ${describeError(err)}`
+      ? `${avisoDeMigracion(archivo)}\n\nDetalle: ${describeError(err)}`
       : `${titulo}\n\n${describeError(err)}`;
 
   const escribirServicio = async (
@@ -947,17 +993,46 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const value: MockContextValue = {
     ...state,
     setRole: (role) => dispatch({ type: 'SET_ROLE', payload: role }),
-    addService: async (service) => {
+    addService: async (service, groupIds) => {
       if (isSupabaseConfigured) {
         try {
-          const inserted = await insertServiceAlert(service);
-          dispatch({ type: 'ADD_SERVICE', payload: inserted });
-          return;
+          const insertado = await insertServiceAlert(service);
+          // Compartida a varios grupos = UNA sola tarjeta (0018).
+          const fila =
+            groupIds && groupIds.length > 0
+              ? await compartirYLeer(insertado.id, groupIds)
+              : insertado;
+          dispatch({ type: 'ADD_SERVICE', payload: fila });
+          return fila.id;
         } catch (err) {
           console.error('[MockStore] insertServiceAlert error:', err);
+          Alert.alert(
+            'No se pudo publicar el servicio',
+            detalleDe(err, 'El backend rechazó la publicación', '0018_servicio_a_varios_grupos.sql')
+          );
+          return null;
         }
       }
       dispatch({ type: 'ADD_SERVICE', payload: service });
+      return service.id;
+    },
+    compartirServicio: async (serviceId, groupIds) => {
+      if (!isSupabaseConfigured) {
+        console.warn('[MockStore] sin backend no hay grupos a los que compartir');
+        return false;
+      }
+      try {
+        const fila = await compartirYLeer(serviceId, groupIds);
+        dispatch({ type: 'UPDATE_SERVICE', payload: fila });
+        return true;
+      } catch (err) {
+        console.error('[MockStore] compartirServicio error:', err);
+        Alert.alert(
+          'No se pudo compartir el servicio',
+          detalleDe(err, 'El backend rechazó el compartir', '0018_servicio_a_varios_grupos.sql')
+        );
+        return false;
+      }
     },
     updateService: async (service) => {
       await persistService(service.id, service);

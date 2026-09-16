@@ -122,6 +122,12 @@ export interface ServiceAlert {
   pago_aceptado_por?: string | null;
   pago_confirmado_at?: string | null;
   pago_confirmado_por?: string | null;
+  /**
+   * Grupos con los que está compartida la alerta (migración 0018): la lista
+   * completa de `service_alert_groups`, en el orden en que se eligieron. `group_id`
+   * es solo el principal. Llega en las lecturas de lista; si falta, vale `group_id`.
+   */
+  shared_group_ids?: string[];
 }
 
 export interface Application {

@@ -30,6 +30,7 @@ import {
   proximaHoraRedondeada,
 } from '../lib/datetime';
 import { estaVencido } from '../lib/estadoServicio';
+import { estaCompartido } from '../lib/gruposDeServicio';
 import { hayApiDeDirecciones } from '../lib/places';
 import { esPremium } from '../lib/premium';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -271,7 +272,7 @@ export function CreateServiceScreen() {
       updateService(servicio);
       Alert.alert(
         'Servicio guardado',
-        editingService.group_id
+        estaCompartido(editingService)
           ? 'Los cambios quedaron guardados.'
           : 'La tarjeta sigue sin compartir. Elige grupos cuando quieras publicarla.'
       );

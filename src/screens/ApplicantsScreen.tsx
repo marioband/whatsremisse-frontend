@@ -68,6 +68,7 @@ export function ApplicantsScreen() {
     rejectApplicationFrom,
     services,
     updateService,
+    compartirServicio,
     emitChatNotification,
   } = useMockStore();
 
@@ -203,8 +204,12 @@ export function ApplicantsScreen() {
         {
           text: 'Cancelar búsqueda',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             rejectApplication(service.id);
+            // 0018: dejar de estar compartido es borrar los grupos, no solo el
+            // principal; si no, los conductores de los otros grupos la seguirían
+            // viendo.
+            await compartirServicio(service.id, []);
             // Sin `driver_progress_step: 0`: el paso del viaje solo avanza (regla de
             // `fusionarServicio`); aquí vale 0 de todas formas porque la tarjeta
             // todavía no tiene conductor asignado.

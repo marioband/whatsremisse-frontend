@@ -1,4 +1,5 @@
 import { describeError } from './errors';
+import { conGrupos } from './gruposDeServicio';
 import { displayName } from './names';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { GroupItem, GroupMember } from '../context/MockStoreContext';
@@ -117,6 +118,72 @@ export async function insertServiceAlert(service: Partial<ServiceAlert>): Promis
   return mapServiceAlertFromDb(data);
 }
 
+// ---------------------------------------------------------------------------
+// Grupos a los que está compartida una alerta (migración 0018)
+// ---------------------------------------------------------------------------
+// `service_alerts.group_id` es solo el grupo PRINCIPAL; la lista completa vive en
+// `service_alert_groups`. Si la migración no está aplicada, la consulta falla con
+// "tabla ausente" y se sigue con `group_id` (el comportamiento anterior), así que
+// la app funciona igual: lo único que exige la 0018 es "Elegir grupos".
+
+/** Grupos por servicio, en el orden en que los eligió el proveedor. */
+export async function fetchGruposDeServicios(serviceIds: string[]): Promise<Map<string, string[]>> {
+  const mapa = new Map<string, string[]>();
+  if (!isSupabaseConfigured || serviceIds.length === 0) return mapa;
+
+  const { data, error } = await supabase
+    .from('service_alert_groups')
+    .select('service_id, group_id, posicion')
+    .in('service_id', serviceIds)
+    .order('posicion', { ascending: true });
+  if (error) {
+    if (esTablaAusente(error)) return mapa;
+    throw error;
+  }
+
+  ((data || []) as { service_id: string; group_id: string }[]).forEach((fila) => {
+    const ids = mapa.get(fila.service_id) || [];
+    ids.push(fila.group_id);
+    mapa.set(fila.service_id, ids);
+  });
+  return mapa;
+}
+
+/** Lee los grupos de esas filas y se los pega (si la 0018 está aplicada). */
+async function conSusGrupos(servicios: ServiceAlert[]): Promise<ServiceAlert[]> {
+  if (servicios.length === 0) return servicios;
+  try {
+    const mapa = await fetchGruposDeServicios(servicios.map((s) => s.id));
+    return servicios.map((servicio) => {
+      const ids = mapa.get(servicio.id);
+      return ids && ids.length > 0 ? conGrupos(servicio, ids) : servicio;
+    });
+  } catch (err) {
+    console.warn('[database] no se pudieron leer los grupos del servicio:', err);
+    return servicios;
+  }
+}
+
+/**
+ * Comparte (o deja de compartir, con un array vacío) una alerta con un conjunto de
+ * grupos. La base valida que quien comparte sea el proveedor y que los grupos sean
+ * suyos; reemplaza el conjunto completo, así que es idempotente.
+ */
+export async function compartirServicioConGrupos(
+  serviceId: string,
+  groupIds: string[]
+): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('Supabase no está configurado en esta build.');
+  await conReintentoDeEsquema(async () => {
+    const { error } = await supabase.rpc('compartir_servicio_con_grupos', {
+      p_service_id: serviceId,
+      p_group_ids: groupIds,
+    });
+    if (error) throw error;
+    return true;
+  });
+}
+
 export async function fetchServicesForProvider(providerId: string): Promise<ServiceAlert[]> {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase
@@ -125,7 +192,7 @@ export async function fetchServicesForProvider(providerId: string): Promise<Serv
     .eq('provider_id', providerId)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return (data || []).map(mapServiceAlertFromDb);
+  return conSusGrupos((data || []).map(mapServiceAlertFromDb));
 }
 
 /**
@@ -178,6 +245,36 @@ export async function fetchServicesForDriver(
       .or(`scheduled_at.is.null,scheduled_at.gt.${new Date().toISOString()}`);
     if (shared.error) throw shared.error;
     rows.push(...((shared.data || []) as DbServiceAlert[]));
+
+    // 0018: las compartidas a mis grupos cuyo grupo PRINCIPAL es otro. Sin la
+    // migración aplicada esta consulta no encuentra la tabla y se sigue igual.
+    const repartidas = await supabase
+      .from('service_alert_groups')
+      .select('service_id')
+      .in('group_id', groupIds);
+    if (repartidas.error) {
+      if (!esTablaAusente(repartidas.error)) throw repartidas.error;
+    } else {
+      const yaVistos = new Set(rows.map((row) => row.id));
+      const faltantes = [
+        ...new Set(
+          ((repartidas.data || []) as { service_id: string }[])
+            .map((fila) => fila.service_id)
+            .filter((id) => !yaVistos.has(id))
+        ),
+      ];
+      if (faltantes.length > 0) {
+        const extra = await supabase
+          .from('service_alerts')
+          .select('*')
+          .eq('status', 'STATUS_OPEN')
+          .in('id', faltantes)
+          .neq('provider_id', driverId)
+          .or(`scheduled_at.is.null,scheduled_at.gt.${new Date().toISOString()}`);
+        if (extra.error) throw extra.error;
+        rows.push(...((extra.data || []) as DbServiceAlert[]));
+      }
+    }
   }
 
   const byId = new Map<string, ServiceAlert>();
@@ -195,7 +292,11 @@ export async function fetchServicesForDriver(
     console.warn('[database] no se pudo leer el archivado del conductor:', err);
   }
 
-  return [...byId.values()].sort(
+  // Los grupos de cada alerta (0018): el conductor que está en varios grupos sigue
+  // viendo UNA sola tarjeta.
+  const servicios = await conSusGrupos([...byId.values()]);
+
+  return servicios.sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 }

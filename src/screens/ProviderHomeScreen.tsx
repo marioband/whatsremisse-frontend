@@ -8,6 +8,7 @@ import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
@@ -126,7 +127,7 @@ export function ProviderHomeScreen() {
   const handleCardPress = (service: ServiceAlert) => {
     // Tarjeta guardada sin compartir: se termina de configurar en "nuevo servicio"
     // (con todos los datos guardados) y desde ahí se eligen grupos.
-    if (!service.group_id) {
+    if (!estaCompartido(service)) {
       navigation.navigate('CreateService', { service });
       return;
     }

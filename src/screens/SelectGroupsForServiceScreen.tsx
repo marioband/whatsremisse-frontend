@@ -5,6 +5,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from
 
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import { gruposDeServicio } from '../lib/gruposDeServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SelectNav = StackNavigationProp<RootStackParamList, 'SelectGroupsForService' | 'Settings'>;
@@ -27,9 +28,14 @@ export function SelectGroupsForServiceScreen() {
   const navigation = useNavigation<SelectNav>();
   const route = useRoute<SelectRoute>();
   const { draftService, serviceId } = route.params;
-  const { role, setRole, groups, addService, updateService, emitNotification } = useMockStore();
+  const { role, setRole, groups, addService, updateService, compartirServicio, emitNotification } =
+    useMockStore();
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Si la tarjeta ya está compartida, sus grupos vienen marcados: el "Enviar" vuelve
+  // a dejar el conjunto completo (quitar uno lo descomparte de ese grupo).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(gruposDeServicio(draftService))
+  );
 
   const activeRoleTab: RoleTab =
     role === 'DRIVER'
@@ -62,38 +68,40 @@ export function SelectGroupsForServiceScreen() {
     return ROLE_COLORS[group.role];
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (selectedIds.size === 0) {
       Alert.alert('Selecciona grupos', 'Elige al menos un grupo para publicar el servicio.');
       return;
     }
 
-    const selectedArray = Array.from(selectedIds);
+    // El orden en que se eligieron importa: el primero es el grupo principal.
+    const seleccionados = Array.from(selectedIds);
 
     if (serviceId) {
-      // Tarjeta que YA existe (venía de "nuevo servicio"): el primer grupo elegido
-      // pasa a ser el suyo y deja de estar "sin compartir". Si eligió más de uno,
-      // se crean tarjetas nuevas para los demás (una tarjeta = un grupo).
-      const [primero, ...resto] = selectedArray;
-      updateService({ ...draftService, id: serviceId, group_id: primero });
-      resto.forEach((groupId) =>
-        addService({ ...draftService, id: `service-${Date.now()}-${groupId}`, group_id: groupId })
-      );
+      // Tarjeta que YA existe (venía de "nuevo servicio"): se comparte con TODOS los
+      // grupos elegidos en el MISMO servicio (0018). Antes se creaba una tarjeta por
+      // grupo, así que el conductor que estaba en varios grupos recibía la misma
+      // alerta varias veces.
+      updateService({ ...draftService, id: serviceId });
+      const compartido = await compartirServicio(serviceId, seleccionados);
+      if (!compartido) return;
       emitNotification(serviceId, draftService.title);
-      Alert.alert('Servicio compartido', 'La tarjeta ya está publicada en el grupo elegido.');
+      Alert.alert(
+        'Servicio compartido',
+        seleccionados.length === 1
+          ? 'La tarjeta ya está publicada en el grupo elegido.'
+          : `La tarjeta está publicada en ${seleccionados.length} grupos. Es un solo servicio: los conductores que estén en varios grupos lo ven una sola vez.`
+      );
       navigation.navigate('Main');
       return;
     }
 
-    selectedArray.forEach((groupId) => {
-      addService({
-        ...draftService,
-        group_id: groupId,
-      });
-    });
+    // Tarjeta nueva: se publica UNA vez y se comparte con todos los grupos elegidos.
+    const id = await addService({ ...draftService, group_id: '' }, seleccionados);
+    if (!id) return;
 
-    // Notificar solo una vez por service_id aunque se publique en varios grupos
-    emitNotification(draftService.id, draftService.title);
+    // Se notifica una sola vez por servicio, aunque se comparta a varios grupos.
+    emitNotification(id, draftService.title);
 
     navigation.navigate('Main');
   };

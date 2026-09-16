@@ -1,4 +1,5 @@
 import { AZUL, OSCURO, ROJO_ACCION, TEXTO_TENUE, VERDE_ACCION } from './colors';
+import { estaCompartido } from './gruposDeServicio';
 import { ServiceAlert } from '../types';
 
 export interface EstadoServicio {
@@ -43,7 +44,7 @@ export function estadoDeServicio(
 ): EstadoServicio {
   const paso = service.driver_progress_step ?? 0;
   const asignado = !!service.assigned_driver_id;
-  const compartido = !!service.group_id;
+  const compartido = estaCompartido(service);
   const soyConductor = vista === 'CONDUCTOR';
 
   if (service.status === 'STATUS_CANCELLED') {

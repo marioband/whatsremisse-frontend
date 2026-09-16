@@ -1,5 +1,6 @@
 import { ServiceAlert } from '../types';
 import { estaVencido } from './estadoServicio';
+import { gruposDeServicio } from './gruposDeServicio';
 
 /**
  * Reglas de visibilidad de los servicios, en un solo lugar para que las dos
@@ -41,11 +42,13 @@ export function isVisibleAsDriver(
   if (service.assigned_driver_id) return false;
   if (service.provider_id === userId) return false;
 
-  // Alerta abierta compartida a alguno de mis grupos.
-  if (service.status !== 'STATUS_OPEN' || !service.group_id) return false;
+  // Alerta abierta compartida a alguno de mis grupos (0018: puede estar compartida
+  // a varios, y el conductor que está en dos grupos tiene que verla UNA vez).
+  const grupos = gruposDeServicio(service);
+  if (service.status !== 'STATUS_OPEN' || grupos.length === 0) return false;
 
   // ...y solo mientras no haya pasado la hora de inicio.
   if (estaVencido(service)) return false;
 
-  return groupIds.includes(service.group_id);
+  return grupos.some((groupId) => groupIds.includes(groupId));
 }
