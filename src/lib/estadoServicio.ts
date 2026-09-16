@@ -22,6 +22,11 @@ export interface EstadoServicio {
  */
 export type VistaServicio = 'PROVEEDOR' | 'CONDUCTOR';
 
+/** El ciclo de pago terminó: el servicio está pagado y cerrado. */
+export function estaPagadoYCerrado(service: ServiceAlert): boolean {
+  return service.pago_estado === 'CONFIRMADO';
+}
+
 /**
  * Estado que comunica la barra inferior de una tarjeta de servicio.
  *
@@ -53,7 +58,7 @@ export function estadoDeServicio(
 
   if (service.status === 'STATUS_COMPLETED' || paso >= 3) {
     // El viaje terminó: lo que falta es el pago entre conductor y proveedor.
-    if (service.pago_estado === 'CONFIRMADO') {
+    if (estaPagadoYCerrado(service)) {
       return { etiqueta: 'Pagado y cerrado', color: VERDE_ACCION, compartido };
     }
     return { etiqueta: 'Pendiente de pago', color: OSCURO, compartido };
@@ -89,7 +94,9 @@ export function estadoDeServicio(
     return {
       etiqueta:
         postulantesPendientes === 1 ? '1 Postulante' : `${postulantesPendientes} Postulantes`,
-      color: OSCURO,
+      // Verde institucional: el usuario pidió que la barra de postulantes de sus
+      // servicios publicados sea verde (#2E9E5B), no oscura.
+      color: VERDE_ACCION,
       compartido,
     };
   }

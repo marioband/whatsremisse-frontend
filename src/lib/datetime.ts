@@ -82,18 +82,35 @@ export function formatearFecha(fecha: Date): string {
 }
 
 /**
- * Momento programado del servicio, para las tarjetas: "16/09/2026 08:00 hrs".
+ * "Hoy", "Mañana" o la fecha completa.
+ *
+ * Regla del usuario para las tarjetas: el día de hoy se dice **Hoy** y el de mañana
+ * **Mañana**; del tercer día en adelante se muestra la fecha (la hora va aparte).
+ */
+export function textoDelDia(fecha: Date, hoy: Date = new Date()): string {
+  const dias = Math.round((inicioDelDia(fecha).getTime() - inicioDelDia(hoy).getTime()) / MS_DIA);
+  if (dias === 0) return 'Hoy';
+  if (dias === 1) return 'Mañana';
+  return formatearFecha(fecha);
+}
+
+/**
+ * Momento programado del servicio, para las tarjetas: "Hoy 08:00 hrs",
+ * "Mañana 08:00 hrs" o "18/09/2026 08:00 hrs".
  *
  * Las tarjetas leían `dispatch_type`, un campo que **no existe como columna** en
  * `service_alerts`: se quedaba siempre vacío y todas decían "Al momento". La hora
  * real es `scheduled_at` (la que fija "nuevo servicio" y la que manda para que la
  * alerta caduque), así que el texto se arma de ahí.
  */
-export function textoProgramado(servicio: { scheduled_at?: string | null }): string {
+export function textoProgramado(
+  servicio: { scheduled_at?: string | null },
+  hoy: Date = new Date()
+): string {
   if (!servicio.scheduled_at) return 'Al momento';
   const fecha = new Date(servicio.scheduled_at);
   if (Number.isNaN(fecha.getTime())) return 'Al momento';
-  return `${formatearFecha(fecha)} ${formatearHora24(fecha)} hrs`;
+  return `${textoDelDia(fecha, hoy)} ${formatearHora24(fecha)} hrs`;
 }
 
 /** true si el servicio tiene un momento programado (lo contrario de "al momento"). */

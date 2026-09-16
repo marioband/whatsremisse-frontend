@@ -9,6 +9,7 @@ import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import { estaPagadoYCerrado } from '../lib/estadoServicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -84,7 +85,11 @@ export function ProviderHomeScreen() {
     return myProviderServices.filter((s) => {
       if (seen.has(s.id)) return false;
       seen.add(s.id);
-      return !s.archived;
+      if (s.archived) return false;
+      // Pagado y cerrado: ya vive en "Mis servicios" con su historial de pago, así
+      // que no se lista en el inicio (ni en "Todos" ni en "Finalizados").
+      if (estaPagadoYCerrado(s)) return false;
+      return true;
     });
   }, [myProviderServices]);
 

@@ -12,6 +12,7 @@ import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
 import { esProgramado } from '../lib/datetime';
+import { estaPagadoYCerrado } from '../lib/estadoServicio';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
 import { isVisibleAsDriver } from '../lib/visibility';
@@ -119,6 +120,9 @@ export function DriverHomeScreen() {
       if (showArchived) return s.archived;
       if (s.archived) return false;
       if (s.status === 'STATUS_CANCELLED') return false;
+      // Pagado y cerrado: el viaje ya se consulta en "Mis servicios" (con su
+      // historial de pago), no en el inicio.
+      if (estaPagadoYCerrado(s)) return false;
       if (!isVisibleAsDriver(s, currentDriverId, groupIdList)) return false;
       if (!matchesVehicleType(s)) return false;
       return true;

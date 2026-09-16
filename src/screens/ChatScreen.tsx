@@ -261,7 +261,13 @@ export function ChatScreen() {
   useEffect(() => {
     if (!pagoConfirmado || yaEstabaConfirmado.current) return;
     setCierreEnCurso(true);
-    const temporizador = setTimeout(() => navigation.navigate('MyServices'), CIERRE_MS);
+    const temporizador = setTimeout(
+      // Se REEMPLAZA la pila: el botón atrás del teléfono tiene que llevar a la
+      // pantalla principal, no al chat del servicio ya cerrado (con `navigate`
+      // quedaba el chat debajo y el atrás devolvía a una conversación terminada).
+      () => navigation.reset({ index: 1, routes: [{ name: 'Main' }, { name: 'MyServices' }] }),
+      CIERRE_MS
+    );
     return () => clearTimeout(temporizador);
   }, [pagoConfirmado, navigation]);
   // Se leen campos sueltos (no un objeto derivado, que sería nuevo en cada render)
