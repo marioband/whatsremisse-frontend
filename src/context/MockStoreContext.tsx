@@ -545,6 +545,12 @@ interface MockContextValue extends MockState {
   setDebtThreshold: (amount: number) => void;
   loadGroupMembers: (groupId: string) => Promise<void>;
   reloadGroups: () => Promise<void>;
+  /**
+   * Relee servicios y postulaciones de Supabase ahora mismo. Lo usa el chat del
+   * servicio: el ciclo de pago (declaración, rechazo, confirmación) tiene que
+   * verse al abrirlo, sin esperar al respaldo periódico del store.
+   */
+  refrescar: () => void;
   /** Pago del servicio (migración 0013): declaración, resolución y confirmación. */
   declararPago: (
     serviceId: string,
@@ -629,55 +635,75 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const { session, profile } = useAuth();
   const loadedRef = useRef(false);
 
-  // Carga inicial desde Supabase cuando hay sesión real
+  /**
+   * Relee de Supabase grupos, servicios (de las dos identidades) y postulaciones.
+   * Vive fuera de los efectos porque la usan dos: la carga inicial y el respaldo
+   * periódico.
+   */
+  const load = useCallback(async () => {
+    if (!isSupabaseConfigured || !session?.user || !profile) return;
+    try {
+      const groups = await fetchGroupsForUser(profile.id);
+      dispatch({ type: 'SET_GROUPS', payload: groups });
+      const groupIds = groups.map((g) => g.id);
+
+      // Las dos identidades conviven en la misma cuenta: el usuario puede
+      // publicar servicios como proveedor y recibir alertas como conductor.
+      const [providerServices, driverServices] = await Promise.all([
+        fetchServicesForProvider(profile.id),
+        fetchServicesForDriver(profile.id, groupIds),
+      ]);
+      const servicesById = new Map<string, ServiceAlert>();
+      [...providerServices, ...driverServices].forEach((s) => servicesById.set(s.id, s));
+      dispatch({ type: 'SET_SERVICES', payload: [...servicesById.values()] });
+
+      // Postulaciones: las mías y las recibidas en mis servicios (así al
+      // proveedor le llega la tarjeta de quién está postulando).
+      const [myApplications, applicationsForMyServices] = await Promise.all([
+        fetchApplicationsForDriver(profile.id),
+        fetchApplicationsForProvider(providerServices.map((s) => s.id)),
+      ]);
+      const applicationsByKey = new Map<string, Application>();
+      [...myApplications, ...applicationsForMyServices].forEach((a) =>
+        applicationsByKey.set(`${a.serviceId}:${a.driverId}`, a)
+      );
+      dispatch({ type: 'SET_APPLICATIONS', payload: [...applicationsByKey.values()] });
+    } catch (err) {
+      console.error('[MockStore] Error loading from Supabase:', err);
+    }
+  }, [session?.user, profile]);
+
+  // Carga inicial (una sola vez por sesión).
   useEffect(() => {
     if (!isSupabaseConfigured || !session?.user || !profile || loadedRef.current) return;
     loadedRef.current = true;
-
-    const load = async () => {
-      try {
-        const groups = await fetchGroupsForUser(profile.id);
-        dispatch({ type: 'SET_GROUPS', payload: groups });
-        const groupIds = groups.map((g) => g.id);
-
-        // Las dos identidades conviven en la misma cuenta: el usuario puede
-        // publicar servicios como proveedor y recibir alertas como conductor.
-        const [providerServices, driverServices] = await Promise.all([
-          fetchServicesForProvider(profile.id),
-          fetchServicesForDriver(profile.id, groupIds),
-        ]);
-        const servicesById = new Map<string, ServiceAlert>();
-        [...providerServices, ...driverServices].forEach((s) => servicesById.set(s.id, s));
-        dispatch({ type: 'SET_SERVICES', payload: [...servicesById.values()] });
-
-        // Postulaciones: las mías y las recibidas en mis servicios (así al
-        // proveedor le llega la tarjeta de quién está postulando).
-        const [myApplications, applicationsForMyServices] = await Promise.all([
-          fetchApplicationsForDriver(profile.id),
-          fetchApplicationsForProvider(providerServices.map((s) => s.id)),
-        ]);
-        const applicationsByKey = new Map<string, Application>();
-        [...myApplications, ...applicationsForMyServices].forEach((a) =>
-          applicationsByKey.set(`${a.serviceId}:${a.driverId}`, a)
-        );
-        dispatch({ type: 'SET_APPLICATIONS', payload: [...applicationsByKey.values()] });
-      } catch (err) {
-        console.error('[MockStore] Error loading from Supabase:', err);
-      }
-    };
-
     load();
+  }, [load, session?.user, profile]);
 
-    // Respaldo de sincronización: si el proyecto no tiene activado el tiempo real
-    // (falta aplicar la migración 0011), las tarjetas se refrescan igual cada
-    // REFRESCO_MS, así un servicio nuevo o anulado no se queda pegado.
-    const intervalo = setInterval(load, REFRESCO_MS);
+  // Respaldo de sincronización: si el proyecto no tiene activado el tiempo real
+  // (falta aplicar la migración 0011), las tarjetas y el pago se refrescan igual
+  // cada REFRESCO_MS. OJO: esto tiene que vivir en su PROPIO efecto. Antes el
+  // `setInterval` estaba dentro del efecto de carga inicial, que se vuelve a
+  // ejecutar cuando cambia la identidad de `session.user` o de `profile` (un
+  // refresco de token basta): su limpieza apagaba el intervalo y el guard
+  // `loadedRef` impedía volver a crearlo, así que el dispositivo se quedaba SIN
+  // respaldo para siempre y solo se enteraba de lo que trajera el tiempo real.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user || !profile) return;
+    const intervalo = setInterval(() => {
+      load();
+    }, REFRESCO_MS);
     return () => clearInterval(intervalo);
-  }, [session?.user, profile]);
+  }, [load, session?.user, profile]);
 
   // Hidrata los datos del perfil (nombres, DNI, vehículo, fotos y datos de pago)
   // desde Supabase: antes vivían solo en memoria y se perdían al recargar la app.
   const hydratedUserIdRef = useRef<string | null>(null);
+
+  /** Relectura a demanda (la usa el chat del servicio al abrirse). */
+  const refrescar = useCallback(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -978,6 +1004,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     setDebtThreshold: (amount) => dispatch({ type: 'SET_DEBT_THRESHOLD', payload: amount }),
     loadGroupMembers,
     reloadGroups,
+    refrescar,
     declararPago: async (serviceId, direccion, monto) => {
       try {
         const actualizado = await declararPagoEnDb(serviceId, direccion, monto);

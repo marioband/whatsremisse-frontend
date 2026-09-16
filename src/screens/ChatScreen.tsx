@@ -89,6 +89,7 @@ export function ChatScreen() {
     resolverDeclaracionDePago,
     confirmarPagoRecibido,
     emitChatNotification,
+    refrescar,
     userProfile,
   } = useMockStore();
 
@@ -240,6 +241,15 @@ export function ChatScreen() {
     setCargando(true);
     cargarMensajes();
   }, [cargarMensajes]);
+
+  // Al abrir el chat se relee el servicio de la base: el ciclo de pago
+  // (declaración → rechazo → confirmación) cambia en el OTRO dispositivo, así que
+  // el estado tiene que estar fresco al entrar y no esperar al respaldo periódico
+  // del store ni a que llegue el evento de tiempo real.
+  useEffect(() => {
+    refrescar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceId]);
 
   const agregarSiEsNuevo = useCallback((nuevo: ServiceMessage) => {
     setMensajes((prev) => (prev.some((m) => m.id === nuevo.id) ? prev : [...prev, nuevo]));

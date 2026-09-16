@@ -39,7 +39,6 @@ export function DriverHomeScreen() {
     unarchiveService,
     applyToService,
     cancelApplication,
-    updateServiceStatus,
     driverDebt,
     debtThreshold,
     emitChatNotification,
@@ -186,9 +185,13 @@ export function DriverHomeScreen() {
     const driverName =
       `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Conductor';
 
-    // Servicio aceptado (verde): abrir chat y mover a En Proceso
+    // Servicio aceptado: abrir el chat. El viaje NO se marca desde la tarjeta:
+    // los hitos (Ubicado → En proceso → Finalizado) se reportan con el
+    // deslizamiento dentro del chat, y escribir aquí STATUS_IN_PROGRESS
+    // significaba reportar el hito 2 ("Servicio en Proceso") de un solo toque,
+    // saltándose "Ubicado". La tarjeta aceptada ya aparece en "En proceso"
+    // desde que el proveedor acepta.
     if (isAcceptedByMe(service)) {
-      updateServiceStatus(service.id, 'STATUS_IN_PROGRESS');
       navigation.navigate('Chat', {
         serviceId: service.id,
         driverId: currentDriverId,
@@ -255,8 +258,13 @@ export function DriverHomeScreen() {
     }
 
     if (activeStatus === 'En proceso') {
+      // La tarjeta entra aquí en cuanto el PROVEEDOR acepta al conductor (el
+      // servicio queda asignado, STATUS_AT_ORIGIN), no cuando el conductor la
+      // toca: antes el filtro pedía STATUS_IN_PROGRESS y la tarjeta solo llegaba
+      // aquí después de tocarla, mientras el contador de la píldora ya la
+      // contaba con isEnProceso().
       return myActiveServices
-        .filter((s) => s.status === 'STATUS_IN_PROGRESS')
+        .filter((s) => isEnProceso(s) && s.status !== 'STATUS_COMPLETED')
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
     if (activeStatus === 'Reservas') {
@@ -368,6 +376,7 @@ export function DriverHomeScreen() {
               onCancelApplication={application ? () => handleCancelApplication(item.id) : undefined}
               showArchived={showArchived}
               disableSwipe={inEnProceso || inReservas || accepted}
+              sinCapa={inEnProceso}
               showReservaIndicator={inReservas}
               isApplied={!!application}
               isAccepted={accepted}

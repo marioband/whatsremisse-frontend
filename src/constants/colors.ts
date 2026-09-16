@@ -14,6 +14,12 @@ export const COLORS = {
   // Tarjetas de servicio
   cardNew: '#FFFFFF',
   cardAppliedOverlay: 'rgba(139, 149, 201, 0.60)',
+  // La capa verde de "Servicio Aceptado" es tan translúcida como la azul: el
+  // conductor tiene que seguir leyendo los datos del servicio bajo la capa.
+  cardAcceptedOverlay: 'rgba(53, 140, 82, 0.60)',
+  // Tinta del rótulo sobre la capa verde translúcida: el blanco sobre el verde
+  // al 60 % da 2,2:1 (ilegible), este verde oscuro da 4,9:1.
+  cardAcceptedInk: '#17452A',
   cardAccepted: '#358C52',
 
   // Acentos
