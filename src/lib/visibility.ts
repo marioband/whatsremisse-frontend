@@ -10,10 +10,10 @@ import { gruposDeServicio } from './gruposDeServicio';
  * - Conductor: ve las alertas abiertas que se compartieron a alguno de sus
  *   grupos, mas las que ya tiene asignadas. Nunca las suyas de proveedor.
  *
- * - Alertas caducadas (paso la hora de inicio y nadie las tomo): desaparecen del
- *   lado del conductor en cuanto se cumple la hora (a las 8:01 ya no ve la de las
- *   8:00) y siguen en la lista del proveedor, que es quien puede editarlas y
- *   volver a enviarlas.
+ * - Alertas caducadas: se cierran solas (20 minutos desde su emisión si son "al
+ *   momento"; 10 minutos DESPUÉS de la hora si tienen hora específica, reservas
+ *   incluidas). El conductor deja de verlas al cerrarse y el proveedor las conserva
+ *   24 h para editarlas y reenviarlas.
  */
 
 /** true si el servicio lo publico este usuario como proveedor. */

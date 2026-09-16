@@ -580,7 +580,8 @@ export function CreateServiceScreen() {
               </Text>
             ) : null}
             <Text style={styles.helperText}>
-              La alerta se mantiene {MINUTOS_CON_HORA} minutos en los grupos.
+              La alerta se mantiene {MINUTOS_CON_HORA} minutos después de la hora del servicio; en
+              los últimos {AVISO_DE_CIERRE_MINUTOS} avisa con cuenta atrás.
             </Text>
           </>
         )}

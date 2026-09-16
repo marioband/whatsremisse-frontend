@@ -175,9 +175,14 @@ export function estadoDeServicio(
 }
 
 /**
- * Minutos que una alerta se mantiene viva y en los grupos antes de cerrarse sola:
- * 20 si se publicó **al momento** y 10 si el proveedor eligió una **hora específica**
- * (regla del usuario). El reloj arranca en la última publicación/edición.
+ * Duración de una alerta antes de cerrarse sola (regla fijada con el usuario):
+ *   - **Al momento**: 20 minutos desde que se emite (y se reemite al editarla). En
+ *     los últimos 5 el proveedor ve la cuenta atrás.
+ *   - **Hora específica**: 10 minutos **después de la hora del servicio**, no desde
+ *     su emisión: una alerta para las 10:00 vive hasta las 10:10 aunque se publique
+ *     a las 9:00 (y una reserva de dentro de 2 horas, igual: sobrevive hasta su
+ *     hora + 10 minutos). El plazo se fija al emitir y no lo mueve una edición
+ *     posterior: la hora del servicio manda.
  */
 export const MINUTOS_AL_MOMENTO = 20;
 export const MINUTOS_CON_HORA = 10;
@@ -188,14 +193,22 @@ export const AVISO_DE_CIERRE_MINUTOS = 5;
 /**
  * Momento (epoch ms) en que la alerta se cierra.
  *
- * Se ancla en `updated_at` —que la base actualiza en cada escritura— para que
- * **editar y reenviar** el servicio arranque el plazo de nuevo (misma idea que la
- * 0016, donde reenviar reinicia la cola de postulantes).
+ * - Al momento (sin hora específica): última escritura + 20 minutos, para que
+ *   **editar y reenviar** arranque el plazo de nuevo (misma idea que la 0016, donde
+ *   reenviar reinicia la cola de postulantes).
+ * - Con hora específica (incluidas las reservas): la hora del servicio + 10 minutos.
+ *   Anclarlo a `updated_at` era el error: una alerta para las 10:00 publicada a las
+ *   9:00 se daba por cerrada a las 9:10, antes de la hora del servicio.
  */
 export function cierreDeLaAlerta(service: ServiceAlert): number {
+  if (esProgramado(service)) {
+    const horaDelServicio = new Date(service.scheduled_at as string).getTime();
+    if (Number.isFinite(horaDelServicio)) {
+      return horaDelServicio + MINUTOS_CON_HORA * 60 * 1000;
+    }
+  }
   const publicada = new Date(service.updated_at || service.created_at).getTime();
-  const minutos = esProgramado(service) ? MINUTOS_CON_HORA : MINUTOS_AL_MOMENTO;
-  return publicada + minutos * 60 * 1000;
+  return publicada + MINUTOS_AL_MOMENTO * 60 * 1000;
 }
 
 /** Minutos (con decimales) que le quedan a la alerta; negativo si ya cerró. */
