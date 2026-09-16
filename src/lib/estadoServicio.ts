@@ -2,6 +2,11 @@ import { AZUL, OSCURO, ROJO_ACCION, TEXTO_TENUE, VERDE_ACCION } from './colors';
 import { ServiceAlert } from '../types';
 
 export interface EstadoServicio {
+  /**
+   * Texto de la franja inferior. **Vacío = no se pinta franja**: no hay nada que
+   * comunicar (es el caso normal de una alerta disponible en la lista del
+   * conductor).
+   */
   etiqueta: string;
   color: string;
   /** El servicio ya se compartió a algún grupo (o sea: salió de "nuevo servicio"). */
@@ -61,8 +66,8 @@ export function estadoDeServicio(
 
   if (!compartido) {
     return {
-      etiqueta: soyConductor ? 'No disponible' : 'Servicio no compartido',
-      color: soyConductor ? TEXTO_TENUE : TEXTO_TENUE,
+      etiqueta: soyConductor ? '' : 'Servicio no compartido',
+      color: TEXTO_TENUE,
       compartido,
     };
   }
@@ -73,7 +78,7 @@ export function estadoDeServicio(
     // editarlas y reenviarlas). Si alguna se colara en un render, igual no le
     // mostramos la señal del proveedor.
     return {
-      etiqueta: soyConductor ? 'No disponible' : 'Servicio vencido',
+      etiqueta: soyConductor ? '' : 'Servicio vencido',
       color: soyConductor ? TEXTO_TENUE : ROJO_ACCION,
       compartido,
     };
@@ -89,7 +94,9 @@ export function estadoDeServicio(
   }
 
   return {
-    etiqueta: soyConductor ? 'Disponible' : 'Buscando conductores',
+    // El conductor no necesita franja en una alerta disponible: la tarjeta ya dice
+    // el servicio, la hora, el recorrido y la tarifa.
+    etiqueta: soyConductor ? '' : 'Buscando conductores',
     color: AZUL,
     compartido,
   };

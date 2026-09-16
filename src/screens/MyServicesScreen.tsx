@@ -128,9 +128,11 @@ export function MyServicesScreen() {
             <Text style={styles.companyName} numberOfLines={1}>
               {service.company_name || service.provider_name || 'Empresa'}
             </Text>
-            <View style={[styles.statusBadge, { backgroundColor: estado.color }]}>
-              <Text style={styles.statusText}>{estado.etiqueta}</Text>
-            </View>
+            {!!estado.etiqueta && (
+              <View style={[styles.statusBadge, { backgroundColor: estado.color }]}>
+                <Text style={styles.statusText}>{estado.etiqueta}</Text>
+              </View>
+            )}
           </View>
 
           <Text style={styles.routeText}>📍 {service.origin_address}</Text>

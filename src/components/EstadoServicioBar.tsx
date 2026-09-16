@@ -33,6 +33,10 @@ export function EstadoServicioBar({
 }: Props) {
   const { etiqueta, color } = estadoDeServicio(service, postulantes, vista);
 
+  // Sin nada que comunicar no se pinta franja: la tarjeta del conductor ya muestra
+  // el servicio, la hora, el recorrido y la tarifa.
+  if (!etiqueta) return null;
+
   return (
     <View
       style={[

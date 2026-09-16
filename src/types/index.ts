@@ -3,7 +3,9 @@ export type SubscriptionTier = 'FREE' | 'PREMIUM';
 
 export type ServiceStatus =
   | 'STATUS_OPEN'
-  | 'STATUS_PENDING_APPROVAL'
+  // 'STATUS_PENDING_APPROVAL' se quitó: era un estado inventado en memoria que no
+  // existe en `service_alerts`. La alerta sigue `STATUS_OPEN` hasta que el proveedor
+  // acepta a un conductor, y el conteo de postulantes sale de `applications`.
   | 'STATUS_EN_ROUTE_ORIGIN'
   | 'STATUS_AT_ORIGIN'
   | 'STATUS_IN_PROGRESS'

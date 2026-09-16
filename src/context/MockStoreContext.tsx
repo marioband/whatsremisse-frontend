@@ -154,6 +154,7 @@ type MockAction =
   | { type: 'UPDATE_SERVICE'; payload: ServiceAlert }
   | { type: 'UPDATE_APPLICATION'; payload: Application }
   | { type: 'APPLY_TO_SERVICE'; payload: { serviceId: string; driverId: string } }
+  | { type: 'UPSERT_APPLICATION'; payload: Application }
   | { type: 'APPROVE_APPLICATION'; payload: { serviceId: string; driverId: string } }
   | { type: 'REJECT_APPLICATION'; payload: { serviceId: string } }
   | { type: 'REJECT_APPLICATION_FROM'; payload: { serviceId: string; driverId: string } }
@@ -246,10 +247,19 @@ function mockReducer(state: MockState, action: MockAction): MockState {
       const existingCount = state.applications.filter(
         (a) => a.serviceId === action.payload.serviceId
       ).length;
+      // OJO: aquí NO se toca `services`. La alerta sigue abierta en la base hasta
+      // que el proveedor acepta a un conductor, así que la tarjeta tiene que
+      // quedarse a la vista de todos. Antes este reducer le ponía un estado local
+      // 'STATUS_PENDING_APPROVAL' (que no existe como columna) y la tarjeta
+      // desaparecía del dispositivo de todos —incluso de quien no había postulado—
+      // porque el aviso de "otro postuló" llegaba por el canal de tiempo real.
       return {
         ...state,
         applications: [
-          ...state.applications,
+          ...state.applications.filter(
+            (a) =>
+              !(a.serviceId === action.payload.serviceId && a.driverId === action.payload.driverId)
+          ),
           {
             serviceId: action.payload.serviceId,
             driverId: action.payload.driverId,
@@ -257,9 +267,23 @@ function mockReducer(state: MockState, action: MockAction): MockState {
             order: existingCount + 1,
           },
         ],
-        services: state.services.map((s) =>
-          s.id === action.payload.serviceId ? { ...s, status: 'STATUS_PENDING_APPROVAL' } : s
-        ),
+      };
+    }
+
+    case 'UPSERT_APPLICATION': {
+      // Alta/actualización de una postulación sin tocar `services`: es lo que usa el
+      // canal de tiempo real, donde llegan postulaciones de otros conductores.
+      const { serviceId, driverId } = action.payload;
+      const yaEsta = state.applications.some(
+        (a) => a.serviceId === serviceId && a.driverId === driverId
+      );
+      return {
+        ...state,
+        applications: yaEsta
+          ? state.applications.map((a) =>
+              a.serviceId === serviceId && a.driverId === driverId ? { ...a, ...action.payload } : a
+            )
+          : [...state.applications, action.payload],
       };
     }
 
@@ -330,22 +354,10 @@ function mockReducer(state: MockState, action: MockAction): MockState {
       const remainingApplications = state.applications.filter(
         (a) => !(a.serviceId === action.payload.serviceId && a.driverId === action.payload.driverId)
       );
-      const hasOtherPending = remainingApplications.some(
-        (a) => a.serviceId === action.payload.serviceId && a.status === 'PENDING'
-      );
-      return {
-        ...state,
-        applications: remainingApplications,
-        services: state.services.map((s) =>
-          s.id === action.payload.serviceId
-            ? {
-                ...s,
-                status: hasOtherPending ? 'STATUS_PENDING_APPROVAL' : 'STATUS_OPEN',
-                assigned_driver_id: null,
-              }
-            : s
-        ),
-      };
+      // Tampoco aquí se inventa un estado para el servicio: anular la postulación no
+      // cambia la alerta (sigue abierta para los demás). El conteo de postulantes de
+      // la tarjeta del proveedor sale de las postulaciones, no del estado.
+      return { ...state, applications: remainingApplications };
     }
 
     case 'UPDATE_SERVICE_STATUS':
@@ -720,10 +732,9 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
 
     const application = cambio.aplicacion;
-    const exists = state.applications.some(
-      (a) => a.serviceId === application.serviceId && a.driverId === application.driverId
-    );
-    dispatch({ type: exists ? 'UPDATE_APPLICATION' : 'APPLY_TO_SERVICE', payload: application });
+    // Alta/actualización neutra: por aquí llegan postulaciones de OTROS conductores,
+    // así que no puede cambiar el estado de la tarjeta en este dispositivo.
+    dispatch({ type: 'UPSERT_APPLICATION', payload: application });
   });
 
   const persistService = async (serviceId: string, updates: Partial<ServiceAlert>) => {
