@@ -37,6 +37,7 @@ import {
   ServiceMessage,
 } from '../lib/database';
 import { describeError } from '../lib/errors';
+import { AVISO_DE_RECHAZO, chatCerradoParaElConductor } from '../lib/miPostulacion';
 import { DireccionPago, montoEnTexto } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
@@ -80,6 +81,7 @@ export function ChatScreen() {
   const {
     role,
     services,
+    applications,
     approveApplication,
     rejectApplicationFrom,
     startProviderChat,
@@ -116,6 +118,8 @@ export function ChatScreen() {
     nombre?: string;
   } | null>(null);
   const isAdvancingRef = useRef(false);
+  // El aviso de rechazo se muestra UNA vez por visita al chat.
+  const rechazoAvisadoRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
 
   const service = useMemo(() => services.find((s) => s.id === serviceId), [services, serviceId]);
@@ -142,6 +146,19 @@ export function ChatScreen() {
   const isEvaluationMode =
     isProvider && service && !isAssigned && service.status !== 'STATUS_COMPLETED';
 
+  /**
+   * El proveedor rechazó a este conductor: la conversación se cierra (aviso con
+   * "Aceptar" y fuera del chat). La regla vive en `lib/miPostulacion.ts` y la
+   * refuerza la base (migración 0017: `is_service_driver` ya no autoriza a una
+   * postulación REJECTED).
+   */
+  const chatCerrado = chatCerradoParaElConductor({
+    applications,
+    serviceId,
+    userId,
+    asignadoAMi: soyConductorAsignado,
+  });
+
   const profile: DriverProfile = useMemo(
     () => ({
       firstName: driverName || 'Conductor',
@@ -162,8 +179,14 @@ export function ChatScreen() {
   // propia condición y llegaron a verse a la vez (el cuadre aparecía un hito antes
   // de tiempo y el formulario del monto se reseteaba solo).
   const showSlider =
-    isDriver && isAssigned && !!service && !isEvaluationMode && currentStep === 'IN_PROGRESS';
-  const showPago = !!service && esParteDelServicio && !isEvaluationMode && currentStep === 'PAGO';
+    isDriver &&
+    isAssigned &&
+    !!service &&
+    !isEvaluationMode &&
+    !chatCerrado &&
+    currentStep === 'IN_PROGRESS';
+  const showPago =
+    !!service && esParteDelServicio && !isEvaluationMode && !chatCerrado && currentStep === 'PAGO';
 
   const rol: 'CONDUCTOR' | 'PROVEEDOR' = isDriver ? 'CONDUCTOR' : 'PROVEEDOR';
   // Se leen campos sueltos (no un objeto derivado, que sería nuevo en cada render)
@@ -278,6 +301,20 @@ export function ChatScreen() {
       markDriverSeenChat(serviceId, effectiveDriverId);
     }
   }, [isDriver, serviceId, effectiveDriverId, markDriverSeenChat]);
+
+  // Conductor rechazado: se avisa UNA vez y el "Aceptar" lo saca del chat. La
+  // pantalla queda en solo lectura mientras el aviso está en camino (el campo de
+  // escritura ni se pinta).
+  useEffect(() => {
+    if (!chatCerrado || rechazoAvisadoRef.current) return;
+    rechazoAvisadoRef.current = true;
+    Alert.alert(AVISO_DE_RECHAZO.titulo, AVISO_DE_RECHAZO.cuerpo, [
+      {
+        text: AVISO_DE_RECHAZO.boton,
+        onPress: () => navigation.goBack(),
+      },
+    ]);
+  }, [chatCerrado, navigation]);
 
   /** Guarda en la base y deja el mensaje local si la tabla aún no existe. */
   const persistir = async (local: ServiceMessage, metadata: Record<string, unknown>) => {
@@ -462,6 +499,9 @@ export function ChatScreen() {
   const handleSend = (content: string, type: 'TEXT' | 'VOICE' = 'TEXT') => {
     const texto = content.trim();
     if (!texto || !service) return;
+    // Conductor rechazado: no se escribe en una conversación cerrada (el campo de
+    // escritura tampoco se pinta; esto es la red de seguridad).
+    if (chatCerrado) return;
     if (isProvider) {
       startProviderChat(serviceId, effectiveDriverId);
     }
@@ -649,13 +689,22 @@ Placa: ${profile.plate}`;
           </View>
         )}
 
-        <ChatInputBar
-          value={input}
-          onChangeText={setInput}
-          onSend={() => handleSend(input)}
-          onSendVoice={handleSendVoice}
-          onAttachment={handleAttachment}
-        />
+        {chatCerrado ? (
+          <View style={styles.cerrado}>
+            <Text style={styles.cerradoTexto}>
+              Conversación cerrada: tu postulación fue rechazada. Si el servicio sigue disponible en
+              tus grupos puedes volver a postularte.
+            </Text>
+          </View>
+        ) : (
+          <ChatInputBar
+            value={input}
+            onChangeText={setInput}
+            onSend={() => handleSend(input)}
+            onSendVoice={handleSendVoice}
+            onAttachment={handleAttachment}
+          />
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -690,6 +739,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF3E0',
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  cerrado: {
+    backgroundColor: '#F2F2F2',
+    borderTopWidth: 0.5,
+    borderTopColor: '#DDDDDD',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  cerradoTexto: {
+    color: '#555555',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
   },
   avisoTexto: {
     color: '#E65100',
