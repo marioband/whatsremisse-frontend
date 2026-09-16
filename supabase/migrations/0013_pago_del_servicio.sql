@@ -128,7 +128,7 @@ BEGIN
 
   IF fila.id IS NULL THEN
     RAISE EXCEPTION
-      'No hay un monto declarado pendiente de resolver en el servicio % (%)', p_service_id;
+      'No hay un monto declarado pendiente de resolver en el servicio %', p_service_id;
   END IF;
 
   RETURN fila;
