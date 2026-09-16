@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { Fab } from '../components/Fab';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore, GroupMember, rolEnGrupo } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
@@ -171,12 +172,10 @@ export function GroupMembersScreen() {
 
       {/* FAB: solo para owner/admin, igual que la política RLS de group_members */}
       {canAddMembers ? (
-        <TouchableOpacity
-          style={styles.fab}
+        <Fab
+          etiqueta="Agregar integrante"
           onPress={() => navigation.navigate('AddParticipant', { groupId, groupName })}
-        >
-          <Text style={styles.fabIcon}>+</Text>
-        </TouchableOpacity>
+        />
       ) : (
         <Text style={styles.memberNote}>
           Solo el propietario o un administrador del grupo pueden agregar integrantes
@@ -293,27 +292,5 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 13,
     paddingHorizontal: 24,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: DARK_BG,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  fabIcon: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    lineHeight: 30,
   },
 });

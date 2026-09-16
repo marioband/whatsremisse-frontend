@@ -20,6 +20,34 @@ export interface ResumenPago {
 export const montoEnTexto = (monto: number | null | undefined): string =>
   monto === null || monto === undefined ? '' : `S/ ${Number(monto).toFixed(2)}`;
 
+/** Quién debe transferir según la dirección declarada. */
+export function pagaDe(direccion: DireccionPago | null | undefined): RolPago | null {
+  if (direccion === 'DRIVER_PAYS_PROVIDER') return 'CONDUCTOR';
+  if (direccion === 'PROVIDER_PAYS_DRIVER') return 'PROVEEDOR';
+  return null;
+}
+
+/** Quién recibe el dinero (y por eso es el único que confirma). */
+export function recibeDe(direccion: DireccionPago | null | undefined): RolPago | null {
+  const paga = pagaDe(direccion);
+  return paga === 'CONDUCTOR' ? 'PROVEEDOR' : paga === 'PROVEEDOR' ? 'CONDUCTOR' : null;
+}
+
+/**
+ * ¿Este rol tiene que ver los datos de pago?
+ *
+ * Solo **quien debe pagar** los ve (y son los de quien recibe el dinero): si el
+ * conductor declara "Me deben" los datos son para el proveedor, no para él; si
+ * declara "Yo pago", los ve él para hacer la transferencia. Antes el conductor
+ * veía los medios del proveedor desde el primer paso, en las dos direcciones.
+ */
+export function leTocaVerLosDatosDePago(
+  direccion: DireccionPago | null | undefined,
+  rol: RolPago
+): boolean {
+  return pagaDe(direccion) === rol;
+}
+
 /**
  * Estado del pago derivado de la fila del servicio. Es la única fuente de
  * verdad del ciclo declaración → aceptación/rechazo → confirmación: la UI no
@@ -30,14 +58,8 @@ export function resumenDePago(service: ServiceAlert): ResumenPago {
   const direccion = (service.pago_direccion || null) as DireccionPago | null;
   const monto = service.pago_monto ?? null;
 
-  const paga: RolPago | null =
-    direccion === 'DRIVER_PAYS_PROVIDER'
-      ? 'CONDUCTOR'
-      : direccion === 'PROVIDER_PAYS_DRIVER'
-        ? 'PROVEEDOR'
-        : null;
-  const recibe: RolPago | null =
-    paga === 'CONDUCTOR' ? 'PROVEEDOR' : paga === 'PROVEEDOR' ? 'CONDUCTOR' : null;
+  const paga = pagaDe(direccion);
+  const recibe = recibeDe(direccion);
 
   let declaracion = '';
   if (direccion === 'DRIVER_PAYS_PROVIDER') {

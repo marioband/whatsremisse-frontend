@@ -28,6 +28,7 @@ import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
 import { Alert } from '../lib/alert';
+import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import {
   datosDePagoDelConductor,
   datosDePagoDelProveedor,
@@ -640,8 +641,13 @@ export function ChatScreen() {
         keyboardVerticalOffset={90}
       >
         <ChatHeader
-          title={service.title || 'Chat'}
-          subtitle={isDriver ? 'Proveedor' : 'Conductor'}
+          title={nombreDeLaContraparte(isDriver, {
+            nombreProveedor: datosDelProveedor?.nombre,
+            nombreConductor: perfilDelConductor
+              ? `${perfilDelConductor.nombres} ${perfilDelConductor.apellidos}`.trim()
+              : driverName,
+          })}
+          subtitle={rolDeLaContraparte(isDriver)}
           onBack={() => navigation.goBack()}
           onSettings={() => navigation.navigate('Settings')}
           searchOpen={buscarAbierto}

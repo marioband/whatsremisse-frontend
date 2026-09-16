@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { Fab } from '../components/Fab';
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -75,9 +76,7 @@ export function MyGroupsScreen() {
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateGroup')}>
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
+      <Fab etiqueta="Agregar grupo" onPress={() => navigation.navigate('CreateGroup')} />
     </SafeAreaView>
   );
 }
@@ -139,27 +138,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#888',
     marginTop: 40,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: DARK_BG,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  fabIcon: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    lineHeight: 30,
   },
 });

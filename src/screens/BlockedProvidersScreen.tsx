@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 
+import { Fab } from '../components/Fab';
 import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { BlockedUser } from '../types';
@@ -67,9 +68,7 @@ export function BlockedProvidersScreen() {
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={handleAdd}>
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
+      <Fab etiqueta="Agregar proveedor bloqueado" onPress={handleAdd} />
     </SafeAreaView>
   );
 }
@@ -133,21 +132,4 @@ const styles = StyleSheet.create({
   },
   removeText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   emptyText: { textAlign: 'center', color: '#888', marginTop: 40, fontSize: 14 },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: DARK_BG,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-  },
-  fabIcon: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
 });

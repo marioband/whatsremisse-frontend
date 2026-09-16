@@ -17,8 +17,10 @@ import {
   DireccionPago,
   historialDePago,
   leTocaTransferir,
+  leTocaVerLosDatosDePago,
   montoEnTexto,
   puedeConfirmar,
+  recibeDe,
   resumenDePago,
   RolPago,
 } from '../../lib/pagoServicio';
@@ -93,19 +95,36 @@ export function PagoDelServicio({
   const puedeDeclararAhora =
     rol === 'CONDUCTOR' && (resumen.estado === 'SIN_DECLARAR' || resumen.estado === 'RECHAZADO');
 
-  /** Medios de pago del proveedor (para el caso A, desde el paso 1). */
-  const datosDelProveedorParaMostrar = {
-    titulo: 'Datos de pago del proveedor',
-    nota: datosDelProveedor?.nombre
-      ? `Transfiere a ${datosDelProveedor.nombre} y luego él confirma la recepción.`
-      : 'Transfiere a estos datos y luego el proveedor confirma la recepción.',
-    yape: datosDelProveedor?.yape || service.provider_yape,
-    cuenta: datosDelProveedor?.bcpAccount || service.provider_bcp_account,
-    cci: datosDelProveedor?.bcpCci || service.provider_bcp_cci,
-  };
+  /**
+   * Dirección de pago que manda en pantalla: mientras el conductor está declarando
+   * vale su elección local (aún no está en la base); ya declarada, la de la fila.
+   */
+  const direccionEfectiva: DireccionPago | null =
+    resumen.estado === 'SIN_DECLARAR' || resumen.estado === 'RECHAZADO'
+      ? direccion
+      : resumen.direccion;
 
+  /**
+   * Los datos de pago los ve SOLO quien tiene que pagar, y son los de quien recibe:
+   * si el conductor declara "Me deben" (paga el proveedor) el conductor no ve los
+   * medios del proveedor; si declara "Yo pago", los ve él para transferir.
+   */
+  const datosDePagoVisibles =
+    leTocaVerLosDatosDePago(direccionEfectiva, rol) && resumen.estado !== 'CONFIRMADO';
+
+  /** Medios de pago de quien RECIBE el dinero según la dirección. */
   const datosDelReceptor = () => {
-    if (resumen.recibe === 'PROVEEDOR') return datosDelProveedorParaMostrar;
+    if (recibeDe(direccionEfectiva) === 'PROVEEDOR') {
+      return {
+        titulo: 'Datos de pago del proveedor',
+        nota: datosDelProveedor?.nombre
+          ? `Transfiere a ${datosDelProveedor.nombre} y luego él confirma la recepción.`
+          : 'Transfiere a estos datos y luego el proveedor confirma la recepción.',
+        yape: datosDelProveedor?.yape || service.provider_yape,
+        cuenta: datosDelProveedor?.bcpAccount || service.provider_bcp_account,
+        cci: datosDelProveedor?.bcpCci || service.provider_bcp_cci,
+      };
+    }
     return {
       titulo: 'Datos de pago del conductor',
       nota:
@@ -182,8 +201,6 @@ export function PagoDelServicio({
     setErrorMonto('');
     onDeclarar(direccion, Number(valor.toFixed(2)));
   };
-
-  const detalles = datosDelReceptor();
 
   return (
     <View style={styles.panel}>
@@ -336,19 +353,16 @@ export function PagoDelServicio({
         )}
 
         {/* ------------------------------------------------ datos de pago */}
-        {/* Paso 1 del conductor: los medios del proveedor, siempre visibles, para
-            que sepa dónde transferir en el caso A. */}
-        {rol === 'CONDUCTOR' &&
-          (resumen.estado === 'SIN_DECLARAR' || resumen.estado === 'RECHAZADO') &&
-          bloqueDatos(datosDelProveedorParaMostrar)}
+        {/* Solo los ve QUIEN TIENE QUE PAGAR, y son los de quien recibe el dinero:
+            el conductor que declara "Me deben" no ve los medios del proveedor; el
+            que declara "Yo pago" sí los ve, porque es él quien transfiere. */}
+        {datosDePagoVisibles && bloqueDatos(datosDelReceptor())}
 
         {resumen.estado !== 'CONFIRMADO' &&
           (resumen.estado === 'SIN_DECLARAR' || resumen.estado === 'RECHAZADO') &&
           !puedeDeclararAhora && (
             <Text style={styles.espera}>Esperando que el conductor declare el monto del pago.</Text>
           )}
-
-        {resumen.direccion !== null && resumen.estado !== 'RECHAZADO' && bloqueDatos(detalles)}
       </View>
     </View>
   );

@@ -3,12 +3,14 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { Fab } from '../components/Fab';
 import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
+import { AZUL } from '../lib/colors';
 import { esProgramado } from '../lib/datetime';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
@@ -394,11 +396,13 @@ export function DriverHomeScreen() {
         }
       />
 
-      {/* FAB para crear servicio (solo proveedor) */}
+      {/* FAB para crear servicio (solo proveedor): flota abajo a la derecha */}
       {role === 'PROVIDER' && (
-        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateService')}>
-          <Text style={styles.fabIcon}>+</Text>
-        </TouchableOpacity>
+        <Fab
+          color={AZUL}
+          etiqueta="Crear servicio"
+          onPress={() => navigation.navigate('CreateService')}
+        />
       )}
     </SafeAreaView>
   );
@@ -524,22 +528,5 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 40,
     fontSize: 14,
-  },
-  fab: {
-    position: 'absolute',
-    right: 18,
-    bottom: 18,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: BLUE,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-  },
-  fabIcon: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
   },
 });

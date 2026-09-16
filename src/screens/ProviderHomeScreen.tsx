@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { EstadoServicioBar } from '../components/EstadoServicioBar';
+import { Fab } from '../components/Fab';
 import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
@@ -249,9 +250,7 @@ export function ProviderHomeScreen() {
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateService')}>
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
+      <Fab etiqueta="Crear servicio" onPress={() => navigation.navigate('CreateService')} />
     </SafeAreaView>
   );
 }
@@ -409,23 +408,5 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 40,
     fontSize: 14,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: DARK_BG,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    zIndex: 100,
-  },
-  fabIcon: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
   },
 });

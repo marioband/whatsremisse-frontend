@@ -30,9 +30,11 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   return (
     <View style={styles.header}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backArrow}>←</Text>
-      </TouchableOpacity>
+      <View style={styles.headerLado}>
+        <TouchableOpacity onPress={onBack} accessibilityLabel="Volver">
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
+      </View>
 
       {searchOpen ? (
         <View style={styles.searchPill}>
@@ -81,10 +83,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   backArrow: { color: '#fff', fontSize: 24, marginRight: 12 },
-  headerInfo: { flex: 1 },
-  headerTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
-  headerIcons: { flexDirection: 'row' },
+  /* Los dos laterales miden lo mismo: así el nombre de la contraparte queda
+     centrado de verdad en la pantalla (con anchos distintos se desplazaba). */
+  headerLado: { width: 68, justifyContent: 'center' },
+  headerInfo: { flex: 1, alignItems: 'center' },
+  headerTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  headerIcons: { flexDirection: 'row', width: 68, justifyContent: 'flex-end' },
   headerIcon: { color: '#fff', fontSize: 18, marginLeft: 16 },
   searchPill: {
     flex: 1,
