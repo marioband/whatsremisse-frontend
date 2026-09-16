@@ -23,7 +23,6 @@ import {
   etiquetaRelativa,
   formatearFecha,
   formatearHora,
-  formatearHora24,
   horaCoherente,
   inicioDelDia,
   mismoDia,
@@ -200,7 +199,6 @@ export function CreateServiceScreen() {
       intermediateStops.length > 0 ? `Paradas: ${intermediateStops.join(', ')}` : '',
     ].filter(Boolean);
 
-    const dispatchType = `${formatearFecha(programada)} ${formatearHora24(programada)} hrs`;
     const scheduledAt = programada.toISOString();
     const providerName = profile?.full_name || editingService?.provider_name || 'Proveedor';
 
@@ -246,7 +244,6 @@ export function CreateServiceScreen() {
       vehicle_requirements: { vehicle_type: unitType },
       vehicle_type: unitType,
       fare: parseFloat(fare) || 0,
-      dispatch_type: dispatchType,
       scheduled_at: scheduledAt,
       observations: observationsList.length > 0 ? observationsList : undefined,
       payment_term: finalPaymentDate,

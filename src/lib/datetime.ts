@@ -81,6 +81,27 @@ export function formatearFecha(fecha: Date): string {
   return `${dia}/${mes}/${fecha.getFullYear()}`;
 }
 
+/**
+ * Momento programado del servicio, para las tarjetas: "16/09/2026 08:00 hrs".
+ *
+ * Las tarjetas leían `dispatch_type`, un campo que **no existe como columna** en
+ * `service_alerts`: se quedaba siempre vacío y todas decían "Al momento". La hora
+ * real es `scheduled_at` (la que fija "nuevo servicio" y la que manda para que la
+ * alerta caduque), así que el texto se arma de ahí.
+ */
+export function textoProgramado(servicio: { scheduled_at?: string | null }): string {
+  if (!servicio.scheduled_at) return 'Al momento';
+  const fecha = new Date(servicio.scheduled_at);
+  if (Number.isNaN(fecha.getTime())) return 'Al momento';
+  return `${formatearFecha(fecha)} ${formatearHora24(fecha)} hrs`;
+}
+
+/** true si el servicio tiene un momento programado (lo contrario de "al momento"). */
+export function esProgramado(servicio: { scheduled_at?: string | null }): boolean {
+  if (!servicio.scheduled_at) return false;
+  return !Number.isNaN(new Date(servicio.scheduled_at).getTime());
+}
+
 /** Texto corto al lado de la fecha: "hoy", "mañana", "en 3 días"... */
 export function etiquetaRelativa(fecha: Date, hoy: Date = new Date()): string {
   const dias = Math.round((inicioDelDia(fecha).getTime() - inicioDelDia(hoy).getTime()) / MS_DIA);

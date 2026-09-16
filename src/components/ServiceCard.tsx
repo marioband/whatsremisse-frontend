@@ -4,6 +4,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 
 import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
+import { textoProgramado } from '../lib/datetime';
 import { ServiceAlert } from '../types';
 
 interface Props {
@@ -113,7 +114,7 @@ export function ServiceCard({
 
           <View style={styles.dispatchRow}>
             <Text style={[styles.dispatchType, isActive && styles.textActiveLight]}>
-              {service.dispatch_type || 'Al momento'}
+              {textoProgramado(service)}
             </Text>
             {isReservation && (
               <Text style={[styles.reservaLabel, isActive && styles.textActiveLight]}>

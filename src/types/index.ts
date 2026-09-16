@@ -89,7 +89,9 @@ export interface ServiceAlert {
   archived?: boolean;
   // Campos para tarjeta de conductor
   company_name?: string;
-  dispatch_type?: string;
+  // `scheduled_at` es la hora real del servicio y de ahí sale el texto de la
+  // tarjeta (`textoProgramado` en lib/datetime). El viejo `dispatch_type` se quitó:
+  // nunca existió como columna, así que todas las tarjetas decían "Al momento".
   vehicle_type?: string;
   origin_estimate?: string;
   destination_estimate?: string;

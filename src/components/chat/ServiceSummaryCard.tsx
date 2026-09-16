@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 import { BankDetailsRow } from './BankDetailsRow';
+import { textoProgramado } from '../../lib/datetime';
 import { ServiceAlert } from '../../types';
 
 interface ServiceSummaryCardProps {
@@ -35,7 +36,7 @@ export function ServiceSummaryCard({
           <Text style={styles.companyName} numberOfLines={1}>
             {service.company_name || service.provider_name || 'Empresa'}
           </Text>
-          <Text style={styles.timeText}>{service.dispatch_type || 'Al momento'}</Text>
+          <Text style={styles.timeText}>{textoProgramado(service)}</Text>
           <Text style={styles.routeText}>
             <Text style={styles.label}>Origen:</Text> {service.origin_address}
           </Text>

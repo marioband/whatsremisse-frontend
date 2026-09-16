@@ -9,6 +9,7 @@ import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
+import { esProgramado } from '../lib/datetime';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
 import { isVisibleAsDriver } from '../lib/visibility';
@@ -83,10 +84,7 @@ export function DriverHomeScreen() {
     return best?.name;
   };
 
-  const isScheduledService = (service: ServiceAlert) => {
-    const dispatch = service.dispatch_type || 'Al momento';
-    return dispatch.toLowerCase() !== 'al momento' && dispatch.trim().length > 0;
-  };
+  const isScheduledService = (service: ServiceAlert) => esProgramado(service);
 
   const isAcceptedByMe = (service: ServiceAlert) =>
     service.assigned_driver_id === currentDriverId &&

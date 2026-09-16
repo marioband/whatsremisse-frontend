@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 
+import { textoProgramado } from '../lib/datetime';
 import { ServiceAlert } from '../types';
 
 interface Props {
@@ -36,7 +37,7 @@ export function ProviderServiceCard({ service, onArchive }: Props) {
 
         {/* Columna central */}
         <View style={styles.centerColumn}>
-          <Text style={styles.dispatchType}>{service.dispatch_type || 'Al momento'}</Text>
+          <Text style={styles.dispatchType}>{textoProgramado(service)}</Text>
 
           <View style={styles.locationRow}>
             <View style={styles.dotOrigin} />
