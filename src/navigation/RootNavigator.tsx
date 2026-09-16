@@ -15,6 +15,7 @@ import { ChatScreen } from '../screens/ChatScreen';
 import { CreateGroupScreen } from '../screens/CreateGroupScreen';
 import { CreateServiceAlertScreen } from '../screens/CreateServiceAlertScreen';
 import { CreateServiceScreen } from '../screens/CreateServiceScreen';
+import { EstadisticasScreen } from '../screens/EstadisticasScreen';
 import { GroupChatScreen } from '../screens/GroupChatScreen';
 import { GroupMembersScreen } from '../screens/GroupMembersScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -57,6 +58,8 @@ export type RootStackParamList = {
     memberRole: 'owner' | 'admin' | 'member';
   };
   Settings: undefined;
+  /** Cuenta → Estadísticas: ingresos por servicios pagados y cerrados. */
+  Estadisticas: undefined;
   PaymentDetails: { fromOnboarding?: boolean } | undefined;
   MyServices: undefined;
   Privacy: undefined;
@@ -162,6 +165,11 @@ export function RootNavigator() {
               <Stack.Screen
                 name="MyServices"
                 component={MyServicesScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Estadisticas"
+                component={EstadisticasScreen}
                 options={{ headerShown: false }}
               />
               <Stack.Screen

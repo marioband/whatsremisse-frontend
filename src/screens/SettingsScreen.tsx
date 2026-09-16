@@ -26,6 +26,7 @@ const MENU_OPTIONS: MenuOption[] = [
   { id: 'profile', label: 'Mi perfil', icon: '👤', route: 'ProfileSetup' },
   { id: 'payment', label: 'Datos de pago', icon: '💳', route: 'PaymentDetails' },
   { id: 'services', label: 'Mis servicios', icon: '🚗', route: 'MyServices' },
+  { id: 'stats', label: 'Estadísticas', icon: '📊', route: 'Estadisticas' },
   { id: 'privacy', label: 'Privacidad', icon: '🔒', route: 'Privacy' },
   { id: 'membership', label: 'Membresía (30 días)', icon: '🎫', route: 'Membership' },
 ];
@@ -74,7 +75,7 @@ export function SettingsScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ajustes</Text>
+        <Text style={styles.headerTitle}>Cuenta</Text>
         <View style={styles.headerSpacer} />
       </View>
 
