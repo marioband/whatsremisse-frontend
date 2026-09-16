@@ -188,8 +188,10 @@ export function ServiceCard({
         )}
       </View>
 
-      {/* Franja de estado del servicio (fuente única: estadoDeServicio) */}
-      <EstadoServicioBar service={service} radius={RADIUS.xl} />
+      {/* Franja de estado del servicio (fuente única: estadoDeServicio).
+          Vista de conductor: "Disponible" / "No disponible", nunca la señal del
+          proveedor que publicó la alerta. */}
+      <EstadoServicioBar service={service} radius={RADIUS.xl} vista="CONDUCTOR" />
     </TouchableOpacity>
   );
 

@@ -1,13 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-import { estadoDeServicio } from '../lib/estadoServicio';
+import { estadoDeServicio, VistaServicio } from '../lib/estadoServicio';
 import { ServiceAlert } from '../types';
 
 interface Props {
   service: ServiceAlert;
   /** Postulaciones pendientes del servicio (para la señal "(x) Postulantes"). */
   postulantes?: number;
+  /**
+   * Lado desde el que se mira la tarjeta: el conductor nunca ve la jerga del
+   * proveedor ("Buscando conductores", "Servicio vencido"), ve lo suyo
+   * ("Disponible", "No disponible").
+   */
+  vista?: VistaServicio;
   /** Línea extra bajo el estado (p. ej. el tiempo de gracia de un vencido). */
   detalle?: string;
   /** Radio de las esquinas inferiores, para encajar con la tarjeta que hay encima. */
@@ -18,8 +24,14 @@ interface Props {
  * Franja de estado al pie de la tarjeta. El texto y el color salen de
  * `estadoDeServicio`, que es la única fuente de verdad del proceso.
  */
-export function EstadoServicioBar({ service, postulantes = 0, detalle, radius = 12 }: Props) {
-  const { etiqueta, color } = estadoDeServicio(service, postulantes);
+export function EstadoServicioBar({
+  service,
+  postulantes = 0,
+  vista = 'PROVEEDOR',
+  detalle,
+  radius = 12,
+}: Props) {
+  const { etiqueta, color } = estadoDeServicio(service, postulantes, vista);
 
   return (
     <View

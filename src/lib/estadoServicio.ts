@@ -9,22 +9,37 @@ export interface EstadoServicio {
 }
 
 /**
+ * Desde qué lado se mira la tarjeta. Las señales del PROVEEDOR describen la alerta
+ * que él publicó (¿la compartí?, ¿ya hay postulantes?); las del CONDUCTOR
+ * describen su situación frente a la alerta (¿puedo postularme?). El viaje en
+ * curso y el pago son comunes a los dos.
+ */
+export type VistaServicio = 'PROVEEDOR' | 'CONDUCTOR';
+
+/**
  * Estado que comunica la barra inferior de una tarjeta de servicio.
  *
  * Es la única fuente de verdad de las señales del proceso: la tarjeta no decide
  * nada por su cuenta, solo pinta lo que devuelve esta función. El reporte del
  * conductor aceptado (`driver_progress_step`) es el que va moviendo la señal.
  *
- *   no compartido → buscando conductores → (x) postulantes → en camino →
- *   conductor ubicado → servicio en proceso → servicio finalizado
+ *   Proveedor: no compartido → buscando conductores → (x) postulantes → en camino →
+ *              conductor ubicado → servicio en proceso → finalizado → pago
+ *   Conductor: disponible → en camino → conductor ubicado → servicio en proceso →
+ *              finalizado → pago
  *
- * `Servicio vencido` aparece cuando la hora programada ya pasó y nadie lo tomó.
- * `Servicio anulado` es el resto (cancelado sin cerrarse).
+ * `Servicio vencido` es del proveedor (su alerta se pasó de hora sin conductor);
+ * el conductor ve esas alertas como `No disponible`, nunca la jerga del proveedor.
  */
-export function estadoDeServicio(service: ServiceAlert, postulantesPendientes = 0): EstadoServicio {
+export function estadoDeServicio(
+  service: ServiceAlert,
+  postulantesPendientes = 0,
+  vista: VistaServicio = 'PROVEEDOR'
+): EstadoServicio {
   const paso = service.driver_progress_step ?? 0;
   const asignado = !!service.assigned_driver_id;
   const compartido = !!service.group_id;
+  const soyConductor = vista === 'CONDUCTOR';
 
   if (service.status === 'STATUS_CANCELLED') {
     return { etiqueta: 'Servicio anulado', color: ROJO_ACCION, compartido };
@@ -45,14 +60,24 @@ export function estadoDeServicio(service: ServiceAlert, postulantesPendientes = 
   }
 
   if (!compartido) {
-    return { etiqueta: 'Servicio no compartido', color: TEXTO_TENUE, compartido };
+    return {
+      etiqueta: soyConductor ? 'No disponible' : 'Servicio no compartido',
+      color: soyConductor ? TEXTO_TENUE : TEXTO_TENUE,
+      compartido,
+    };
   }
 
   if (estaVencido(service)) {
-    return { etiqueta: 'Servicio vencido', color: ROJO_ACCION, compartido };
+    // El conductor no puede tomar una alerta caducada: se le dice sin rodeos y sin
+    // la palabra "vencido", que es la señal del proveedor para su propia tarjeta.
+    return {
+      etiqueta: soyConductor ? 'No disponible' : 'Servicio vencido',
+      color: soyConductor ? TEXTO_TENUE : ROJO_ACCION,
+      compartido,
+    };
   }
 
-  if (postulantesPendientes > 0) {
+  if (!soyConductor && postulantesPendientes > 0) {
     return {
       etiqueta:
         postulantesPendientes === 1 ? '1 Postulante' : `${postulantesPendientes} Postulantes`,
@@ -61,7 +86,11 @@ export function estadoDeServicio(service: ServiceAlert, postulantesPendientes = 
     };
   }
 
-  return { etiqueta: 'Buscando conductores', color: AZUL, compartido };
+  return {
+    etiqueta: soyConductor ? 'Disponible' : 'Buscando conductores',
+    color: AZUL,
+    compartido,
+  };
 }
 
 /** La hora programada ya pasó (y el servicio no se cerró). */

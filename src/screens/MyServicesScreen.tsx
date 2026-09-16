@@ -104,8 +104,10 @@ export function MyServicesScreen() {
 
   const renderServiceCard = (service: ServiceAlert, rol: 'PROVEEDOR' | 'CONDUCTOR') => {
     // La señal de la tarjeta sale de `estadoDeServicio`: una sola fuente de verdad
-    // (no compartido → buscando → postulantes → en camino → ubicado → proceso → finalizado).
-    const estado = estadoDeServicio(service, postulantesDe(service.id));
+    // (no compartido → buscando → postulantes → en camino → ubicado → proceso → pago)
+    // y depende del rol que tuve en ese servicio: las señales de proveedor no
+    // aplican a un servicio que hice como conductor.
+    const estado = estadoDeServicio(service, postulantesDe(service.id), rol);
 
     return (
       <TouchableOpacity
