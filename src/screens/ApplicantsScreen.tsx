@@ -9,15 +9,14 @@ import {
   FlatList,
   TouchableOpacity,
   SafeAreaView,
-  Image,
 } from 'react-native';
 
+import { ApplicantCard } from '../components/ApplicantCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDePostulantes } from '../hooks/useEstimacionesDePostulantes';
 import { Alert } from '../lib/alert';
 import {
-  AZUL,
   BORDE_SUAVE,
   FONDO_TARJETA,
   OSCURO,
@@ -25,10 +24,9 @@ import {
   TEXTO,
   TEXTO_SUAVE,
   TEXTO_TENUE,
-  VERDE_ACCION,
 } from '../lib/colors';
 import { fetchPublicProfile } from '../lib/database';
-import { conGuion, DatosPublicos, datosDesdePerfilPublico, inicialDe } from '../lib/perfilPublico';
+import { DatosPublicos, datosDesdePerfilPublico } from '../lib/perfilPublico';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas, Punto } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -48,10 +46,11 @@ function normalizar(texto: string): string {
 }
 
 /**
- * Postulantes del servicio, con el formato de la referencia del usuario:
- * avatar, "Datos del conductor" (nombres y apellidos), "Datos del vehículo"
- * (marca, modelo y color) con el tiempo y la distancia del postulante al punto
- * de origen a la derecha, y tres acciones al pie:
+ * Postulantes del servicio, con la estructura de la última referencia del usuario:
+ * el tiempo y la distancia al punto de origen **centrados arriba**, y debajo dos
+ * columnas de datos SIN títulos —conductor (nombres, apellidos, DNI y celular) a la
+ * izquierda, vehículo (marca, modelo, color y placa) a la derecha— junto al avatar.
+ * Al pie, tres acciones:
  *   - Aceptar  (verde): acepta el servicio y lleva al chat ya aceptado.
  *   - Conversar (azul): lleva al chat sin aceptar (el botón de aceptar está allí).
  *   - Rechazar (rojo): descarta a ese postulante.
@@ -226,62 +225,15 @@ export function ApplicantsScreen() {
     );
   };
 
-  const renderApplicant = ({ item }: { item: { serviceId: string; driverId: string } }) => {
-    const datos = datosDe(item.driverId);
-    const estimacion = estimaciones[item.driverId];
-
-    return (
-      <View style={styles.card}>
-        <View style={styles.topRow}>
-          {datos.foto ? (
-            <Image source={{ uri: datos.foto }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{inicialDe(datos)}</Text>
-            </View>
-          )}
-
-          <View style={styles.dataColumn}>
-            <Text style={styles.sectionTitle}>Datos del conductor</Text>
-            <Text style={styles.fieldText}>Nombres: {conGuion(datos.nombres)}</Text>
-            <Text style={styles.fieldText}>Apellidos: {conGuion(datos.apellidos)}</Text>
-
-            <View style={styles.vehicleHeader}>
-              <Text style={[styles.sectionTitle, styles.vehicleTitle]}>Datos del vehículo</Text>
-              {!!estimacion && <Text style={styles.estimate}>{estimacion}</Text>}
-            </View>
-            <Text style={styles.fieldText}>Marca: {conGuion(datos.marca)}</Text>
-            <Text style={styles.fieldText}>Modelo: {conGuion(datos.modelo)}</Text>
-            <Text style={styles.fieldText}>Color: {conGuion(datos.color)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.acceptBtn]}
-            onPress={() => handleAceptar(item.driverId)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.actionBtnText}>Aceptar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.chatBtn]}
-            onPress={() => irAlChat(item.driverId)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.actionBtnText}>Conversar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.rejectBtn]}
-            onPress={() => handleRechazar(item.driverId)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.actionBtnText}>Rechazar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
+  const renderApplicant = ({ item }: { item: { serviceId: string; driverId: string } }) => (
+    <ApplicantCard
+      datos={datosDe(item.driverId)}
+      estimacion={estimaciones[item.driverId]}
+      onAceptar={() => handleAceptar(item.driverId)}
+      onConversar={() => irAlChat(item.driverId)}
+      onRechazar={() => handleRechazar(item.driverId)}
+    />
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -430,85 +382,6 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
     paddingBottom: 40,
-  },
-  card: {
-    backgroundColor: FONDO_TARJETA,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    marginBottom: 16,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: OSCURO,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  dataColumn: {
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: TEXTO,
-    marginBottom: 6,
-  },
-  vehicleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-  },
-  vehicleTitle: {
-    marginBottom: 6,
-  },
-  estimate: {
-    fontSize: 14,
-    color: TEXTO_SUAVE,
-    marginLeft: 8,
-  },
-  fieldText: {
-    fontSize: 14,
-    color: TEXTO_SUAVE,
-    marginBottom: 2,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    marginTop: 16,
-  },
-  actionBtn: {
-    flex: 1,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  acceptBtn: {
-    backgroundColor: VERDE_ACCION,
-    marginRight: 5,
-  },
-  chatBtn: {
-    backgroundColor: AZUL,
-    marginRight: 5,
-  },
-  rejectBtn: {
-    backgroundColor: ROJO_ACCION,
-  },
-  actionBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   emptyText: {
     textAlign: 'center',

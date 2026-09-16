@@ -22,6 +22,7 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { MembershipScreen } from '../screens/MembershipScreen';
 import { MyServicesScreen } from '../screens/MyServicesScreen';
+import { NavegacionScreen } from '../screens/NavegacionScreen';
 import { ParticipantDetailScreen } from '../screens/ParticipantDetailScreen';
 import { PaymentDetailsScreen } from '../screens/PaymentDetailsScreen';
 import { PrivacyScreen } from '../screens/PrivacyScreen';
@@ -60,6 +61,8 @@ export type RootStackParamList = {
   Settings: undefined;
   /** Cuenta → Estadísticas: ingresos por servicios pagados y cerrados. */
   Estadisticas: undefined;
+  /** Cuenta → Navegación: con qué app se abren las rutas (Google Maps o Waze). */
+  Navegacion: undefined;
   PaymentDetails: { fromOnboarding?: boolean } | undefined;
   MyServices: undefined;
   Privacy: undefined;
@@ -170,6 +173,11 @@ export function RootNavigator() {
               <Stack.Screen
                 name="Estadisticas"
                 component={EstadisticasScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Navegacion"
+                component={NavegacionScreen}
                 options={{ headerShown: false }}
               />
               <Stack.Screen

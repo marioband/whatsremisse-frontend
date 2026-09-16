@@ -27,6 +27,7 @@ const MENU_OPTIONS: MenuOption[] = [
   { id: 'payment', label: 'Datos de pago', icon: '💳', route: 'PaymentDetails' },
   { id: 'services', label: 'Mis servicios', icon: '🚗', route: 'MyServices' },
   { id: 'stats', label: 'Estadísticas', icon: '📊', route: 'Estadisticas' },
+  { id: 'navigation', label: 'Navegación', icon: '🧭', route: 'Navegacion' },
   { id: 'privacy', label: 'Privacidad', icon: '🔒', route: 'Privacy' },
   { id: 'membership', label: 'Membresía (30 días)', icon: '🎫', route: 'Membership' },
 ];
