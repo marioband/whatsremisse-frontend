@@ -11,10 +11,10 @@ import {
 
 import { VERDE_ACCION } from '../lib/colors';
 
-const TRACK_HEIGHT = 50;
-const THUMB_SIZE = 42;
+const TRACK_HEIGHT = 54;
+const THUMB_SIZE = 46;
 /** Cuánto hay que arrastrar (0-1 del ancho) para que cuente como deslizado. */
-const UMBRAL = 0.6;
+const UMBRAL = 0.55;
 
 export interface SwipeState {
   label: string;
@@ -83,6 +83,17 @@ function buildRoleStates(
   ];
 }
 
+const clamp = (valor: number, minimo: number, maximo: number) =>
+  Math.max(minimo, Math.min(valor, maximo));
+
+/**
+ * Barra de reporte del viaje.
+ *
+ * El gesto se atiende en TODA la barra (no solo en el pulgar) y el pulgar sigue
+ * al dedo usando la posición absoluta del toque contra el borde medido de la
+ * barra: antes solo se movía agarrando el círculo exacto y con el
+ * desplazamiento relativo, y por eso "no respondía bien".
+ */
 export function SwipeStatusButton(props: Props) {
   const generic = isGeneric(props);
   const role = generic ? undefined : props.role;
@@ -94,13 +105,17 @@ export function SwipeStatusButton(props: Props) {
   const disabledByRole = generic ? false : role === 'PROVIDER' && step === 'IN_PROGRESS';
   const disabled = Boolean(props.disabled) || disabledByRole;
 
-  // El ancho real de la barra se mide en pantalla: antes se usaba el ancho de la
-  // ventana y el recorrido quedaba descuadrado (y con umbral de 0.7 era muy
-  // difícil que el deslizamiento contara).
+  const [dragging, setDragging] = useState(false);
+  const [listo, setListo] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
-  const maxTranslate = Math.max(trackWidth - THUMB_SIZE - 8, 1);
 
   const translateX = useRef(new Animated.Value(0)).current;
+  const trackRef = useRef<View>(null);
+  /** Borde izquierdo de la barra en la pantalla, para convertir el toque. */
+  const pageXRef = useRef(0);
+  const anchoRef = useRef(0);
+  const maxTranslate = Math.max(trackWidth - THUMB_SIZE - 8, 1);
+
   const current = states[currentIndex] || states[states.length - 1];
   const isFinal = disabled || (generic ? currentIndex >= states.length - 1 : step === 'FINISHED');
 
@@ -117,37 +132,72 @@ export function SwipeStatusButton(props: Props) {
   useEffect(() => {
     propsRef.current = { generic, onAdvance: props.onAdvance, currentIndex, disabled };
   }, [generic, props.onAdvance, currentIndex, disabled]);
-  const maxRef = useRef(maxTranslate);
-  useEffect(() => {
-    maxRef.current = maxTranslate;
-  }, [maxTranslate]);
+
+  const medir = () => {
+    trackRef.current?.measureInWindow((x, _y, width) => {
+      pageXRef.current = x;
+      anchoRef.current = width;
+      setTrackWidth((actual) => (Math.abs(actual - width) > 1 ? width : actual));
+    });
+  };
+
+  /** Posición del dedo dentro de la barra (0 = borde izquierdo). */
+  const posicionEnBarra = (gesture: PanResponderGestureState, locationX: number) => {
+    const ancho = anchoRef.current || trackWidth;
+    if (!ancho) return 0;
+    const absoluta = gesture.moveX - pageXRef.current;
+    // Si la medición del borde no está disponible, se usa el relativo al toque.
+    const dentro = pageXRef.current > 0 ? absoluta : locationX;
+    return clamp(dentro, 0, ancho);
+  };
+
+  const pintarArrastre = (dentro: number) => {
+    const ancho = anchoRef.current || trackWidth || 1;
+    const desplazamiento = clamp(dentro - THUMB_SIZE / 2, 0, maxTranslateValue());
+    translateX.setValue(desplazamiento);
+    setListo(dentro / ancho >= UMBRAL);
+  };
+
+  const maxTranslateValue = () => {
+    const ancho = anchoRef.current || trackWidth;
+    return Math.max(ancho - THUMB_SIZE - 8, 1);
+  };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !propsRef.current.disabled,
       onMoveShouldSetPanResponder: () => !propsRef.current.disabled,
-      // El deslizamiento no se cede a la lista ni al scroll mientras se arrastra.
+      // El gesto no se cede a la lista ni al scroll mientras se arrastra.
       onPanResponderTerminationRequest: () => false,
       onShouldBlockNativeResponder: () => true,
-      onPanResponderMove: (_evt, gestureState: PanResponderGestureState) => {
-        // Sin offsets: el pulgar siempre parte de 0 y vuelve a 0 al soltar.
-        const nuevo = Math.max(0, Math.min(gestureState.dx, maxRef.current));
-        translateX.setValue(nuevo);
+      onPanResponderGrant: () => {
+        setDragging(true);
+        setListo(false);
       },
-      onPanResponderRelease: (_evt, gestureState: PanResponderGestureState) => {
-        const recorrido = Math.max(0, Math.min(gestureState.dx, maxRef.current));
-        const progress = recorrido / maxRef.current;
-        if (progress >= UMBRAL) {
-          const { generic: isGen, onAdvance, currentIndex: idx } = propsRef.current;
-          if (isGen) {
-            (onAdvance as (nextIndex: number) => void)(idx + 1);
-          } else {
-            (onAdvance as () => void)();
-          }
-        }
+      onPanResponderMove: (evt, gesture: PanResponderGestureState) => {
+        const dentro = posicionEnBarra(gesture, evt.nativeEvent.locationX);
+        pintarArrastre(dentro);
+      },
+      onPanResponderRelease: (evt, gesture: PanResponderGestureState) => {
+        const ancho = anchoRef.current || trackWidth || 1;
+        const dentro = posicionEnBarra(gesture, evt.nativeEvent.locationX);
+        const avanza = dentro / ancho >= UMBRAL;
+
+        setDragging(false);
+        setListo(false);
         resetThumb();
+
+        if (!avanza) return;
+        const { generic: isGen, onAdvance, currentIndex: idx } = propsRef.current;
+        if (isGen) {
+          (onAdvance as (nextIndex: number) => void)(idx + 1);
+        } else {
+          (onAdvance as () => void)();
+        }
       },
       onPanResponderTerminate: () => {
+        setDragging(false);
+        setListo(false);
         resetThumb();
       },
     })
@@ -159,14 +209,18 @@ export function SwipeStatusButton(props: Props) {
     extrapolate: 'clamp',
   });
 
-  const onLayout = (event: LayoutChangeEvent) => {
-    const { width } = event.nativeEvent.layout;
-    if (width && Math.abs(width - trackWidth) > 1) setTrackWidth(width);
+  const onLayout = (_event: LayoutChangeEvent) => {
+    medir();
   };
 
   return (
     <View style={styles.container}>
-      <View style={[styles.track, { backgroundColor: current.color }]} onLayout={onLayout}>
+      <View
+        ref={trackRef}
+        style={[styles.track, { backgroundColor: current.color }]}
+        onLayout={onLayout}
+        {...panResponder.panHandlers}
+      >
         <Animated.View
           style={[
             styles.fill,
@@ -174,14 +228,11 @@ export function SwipeStatusButton(props: Props) {
           ]}
         />
         <Text style={styles.label} numberOfLines={1} adjustsFontSizeToFit>
-          {current.label}
+          {dragging && listo ? 'Suelta para confirmar' : current.label}
         </Text>
         {!isFinal && (
-          <Animated.View
-            style={[styles.thumb, { transform: [{ translateX }] }]}
-            {...panResponder.panHandlers}
-          >
-            <Text style={styles.thumbIcon}>→</Text>
+          <Animated.View style={[styles.thumb, { transform: [{ translateX }] }]}>
+            <Text style={styles.thumbIcon}>{listo ? '✓' : '→'}</Text>
           </Animated.View>
         )}
       </View>
@@ -214,6 +265,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     zIndex: 1,
+    paddingHorizontal: THUMB_SIZE + 12,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -221,7 +273,7 @@ const styles = StyleSheet.create({
   thumb: {
     position: 'absolute',
     left: 4,
-    top: 4,
+    top: (TRACK_HEIGHT - THUMB_SIZE) / 2,
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
@@ -237,7 +289,7 @@ const styles = StyleSheet.create({
   },
   thumbIcon: {
     color: '#2D2D2D',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
   },
 });

@@ -153,6 +153,18 @@ export async function fetchServicesForDriver(
   const byId = new Map<string, ServiceAlert>();
   rows.forEach((row) => byId.set(row.id, mapServiceAlertFromDb(row)));
 
+  // Archivado propio del conductor (la bandera del servicio es del proveedor).
+  try {
+    const archivados = await fetchServiceArchivesForDriver(driverId);
+    archivados.forEach((id) => {
+      const service = byId.get(id);
+      if (service) byId.set(id, { ...service, archived: true });
+    });
+  } catch (err) {
+    // Sin la migración 0012 no hay tabla de archivado por conductor: se sigue sin ella.
+    console.warn('[database] no se pudo leer el archivado del conductor:', err);
+  }
+
   return [...byId.values()].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
@@ -278,13 +290,85 @@ export async function rejectApplicationFromDb(serviceId: string, driverId: strin
 export async function updateServiceAlert(
   serviceId: string,
   updates: Partial<ServiceAlert>
-): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  const { error } = await supabase
+): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase
     .from('service_alerts')
     .update(mapServiceAlertToDb(updates))
-    .eq('id', serviceId);
+    .eq('id', serviceId)
+    .select();
   if (error) throw error;
+
+  const fila = (data || [])[0];
+  // Con RLS, un UPDATE que no toca ninguna fila NO es un error: PostgREST
+  // responde 204 y el cliente cree que guardó (así se perdía en silencio el
+  // reporte del conductor y el cambio "reaparecía" al recargar).
+  if (!fila) {
+    throw new Error(
+      'La base no cambió el servicio: o no tienes permiso de escritura sobre él o ya no existe. ' +
+        'El proveedor escribe su propio servicio; el conductor reporta con las funciones de la ' +
+        'migración 0012 (reportar_progreso_servicio / marcar_hito_de_pago).'
+    );
+  }
+  return mapServiceAlertFromDb(fila as DbServiceAlert);
+}
+
+/**
+ * Reporte del conductor (migración 0012). El conductor no puede escribir la fila
+ * de `service_alerts` (RLS: solo el proveedor), así que su avance se guarda con
+ * esta función, que valida que él sea el conductor asignado y que el paso no
+ * retroceda. Devuelve la fila ya actualizada (fuente de verdad para la UI).
+ */
+export async function reportarProgresoDelConductor(
+  serviceId: string,
+  paso: number
+): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.rpc('reportar_progreso_servicio', {
+    p_service_id: serviceId,
+    p_paso: paso,
+  });
+  if (error) throw error;
+  return data ? mapServiceAlertFromDb(data as DbServiceAlert) : null;
+}
+
+/** Comisión entregada / pago recibido, marcados por el conductor (0012). */
+export async function marcarHitoDePagoDelConductor(
+  serviceId: string,
+  hito: 'comision' | 'pago'
+): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.rpc('marcar_hito_de_pago', {
+    p_service_id: serviceId,
+    p_hito: hito,
+  });
+  if (error) throw error;
+  return data ? mapServiceAlertFromDb(data as DbServiceAlert) : null;
+}
+
+/**
+ * Archiva/desarchiva un servicio. El proveedor escribe su fila; un conductor
+ * archiva solo para él (`service_archives`), porque la bandera del servicio es
+ * una sola y ocultarla afectaría al proveedor.
+ */
+export async function archivarServicio(serviceId: string, archivado: boolean): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.rpc('archivar_servicio', {
+    p_service_id: serviceId,
+    p_archivado: archivado,
+  });
+  if (error) throw error;
+}
+
+/** Ids que YO tengo archivados (el conductor archiva para sí mismo). */
+export async function fetchServiceArchivesForDriver(userId: string): Promise<string[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('service_archives')
+    .select('service_id')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return ((data || []) as { service_id: string }[]).map((row) => row.service_id);
 }
 
 /**
@@ -635,7 +719,7 @@ export async function updateGroupMember(
 }
 
 /** ¿El error es "esa función no existe" (migración sin aplicar)? */
-function esFuncionAusente(err: unknown): boolean {
+export function esFuncionAusente(err: unknown): boolean {
   const e = err as { code?: string; message?: string } | null;
   const code = e?.code || '';
   const mensaje = (e?.message || '').toLowerCase();

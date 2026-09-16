@@ -81,12 +81,10 @@ export function ChatScreen() {
     services,
     approveApplication,
     rejectApplicationFrom,
-    updateServiceStatus,
     payCommission,
     confirmDriverPayment,
     startProviderChat,
     markDriverSeenChat,
-    enableSettlement,
     advanceDriverProgress,
     emitChatNotification,
     userProfile,
@@ -289,7 +287,7 @@ export function ChatScreen() {
     navigation.goBack();
   };
 
-  const handleStepAdvance = () => {
+  const handleStepAdvance = async () => {
     if (!service || isAdvancingRef.current) return;
     if (currentStep === 'IN_PROGRESS' && (service.driver_progress_step ?? 0) >= ULTIMO_HITO) {
       // El viaje ya está reportado como finalizado: no se repite el hito.
@@ -299,26 +297,25 @@ export function ChatScreen() {
     isAdvancingRef.current = true;
     setTimeout(() => {
       isAdvancingRef.current = false;
-    }, 500);
+    }, 700);
 
     if (currentStep === 'IN_PROGRESS') {
       if (progressIndex < 0 || progressIndex > 2) return;
 
-      advanceDriverProgress(service.id);
+      // Primero se guarda en la base (el conductor con la RPC de la 0012) y solo
+      // entonces se anuncia el hito: así el proceso no se queda en bucle ni
+      // reaparece al recargar.
+      const guardado = await advanceDriverProgress(service.id);
+      if (!guardado) return;
+
       addSystemMessage(EXECUTION_MESSAGES[progressIndex]);
       emitChatNotification(
         'Hito del viaje',
         EXECUTION_MESSAGES[progressIndex].replace('Sistema: ', '')
       );
-
-      if (progressIndex === 1) {
-        updateServiceStatus(service.id, 'STATUS_IN_PROGRESS');
-      } else if (progressIndex === 2) {
-        updateServiceStatus(service.id, 'STATUS_COMPLETED');
-        enableSettlement(service.id);
-      }
     } else if (currentStep === 'COMMISSION_PAID') {
-      payCommission(service.id);
+      const guardado = await payCommission(service.id);
+      if (!guardado) return;
       addSystemMessage(
         isDriver
           ? 'Sistema: Comisión entregada al proveedor.'
@@ -329,7 +326,8 @@ export function ChatScreen() {
         isDriver ? 'Comisión entregada al proveedor.' : 'Comisión recibida del conductor.'
       );
     } else if (currentStep === 'PAYMENT_RECEIVED') {
-      confirmDriverPayment(service.id);
+      const guardado = await confirmDriverPayment(service.id);
+      if (!guardado) return;
       addSystemMessage(
         isDriver
           ? 'Sistema: Pago recibido. Servicio cerrado.'

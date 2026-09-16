@@ -21,6 +21,10 @@ import {
   fetchGroupMembers,
   fetchGroupsForUser,
   deleteServiceAlert,
+  reportarProgresoDelConductor,
+  marcarHitoDePagoDelConductor,
+  archivarServicio,
+  esFuncionAusente,
   fetchServicesForDriver,
   fetchServicesForProvider,
   insertApplication,
@@ -523,8 +527,8 @@ interface MockContextValue extends MockState {
   setDebtThreshold: (amount: number) => void;
   loadGroupMembers: (groupId: string) => Promise<void>;
   reloadGroups: () => Promise<void>;
-  payCommission: (serviceId: string) => void;
-  confirmDriverPayment: (serviceId: string) => void;
+  payCommission: (serviceId: string) => Promise<boolean>;
+  confirmDriverPayment: (serviceId: string) => Promise<boolean>;
   toggleFavoriteGroup: (groupId: string) => void;
   addGroup: (group: GroupItem) => Promise<void>;
   addMember: (member: GroupMember) => void;
@@ -538,7 +542,7 @@ interface MockContextValue extends MockState {
   startProviderChat: (serviceId: string, driverId: string) => void;
   markDriverSeenChat: (serviceId: string, driverId: string) => void;
   enableSettlement: (serviceId: string) => void;
-  advanceDriverProgress: (serviceId: string) => void;
+  advanceDriverProgress: (serviceId: string) => Promise<boolean>;
 }
 
 const MockContext = createContext<MockContextValue | undefined>(undefined);
@@ -736,6 +740,102 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Escrituras sobre `service_alerts`
+  // El proveedor escribe su propia fila (RLS); el conductor NO puede: su avance y
+  // su cuadre van por las funciones de la migración 0012. Antes el conductor
+  // escribía directo, la base descartaba el UPDATE sin error y el proceso se
+  // quedaba en bucle (volvía al estado real al recargar).
+  // ---------------------------------------------------------------------------
+
+  /** ¿Este servicio lo publiqué yo como proveedor? */
+  const esServicioPropio = (serviceId: string) => {
+    const service = state.services.find((s) => s.id === serviceId);
+    return !!service && service.provider_id === profile?.id;
+  };
+
+  const avisoDeMigracion =
+    'Falta aplicar la migración 0012 (supabase/migrations/0012_reporte_del_conductor.sql) ' +
+    'en Supabase Studio: sin ella el conductor no puede guardar su reporte.';
+
+  const escribirServicio = async (
+    serviceId: string,
+    cambios: Partial<ServiceAlert>,
+    titulo: string
+  ): Promise<boolean> => {
+    if (!isSupabaseConfigured) return true;
+    try {
+      const actualizado = await updateServiceAlert(serviceId, cambios);
+      if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+      return true;
+    } catch (err) {
+      console.error('[MockStore] escribirServicio error:', err);
+      Alert.alert(titulo, esFuncionAusente(err) ? avisoDeMigracion : describeError(err));
+      return false;
+    }
+  };
+
+  /** Avance del viaje (1 ubicado, 2 en proceso, 3 finalizado). */
+  const reportarAvance = async (serviceId: string, paso: number): Promise<boolean> => {
+    if (!isSupabaseConfigured) return true;
+    try {
+      const actualizado = esServicioPropio(serviceId)
+        ? await updateServiceAlert(serviceId, { driver_progress_step: paso })
+        : await reportarProgresoDelConductor(serviceId, paso);
+      if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+      return true;
+    } catch (err) {
+      console.error('[MockStore] reportarAvance error:', err);
+      Alert.alert(
+        'No se pudo reportar el avance',
+        esFuncionAusente(err) ? avisoDeMigracion : describeError(err)
+      );
+      return false;
+    }
+  };
+
+  /** Cuadre del servicio: comisión entregada / pago recibido. */
+  const marcarHitoDelCuadre = async (
+    serviceId: string,
+    hito: 'comision' | 'pago',
+    cambios: Partial<ServiceAlert>
+  ): Promise<boolean> => {
+    if (!isSupabaseConfigured) return true;
+    try {
+      const actualizado = esServicioPropio(serviceId)
+        ? await updateServiceAlert(serviceId, cambios)
+        : await marcarHitoDePagoDelConductor(serviceId, hito);
+      if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+      return true;
+    } catch (err) {
+      console.error('[MockStore] marcarHitoDelCuadre error:', err);
+      Alert.alert(
+        'No se pudo marcar el cuadre',
+        esFuncionAusente(err) ? avisoDeMigracion : describeError(err)
+      );
+      return false;
+    }
+  };
+
+  const archivarSegunRol = async (serviceId: string, archivado: boolean) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      if (esServicioPropio(serviceId)) {
+        await updateServiceAlert(serviceId, { archived: archivado });
+      } else {
+        // El conductor archiva solo para él (service_archives): la bandera del
+        // servicio es una sola y ocultarla afectaría al proveedor.
+        await archivarServicio(serviceId, archivado);
+      }
+    } catch (err) {
+      console.error('[MockStore] archivarSegunRol error:', err);
+      Alert.alert(
+        'No se pudo archivar',
+        esFuncionAusente(err) ? avisoDeMigracion : describeError(err)
+      );
+    }
+  };
+
   // Identidad estable: las pantallas que la usan dentro de un useEffect ya no
   // disparan el efecto en cada render del store (antes se pedían los miembros
   // del grupo en bucle).
@@ -838,15 +938,25 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'CANCEL_APPLICATION', payload: { serviceId, driverId } });
     },
     updateServiceStatus: async (serviceId, status) => {
-      await persistService(serviceId, { status });
+      if (esServicioPropio(serviceId)) {
+        const ok = await escribirServicio(serviceId, { status }, 'No se pudo cambiar el estado');
+        if (!ok) return;
+      } else {
+        // El conductor no puede escribir la fila: reporta el paso equivalente.
+        const paso = status === 'STATUS_COMPLETED' ? 3 : status === 'STATUS_IN_PROGRESS' ? 2 : null;
+        if (paso) {
+          const ok = await reportarAvance(serviceId, paso);
+          if (!ok) return;
+        }
+      }
       dispatch({ type: 'UPDATE_SERVICE_STATUS', payload: { serviceId, status } });
     },
     archiveService: async (serviceId) => {
-      await persistService(serviceId, { archived: true });
+      await archivarSegunRol(serviceId, true);
       dispatch({ type: 'ARCHIVE_SERVICE', payload: { serviceId } });
     },
     unarchiveService: async (serviceId) => {
-      await persistService(serviceId, { archived: false });
+      await archivarSegunRol(serviceId, false);
       dispatch({ type: 'UNARCHIVE_SERVICE', payload: { serviceId } });
     },
     addMessage: (serviceId, message) =>
@@ -857,12 +967,16 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     loadGroupMembers,
     reloadGroups,
     payCommission: async (serviceId) => {
-      await persistService(serviceId, { commission_paid: true });
+      const ok = await marcarHitoDelCuadre(serviceId, 'comision', { commission_paid: true });
+      if (!ok) return false;
       dispatch({ type: 'PAY_COMMISSION', payload: { serviceId } });
+      return true;
     },
     confirmDriverPayment: async (serviceId) => {
-      await persistService(serviceId, { driver_payment_received: true });
+      const ok = await marcarHitoDelCuadre(serviceId, 'pago', { driver_payment_received: true });
+      if (!ok) return false;
       dispatch({ type: 'CONFIRM_DRIVER_PAYMENT', payload: { serviceId } });
+      return true;
     },
     toggleFavoriteGroup: async (groupId) => {
       const group = state.groups.find((g) => g.id === groupId);
@@ -980,14 +1094,25 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'MARK_DRIVER_SEEN_CHAT', payload: { serviceId, driverId } });
     },
     enableSettlement: async (serviceId) => {
-      await persistService(serviceId, { settlement_enabled: true });
+      // El conductor ya la activa en la base con su paso 3; el proveedor la escribe.
+      if (esServicioPropio(serviceId)) {
+        const ok = await escribirServicio(
+          serviceId,
+          { settlement_enabled: true },
+          'No se pudo abrir el cuadre'
+        );
+        if (!ok) return;
+      }
       dispatch({ type: 'ENABLE_SETTLEMENT', payload: { serviceId } });
     },
     advanceDriverProgress: async (serviceId) => {
       const service = state.services.find((s) => s.id === serviceId);
-      const nextStep = (service?.driver_progress_step ?? 0) + 1;
-      await persistService(serviceId, { driver_progress_step: nextStep });
+      // El paso se calcula sobre el estado actual y la base solo permite avanzar.
+      const paso = Math.min((service?.driver_progress_step ?? 0) + 1, 3);
+      const ok = await reportarAvance(serviceId, paso);
+      if (!ok) return false;
       dispatch({ type: 'ADVANCE_DRIVER_PROGRESS', payload: { serviceId } });
+      return true;
     },
   };
 
