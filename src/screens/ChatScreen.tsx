@@ -668,6 +668,23 @@ export function ChatScreen() {
     );
   }
 
+  /**
+   * Salir del chat.
+   *
+   * Con conductor ya asignado se vuelve a la pantalla PRINCIPAL: el proveedor llega
+   * aquí desde "Postulantes" (para aceptar), así que un `goBack` lo devolvía al
+   * listado de postulantes de un servicio que ya tiene conductor —lo pidió el
+   * usuario—. Para el conductor aceptado vale lo mismo (su viaje ya está en el
+   * inicio, con la franja verde).
+   */
+  const handleBack = () => {
+    if (service.assigned_driver_id) {
+      navigation.navigate('Main');
+      return;
+    }
+    navigation.goBack();
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -683,7 +700,7 @@ export function ChatScreen() {
               : driverName,
           })}
           subtitle={rolDeLaContraparte(isDriver)}
-          onBack={() => navigation.goBack()}
+          onBack={handleBack}
           onSettings={() => navigation.navigate('Settings')}
           searchOpen={buscarAbierto}
           query={consulta}

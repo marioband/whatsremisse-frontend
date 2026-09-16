@@ -1,5 +1,6 @@
 import { AZUL, OSCURO, ROJO_ACCION, TEXTO_TENUE, VERDE_ACCION } from './colors';
 import { estaCompartido } from './gruposDeServicio';
+import { EstadoDeMiPostulacion } from './miPostulacion';
 import { ServiceAlert } from '../types';
 
 export interface EstadoServicio {
@@ -21,6 +22,16 @@ export interface EstadoServicio {
  * curso y el pago son comunes a los dos.
  */
 export type VistaServicio = 'PROVEEDOR' | 'CONDUCTOR';
+
+/**
+ * Lo que el conductor necesita saber de SU postulación para pintar la franja:
+ * si sigue esperando, en qué puesto va, o si ya quedó fuera.
+ */
+export interface MiPostulacionEnLaTarjeta {
+  estado: EstadoDeMiPostulacion;
+  /** Puesto de la postulación (lo asigna la base); solo se muestra si se conoce. */
+  numero?: number | null;
+}
 
 /** El ciclo de pago terminó: el servicio está pagado y cerrado. */
 export function estaPagadoYCerrado(service: ServiceAlert): boolean {
@@ -45,7 +56,8 @@ export function estaPagadoYCerrado(service: ServiceAlert): boolean {
 export function estadoDeServicio(
   service: ServiceAlert,
   postulantesPendientes = 0,
-  vista: VistaServicio = 'PROVEEDOR'
+  vista: VistaServicio = 'PROVEEDOR',
+  miPostulacion?: MiPostulacionEnLaTarjeta
 ): EstadoServicio {
   const paso = service.driver_progress_step ?? 0;
   const asignado = !!service.assigned_driver_id;
@@ -64,7 +76,31 @@ export function estadoDeServicio(
     return { etiqueta: 'Pendiente de pago', color: OSCURO, compartido };
   }
 
+  // La situación del conductor frente a la alerta también se dice en la franja (ya no
+  // con una capa sobre la tarjeta): azul con su puesto, y rojo si quedó fuera —lo
+  // rechazó el proveedor o lo cubrió otro conductor, que la base marca igual—.
+  if (soyConductor && miPostulacion?.estado === 'RECHAZADA') {
+    return {
+      etiqueta: 'Servicio rechazado o cubierto por otro conductor',
+      color: ROJO_ACCION,
+      compartido,
+    };
+  }
+
+  if (soyConductor && miPostulacion?.estado === 'PENDIENTE') {
+    const numero = miPostulacion.numero;
+    return {
+      etiqueta: numero ? `Postulante ${numero}` : 'Postulación enviada',
+      color: AZUL,
+      compartido,
+    };
+  }
+
   if (asignado) {
+    // Aceptado y todavía sin arrancar: verde y a la vista, con la instrucción.
+    if (soyConductor && paso === 0) {
+      return { etiqueta: 'Servicio aceptado, toca para iniciar', color: VERDE_ACCION, compartido };
+    }
     if (paso === 1) return { etiqueta: 'Conductor ubicado', color: OSCURO, compartido };
     if (paso === 2) return { etiqueta: 'Servicio en Proceso', color: OSCURO, compartido };
     return { etiqueta: 'En camino', color: AZUL, compartido };

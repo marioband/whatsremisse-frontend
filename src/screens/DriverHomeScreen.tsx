@@ -12,7 +12,8 @@ import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
 import { esProgramado } from '../lib/datetime';
-import { estaPagadoYCerrado } from '../lib/estadoServicio';
+import { estaPagadoYCerrado, MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
+import { estadoDeMiPostulacion } from '../lib/miPostulacion';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
 import { isVisibleAsDriver } from '../lib/visibility';
@@ -101,6 +102,32 @@ export function DriverHomeScreen() {
   const isOpenAndAvailable = (service: ServiceAlert) =>
     service.status === 'STATUS_OPEN' && !service.assigned_driver_id && !getApplication(service.id);
 
+  /**
+   * Mi postulación en este servicio, para la franja de la tarjeta: el puesto que
+   * ocupo, o el aviso de que quedé fuera. Es la única señal del estado de la
+   * tarjeta del conductor.
+   */
+  const miPostulacionDe = (service: ServiceAlert): MiPostulacionEnLaTarjeta => ({
+    estado: estadoDeMiPostulacion(applications, service.id, currentDriverId),
+    numero:
+      applications.find((a) => a.serviceId === service.id && a.driverId === currentDriverId)
+        ?.order ?? null,
+  });
+
+  /**
+   * Postulé y quedé fuera —me rechazó el proveedor o eligió a otro conductor, que la
+   * base marca igual— pero el servicio sigue vivo: lo sigo viendo con la franja roja
+   * que me lo explica.
+   *
+   * Antes desaparecía de mi lista (una postulación rechazada ya no cuenta como
+   * "postulado") y solo volvía si el proveedor editaba el servicio.
+   */
+  const quedeFueraDelServicio = (service: ServiceAlert) =>
+    estadoDeMiPostulacion(applications, service.id, currentDriverId) === 'RECHAZADA' &&
+    service.status !== 'STATUS_COMPLETED' &&
+    service.status !== 'STATUS_CANCELLED' &&
+    !estaPagadoYCerrado(service);
+
   const driverVehicleType = userProfile?.vehicleType || 'Auto';
 
   const matchesVehicleType = (service: ServiceAlert) => {
@@ -123,18 +150,24 @@ export function DriverHomeScreen() {
       // Pagado y cerrado: el viaje ya se consulta en "Mis servicios" (con su
       // historial de pago), no en el inicio.
       if (estaPagadoYCerrado(s)) return false;
-      if (!isVisibleAsDriver(s, currentDriverId, groupIdList)) return false;
+      if (!isVisibleAsDriver(s, currentDriverId, groupIdList) && !quedeFueraDelServicio(s)) {
+        return false;
+      }
       if (!matchesVehicleType(s)) return false;
       return true;
     });
     return filtered;
-  }, [services, showArchived, driverVehicleType, currentDriverId, groupIdList]);
+  }, [services, showArchived, driverVehicleType, currentDriverId, groupIdList, applications]);
 
   // "Todos": alertas nuevas, postuladas y aceptadas (la tarjeta verde permanece aquí hasta tocarla)
   const todosServices = useMemo(
     () =>
       myActiveServices.filter(
-        (s) => isOpenAndAvailable(s) || !!getApplication(s.id) || isAcceptedByMe(s)
+        (s) =>
+          isOpenAndAvailable(s) ||
+          !!getApplication(s.id) ||
+          isAcceptedByMe(s) ||
+          quedeFueraDelServicio(s)
       ),
     [myActiveServices, applications]
   );
@@ -382,11 +415,9 @@ export function DriverHomeScreen() {
               onCancelApplication={application ? () => handleCancelApplication(item.id) : undefined}
               showArchived={showArchived}
               disableSwipe={inEnProceso || inReservas || accepted}
-              sinCapa={inEnProceso}
               showReservaIndicator={inReservas}
               isApplied={!!application}
-              isAccepted={accepted}
-              applicationOrder={application?.order || null}
+              miPostulacion={miPostulacionDe(item)}
               notificationCount={notificationCount}
               groupName={displayGroupName}
             />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-import { estadoDeServicio, VistaServicio } from '../lib/estadoServicio';
+import { estadoDeServicio, MiPostulacionEnLaTarjeta, VistaServicio } from '../lib/estadoServicio';
 import { ServiceAlert } from '../types';
 
 interface Props {
@@ -11,9 +11,12 @@ interface Props {
   /**
    * Lado desde el que se mira la tarjeta: el conductor nunca ve la jerga del
    * proveedor ("Buscando conductores", "Servicio vencido"), ve lo suyo
-   * ("Disponible", "No disponible").
+   * (su puesto de postulante, "Servicio aceptado, toca para iniciar",
+   * "Servicio rechazado o cubierto por otro conductor").
    */
   vista?: VistaServicio;
+  /** Solo para la vista del conductor: su propia postulación en este servicio. */
+  miPostulacion?: MiPostulacionEnLaTarjeta;
   /** Línea extra bajo el estado (p. ej. el tiempo de gracia de un vencido). */
   detalle?: string;
   /** Radio de las esquinas inferiores, para encajar con la tarjeta que hay encima. */
@@ -28,10 +31,11 @@ export function EstadoServicioBar({
   service,
   postulantes = 0,
   vista = 'PROVEEDOR',
+  miPostulacion,
   detalle,
   radius = 12,
 }: Props) {
-  const { etiqueta, color } = estadoDeServicio(service, postulantes, vista);
+  const { etiqueta, color } = estadoDeServicio(service, postulantes, vista, miPostulacion);
 
   // Sin nada que comunicar no se pinta franja: la tarjeta del conductor ya muestra
   // el servicio, la hora, el recorrido y la tarifa.

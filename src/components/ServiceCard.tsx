@@ -2,8 +2,10 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 
+import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
 import { textoProgramado } from '../lib/datetime';
+import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { ServiceAlert } from '../types';
 
 interface Props {
@@ -16,10 +18,12 @@ interface Props {
   disableSwipe?: boolean;
   showReservaIndicator?: boolean;
   isApplied?: boolean;
-  isAccepted?: boolean;
-  /** Sin capa de color: es la tarjeta del apartado "En proceso". */
-  sinCapa?: boolean;
-  applicationOrder?: number | null;
+  /**
+   * Mi postulación en este servicio: con ella la franja inferior dice el puesto
+   * ("Postulante 2"), que quedó aceptado o que quedó fuera. Antes esto se pintaba
+   * como una capa sobre toda la tarjeta (azul al postularse, verde al ser aceptado).
+   */
+  miPostulacion?: MiPostulacionEnLaTarjeta;
   notificationCount?: number;
   groupName?: string;
 }
@@ -34,22 +38,13 @@ export function ServiceCard({
   disableSwipe = false,
   showReservaIndicator = false,
   isApplied = false,
-  isAccepted = false,
-  sinCapa = false,
-  applicationOrder = null,
+  miPostulacion,
   notificationCount = 0,
   groupName,
 }: Props) {
   const swipeableRef = useRef<Swipeable>(null);
 
-  // Las dos capas (azul de postulación y verde de aceptado) son translúcidas y
-  // con la misma opacidad: en ambas el conductor tiene que poder leer los datos
-  // del servicio que quedan debajo, así que el texto va con la paleta oscura
-  // normal y solo el rótulo de la capa lleva su propio color.
   const cardBackground = COLORS.cardNew;
-
-  /** Con capa (azul o verde) los datos del servicio se leen sobre el color. */
-  const isActive = isApplied || isAccepted;
 
   const getAction = () => {
     if (showArchived) {
@@ -136,7 +131,7 @@ export function ServiceCard({
             </Text>
           </View>
 
-          {service.observations && service.observations.length > 0 && !isActive && (
+          {service.observations && service.observations.length > 0 && (
             <View style={styles.observationsRow}>
               {service.observations.map((obs, index) => (
                 <View key={index} style={styles.observationBadge}>
@@ -154,21 +149,6 @@ export function ServiceCard({
           <Text style={styles.paymentMethod}>{service.payment_method || 'BCP'}</Text>
         </View>
 
-        {/* Overlay para postulaciones */}
-        {isApplied && applicationOrder && (
-          <View style={styles.appliedOverlay}>
-            <Text style={styles.appliedText}>Postulante N° {applicationOrder}</Text>
-          </View>
-        )}
-
-        {/* Overlay para servicio aceptado (sin capa en el apartado "En proceso") */}
-        {isAccepted && !sinCapa && (
-          <View style={styles.acceptedOverlay}>
-            <Text style={styles.acceptedText}>Servicio Aceptado</Text>
-            <Text style={styles.acceptedSubtext}>Toca para iniciar</Text>
-          </View>
-        )}
-
         {/* Indicador de reserva */}
         {showReservaIndicator && (
           <View style={styles.reservaBadge}>
@@ -177,11 +157,17 @@ export function ServiceCard({
         )}
       </View>
 
-      {/* La tarjeta del conductor NO lleva franja de estado (regla fijada con el
-          usuario): su estado se comunica con la capa (azul = postulado, verde =
-          aceptado) y el resto del proceso vive en el chat. La franja es de las
-          tarjetas del proveedor (ProviderServiceCard/ProviderHomeScreen) y de la
-          insignia de Mis servicios. */}
+      {/* Franja inferior: la MISMA que usan las tarjetas del proveedor, ahora para el
+          estado del conductor — azul con su puesto de postulante, verde si lo
+          aceptaron y rojo si quedó fuera (rechazado o cubierto por otro)—. Antes el
+          estado se pintaba como una capa sobre toda la tarjeta; el usuario lo cambió
+          justamente por esto. Va dentro de la tarjeta para heredar su redondeo. */}
+      <EstadoServicioBar
+        service={service}
+        vista="CONDUCTOR"
+        miPostulacion={miPostulacion}
+        radius={RADIUS.xl}
+      />
     </TouchableOpacity>
   );
 
@@ -311,41 +297,6 @@ const styles = StyleSheet.create({
   estimate: {
     color: '#888',
     fontSize: 12,
-  },
-  appliedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.cardAppliedOverlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: RADIUS.xl,
-  },
-  appliedText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    // Sobre la capa translúcida el blanco no se lee: el número va en azul de
-    // marca oscuro para que destaque sin tapar los datos del servicio.
-    color: COLORS.primaryDark,
-    textAlign: 'center',
-  },
-  acceptedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    // Misma transparencia que la capa azul de "Postulante N° X".
-    backgroundColor: COLORS.cardAcceptedOverlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: RADIUS.xl,
-  },
-  acceptedText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    // El blanco sobre el verde translúcido queda en 2,2:1: no se lee.
-    color: COLORS.cardAcceptedInk,
-    textAlign: 'center',
-  },
-  acceptedSubtext: {
-    fontSize: 13,
-    color: COLORS.cardAcceptedInk,
-    marginTop: 4,
   },
   observationsRow: {
     flexDirection: 'row',
