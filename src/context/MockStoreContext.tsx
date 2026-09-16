@@ -154,6 +154,7 @@ type MockAction =
   | { type: 'CANCEL_APPLICATION'; payload: { serviceId: string; driverId: string } }
   | { type: 'UPDATE_SERVICE_STATUS'; payload: { serviceId: string; status: ServiceStatus } }
   | { type: 'REMOVE_SERVICE'; payload: { serviceId: string } }
+  | { type: 'REMOVE_APPLICATION'; payload: { serviceId: string; driverId: string } }
   | { type: 'ARCHIVE_SERVICE'; payload: { serviceId: string } }
   | { type: 'UNARCHIVE_SERVICE'; payload: { serviceId: string } }
   | { type: 'ADD_MESSAGE'; payload: { serviceId: string; message: Message } }
@@ -176,6 +177,9 @@ type MockAction =
   | { type: 'MARK_NOTIFIED'; payload: { serviceId: string } }
   | { type: 'START_PROVIDER_CHAT'; payload: { serviceId: string; driverId: string } }
   | { type: 'MARK_DRIVER_SEEN_CHAT'; payload: { serviceId: string; driverId: string } };
+
+/** Cada cuánto se rehace la carga completa como respaldo del tiempo real. */
+const REFRESCO_MS = 15000;
 
 const initialState: MockState = {
   role: 'DRIVER',
@@ -272,6 +276,15 @@ function mockReducer(state: MockState, action: MockAction): MockState {
                 driver_progress_step: 0,
               }
             : s
+        ),
+      };
+
+    case 'REMOVE_APPLICATION':
+      return {
+        ...state,
+        applications: state.applications.filter(
+          (a) =>
+            !(a.serviceId === action.payload.serviceId && a.driverId === action.payload.driverId)
         ),
       };
 
@@ -626,6 +639,12 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     };
 
     load();
+
+    // Respaldo de sincronización: si el proyecto no tiene activado el tiempo real
+    // (falta aplicar la migración 0011), las tarjetas se refrescan igual cada
+    // REFRESCO_MS, así un servicio nuevo o anulado no se queda pegado.
+    const intervalo = setInterval(load, REFRESCO_MS);
+    return () => clearInterval(intervalo);
   }, [session?.user, profile]);
 
   // Hidrata los datos del perfil (nombres, DNI, vehículo, fotos y datos de pago)
@@ -639,8 +658,17 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_USER_PROFILE', payload: userProfileFromAuthProfile(profile) });
   }, [profile]);
 
-  // Sincronización en tiempo real
-  useRealtimeServices((service) => {
+  // Sincronización en tiempo real: las tarjetas aparecen y desaparecen en los
+  // dos dispositivos sin recargar.
+  useRealtimeServices((cambio) => {
+    // La tarjeta anulada llega como DELETE y sin `new`: si no se mira `old`, el
+    // evento se descarta y la tarjeta se queda en el otro dispositivo.
+    if (cambio.evento === 'DELETE') {
+      dispatch({ type: 'REMOVE_SERVICE', payload: { serviceId: cambio.id } });
+      return;
+    }
+
+    const service = cambio.servicio;
     // Solo aceptamos lo que corresponde a alguna de las dos identidades (ver
     // src/lib/visibility.ts): antes entraba cualquier fila y por eso todos veían
     // los servicios de todos.
@@ -652,6 +680,14 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
     const exists = state.services.some((s) => s.id === service.id);
     dispatch({ type: exists ? 'UPDATE_SERVICE' : 'ADD_SERVICE', payload: service });
+
+    // Al conductor le acaban de compartir un servicio: se le avisa en el momento.
+    if (cambio.evento === 'INSERT' && service.provider_id !== myId) {
+      notifyHighPriority('Nuevo servicio compartido', service.title, {
+        serviceId: service.id,
+        type: 'NEW_SERVICE',
+      });
+    }
   });
 
   useRealtimeGroups(session?.user?.id, (group) => {
@@ -662,7 +698,16 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_GROUPS', payload: next });
   });
 
-  useRealtimeApplications((application) => {
+  useRealtimeApplications((cambio) => {
+    if (cambio.evento === 'DELETE') {
+      dispatch({
+        type: 'REMOVE_APPLICATION',
+        payload: { serviceId: cambio.serviceId, driverId: cambio.driverId },
+      });
+      return;
+    }
+
+    const application = cambio.aplicacion;
     const exists = state.applications.some(
       (a) => a.serviceId === application.serviceId && a.driverId === application.driverId
     );

@@ -1,17 +1,29 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { GroupItem } from '../context/MockStoreContext';
 import { supabase } from '../lib/supabase';
 
+let canalGrupos = 0;
+
+/**
+ * Mis grupos en vivo (rol y favorito). Al cambiar cualquier grupo se releen mis
+ * membresías: la tabla `group_members` no se puede filtrar por usuario en el
+ * canal, así que se resuelve con una consulta.
+ */
 export function useRealtimeGroups(
   userId: string | undefined,
   onChange: (group: GroupItem) => void
 ) {
+  const callbackRef = useRef(onChange);
+  useEffect(() => {
+    callbackRef.current = onChange;
+  }, [onChange]);
+
   useEffect(() => {
     if (!userId) return;
 
     const channel = supabase
-      .channel('groups-realtime')
+      .channel(`groups-realtime-${++canalGrupos}`)
       .on(
         'postgres_changes',
         {
@@ -28,7 +40,7 @@ export function useRealtimeGroups(
           data.forEach((row: any) => {
             const group = row.groups;
             if (group) {
-              onChange({
+              callbackRef.current({
                 id: group.id,
                 name: group.name,
                 role: row.role,
@@ -41,7 +53,7 @@ export function useRealtimeGroups(
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, [userId, onChange]);
+  }, [userId]);
 }
