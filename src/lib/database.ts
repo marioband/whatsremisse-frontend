@@ -314,6 +314,26 @@ export async function updateServiceAlert(
 }
 
 /**
+ * Reintenta una llamada cuando el error es "no encuentro la función": eso pasa
+ * cuando la migración acaba de aplicarse y PostgREST todavía no recargó su
+ * esquema. Un segundo intento (con una pausa corta) lo resuelve sin molestar al
+ * usuario con un aviso que no es su problema.
+ */
+async function conReintentoDeEsquema<T>(llamada: () => Promise<T>, intentos = 2): Promise<T> {
+  let ultimoError: unknown;
+  for (let intento = 0; intento < intentos; intento += 1) {
+    try {
+      return await llamada();
+    } catch (err) {
+      ultimoError = err;
+      if (!esFuncionAusente(err)) throw err;
+      await new Promise((resolver) => setTimeout(resolver, 1500));
+    }
+  }
+  throw ultimoError;
+}
+
+/**
  * Reporte del conductor (migración 0012). El conductor no puede escribir la fila
  * de `service_alerts` (RLS: solo el proveedor), así que su avance se guarda con
  * esta función, que valida que él sea el conductor asignado y que el paso no
@@ -324,11 +344,14 @@ export async function reportarProgresoDelConductor(
   paso: number
 ): Promise<ServiceAlert | null> {
   if (!isSupabaseConfigured) return null;
-  const { data, error } = await supabase.rpc('reportar_progreso_servicio', {
-    p_service_id: serviceId,
-    p_paso: paso,
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: fila, error } = await supabase.rpc('reportar_progreso_servicio', {
+      p_service_id: serviceId,
+      p_paso: paso,
+    });
+    if (error) throw error;
+    return fila;
   });
-  if (error) throw error;
   return data ? mapServiceAlertFromDb(data as DbServiceAlert) : null;
 }
 
@@ -338,11 +361,14 @@ export async function marcarHitoDePagoDelConductor(
   hito: 'comision' | 'pago'
 ): Promise<ServiceAlert | null> {
   if (!isSupabaseConfigured) return null;
-  const { data, error } = await supabase.rpc('marcar_hito_de_pago', {
-    p_service_id: serviceId,
-    p_hito: hito,
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: fila, error } = await supabase.rpc('marcar_hito_de_pago', {
+      p_service_id: serviceId,
+      p_hito: hito,
+    });
+    if (error) throw error;
+    return fila;
   });
-  if (error) throw error;
   return data ? mapServiceAlertFromDb(data as DbServiceAlert) : null;
 }
 
@@ -353,11 +379,14 @@ export async function marcarHitoDePagoDelConductor(
  */
 export async function archivarServicio(serviceId: string, archivado: boolean): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error } = await supabase.rpc('archivar_servicio', {
-    p_service_id: serviceId,
-    p_archivado: archivado,
+  await conReintentoDeEsquema(async () => {
+    const { error } = await supabase.rpc('archivar_servicio', {
+      p_service_id: serviceId,
+      p_archivado: archivado,
+    });
+    if (error) throw error;
+    return true;
   });
-  if (error) throw error;
 }
 
 /** Ids que YO tengo archivados (el conductor archiva para sí mismo). */

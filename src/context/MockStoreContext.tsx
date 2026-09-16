@@ -755,8 +755,15 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   };
 
   const avisoDeMigracion =
-    'Falta aplicar la migración 0012 (supabase/migrations/0012_reporte_del_conductor.sql) ' +
-    'en Supabase Studio: sin ella el conductor no puede guardar su reporte.';
+    'El backend no encontró la función. Si la migración 0012 ' +
+    '(supabase/migrations/0012_reporte_del_conductor.sql) ya está aplicada, espera unos segundos ' +
+    "y reintenta: PostgREST recarga su esquema solo (o fuérzalo con NOTIFY pgrst, 'reload schema';).";
+
+  /** Texto del aviso: el detalle crudo del backend va siempre, para diagnosticar. */
+  const detalleDe = (err: unknown, titulo: string) =>
+    esFuncionAusente(err)
+      ? `${avisoDeMigracion}\n\nDetalle: ${describeError(err)}`
+      : `${titulo}\n\n${describeError(err)}`;
 
   const escribirServicio = async (
     serviceId: string,
@@ -770,7 +777,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (err) {
       console.error('[MockStore] escribirServicio error:', err);
-      Alert.alert(titulo, esFuncionAusente(err) ? avisoDeMigracion : describeError(err));
+      Alert.alert(titulo, detalleDe(err, titulo));
       return false;
     }
   };
@@ -786,10 +793,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (err) {
       console.error('[MockStore] reportarAvance error:', err);
-      Alert.alert(
-        'No se pudo reportar el avance',
-        esFuncionAusente(err) ? avisoDeMigracion : describeError(err)
-      );
+      Alert.alert('No se pudo reportar el avance', detalleDe(err, 'El backend rechazó el reporte'));
       return false;
     }
   };
@@ -809,10 +813,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (err) {
       console.error('[MockStore] marcarHitoDelCuadre error:', err);
-      Alert.alert(
-        'No se pudo marcar el cuadre',
-        esFuncionAusente(err) ? avisoDeMigracion : describeError(err)
-      );
+      Alert.alert('No se pudo marcar el cuadre', detalleDe(err, 'El backend rechazó el cuadre'));
       return false;
     }
   };
@@ -829,10 +830,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error('[MockStore] archivarSegunRol error:', err);
-      Alert.alert(
-        'No se pudo archivar',
-        esFuncionAusente(err) ? avisoDeMigracion : describeError(err)
-      );
+      Alert.alert('No se pudo archivar', detalleDe(err, 'El backend rechazó el archivado'));
     }
   };
 
