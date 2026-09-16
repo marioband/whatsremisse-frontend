@@ -9,7 +9,7 @@ import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
-import { estaPagadoYCerrado } from '../lib/estadoServicio';
+import { cierreDeLaAlerta, estaPagadoYCerrado, estaVencido } from '../lib/estadoServicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -42,22 +42,19 @@ const isReservation = (service: ServiceAlert): boolean => {
   return scheduled.getTime() > Date.now() + TWO_HOURS_MS;
 };
 
-const isExpired = (service: ServiceAlert): boolean => {
-  const scheduled = getScheduledAt(service);
-  if (!scheduled) return false;
-  return scheduled.getTime() < Date.now();
-};
+/**
+ * Una alerta se cierra sola a los 20 minutos (al momento) o a los 10 (con hora
+ * específica): de ahí en adelante el proveedor la ve como vencida y tiene 24 horas
+ * para editarla y reenviarla antes de que desaparezca. La regla vive en
+ * `estadoServicio` (`cierreDeLaAlerta`), aquí solo se consulta.
+ */
+const isExpired = (service: ServiceAlert): boolean => estaVencido(service);
 
-const isGraceExpired = (service: ServiceAlert): boolean => {
-  const scheduled = getScheduledAt(service);
-  if (!scheduled) return false;
-  return Date.now() - scheduled.getTime() > TWENTY_FOUR_HOURS_MS;
-};
+const isGraceExpired = (service: ServiceAlert): boolean =>
+  Date.now() - cierreDeLaAlerta(service) > TWENTY_FOUR_HOURS_MS;
 
 const getGraceCountdown = (service: ServiceAlert): string => {
-  const scheduled = getScheduledAt(service);
-  if (!scheduled) return '';
-  const remaining = TWENTY_FOUR_HOURS_MS - (Date.now() - scheduled.getTime());
+  const remaining = TWENTY_FOUR_HOURS_MS - (Date.now() - cierreDeLaAlerta(service));
   if (remaining <= 0) return 'Eliminando...';
   const hours = Math.floor(remaining / (60 * 60 * 1000));
   const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));

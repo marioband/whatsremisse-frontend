@@ -30,7 +30,12 @@ import {
   proximaHoraRedondeada,
 } from '../lib/datetime';
 import { filaDestino, FILA_ORIGEN, zIndexDeFila } from '../lib/desplegables';
-import { estaVencido } from '../lib/estadoServicio';
+import {
+  estaVencido,
+  AVISO_DE_CIERRE_MINUTOS,
+  MINUTOS_AL_MOMENTO,
+  MINUTOS_CON_HORA,
+} from '../lib/estadoServicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { hayApiDeDirecciones } from '../lib/places';
 import { esPremium } from '../lib/premium';
@@ -52,6 +57,8 @@ const ROJO_ACCION = '#C2333F';
 const PAYMENT_TYPES = ['BCP', 'Yape', 'Plin', 'Efectivo', 'Otro'];
 const PAYMENT_DATES = ['Al término', 'Durante el día', 'Mañana', 'Escribir'];
 const UNIT_TYPES = ['Todos', 'Auto compacto', 'Auto', 'Camioneta', 'Camioneta 3 filas'];
+/** Momento del servicio: "Al momento" es el default; la hora específica abre el reloj. */
+const MOMENTOS_DEL_SERVICIO = ['Al momento', 'Hora específica'];
 
 export function CreateServiceScreen() {
   const navigation = useNavigation<CreateNav>();
@@ -93,6 +100,12 @@ export function CreateServiceScreen() {
   const [observation, setObservation] = useState(editingService?.observations?.join(', ') || '');
   const [fechaServicio, setFechaServicio] = useState<Date>(initialDateTime.fecha);
   const [horaServicio, setHoraServicio] = useState<Date>(initialDateTime.hora);
+  /**
+   * Momento del servicio: **por defecto "Al momento"** (regla del usuario). Solo al
+   * elegir "Hora específica" se abren la fecha y el reloj; y la alerta dura distinto
+   * según el modo (20 minutos al momento, 10 con hora específica, ver `estadoServicio`).
+   */
+  const [alMomento, setAlMomento] = useState(!editingService?.scheduled_at);
   const [abriendoCalendario, setAbriendoCalendario] = useState(false);
   const [abriendoReloj, setAbriendoReloj] = useState(false);
   /**
@@ -177,14 +190,20 @@ export function CreateServiceScreen() {
   /** Valida lo que hay en pantalla y arma el servicio (null si falta algo). */
   const construirServicio = (): ServiceAlert | null => {
     if (!origin || !destinations[0] || !fare) {
-      Alert.alert('Campos incompletos', 'Completa origen, destino, tarifa, fecha y hora.');
+      Alert.alert(
+        'Campos incompletos',
+        alMomento
+          ? 'Completa origen, destino y tarifa.'
+          : 'Completa origen, destino, tarifa, fecha y hora.'
+      );
       return null;
     }
 
     const programada = combinarFechaYHora(fechaServicio, horaServicio);
-    // Coherencia (por si la pantalla quedó abierta y el momento elegido ya pasó):
-    // se ajusta la hora y se avisa, en vez de guardar algo imposible.
-    if (programada.getTime() <= Date.now()) {
+    // Coherencia solo con hora específica: un servicio "al momento" se publica ya.
+    // (Por si la pantalla quedó abierta y el momento elegido ya pasó: se ajusta la
+    // hora y se avisa, en vez de guardar algo imposible.)
+    if (!alMomento && programada.getTime() <= Date.now()) {
       const ajustada = horaCoherente(fechaServicio, horaServicio);
       setHoraServicio(ajustada);
       Alert.alert(
@@ -213,7 +232,7 @@ export function CreateServiceScreen() {
       intermediateStops.length > 0 ? `Paradas: ${intermediateStops.join(', ')}` : '',
     ].filter(Boolean);
 
-    const scheduledAt = programada.toISOString();
+    const scheduledAt = alMomento ? null : programada.toISOString();
     const providerName = profile?.full_name || editingService?.provider_name || 'Proveedor';
 
     const base: ServiceAlert = editingService ?? {
@@ -504,36 +523,67 @@ export function CreateServiceScreen() {
           ))}
         </View>
 
-        {/* Fecha y hora del servicio */}
-        <Text style={styles.label}>Fecha del servicio</Text>
-        <TouchableOpacity
-          style={styles.pickerField}
-          onPress={() => setAbriendoCalendario(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.pickerIcon}>🗓️</Text>
-          <Text style={styles.pickerValue}>{formatearFecha(fechaServicio)}</Text>
-          {etiquetaRelativa(fechaServicio) ? (
-            <Text style={styles.pickerHint}>{etiquetaRelativa(fechaServicio)}</Text>
-          ) : null}
-          <Text style={styles.pickerChevron}>›</Text>
-        </TouchableOpacity>
-
+        {/* Momento del servicio: "Al momento" por defecto (regla del usuario). Solo
+            al elegir "Hora específica" se abren el calendario y el reloj. */}
         <Text style={styles.label}>Hora del servicio</Text>
-        <TouchableOpacity
-          style={[styles.pickerField, coherenciaPendiente && styles.pickerFieldError]}
-          onPress={() => setAbriendoReloj(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.pickerIcon}>🕐</Text>
-          <Text style={styles.pickerValue}>{formatearHora(horaServicio)}</Text>
-          <Text style={styles.pickerChevron}>›</Text>
-        </TouchableOpacity>
-        {restringeHoy ? (
+        <View style={styles.optionsRow}>
+          {MOMENTOS_DEL_SERVICIO.map((opcion) => {
+            const activo = (opcion === 'Al momento') === alMomento;
+            return (
+              <TouchableOpacity
+                key={opcion}
+                style={[styles.optionChip, activo && styles.optionChipActive]}
+                onPress={() => setAlMomento(opcion === 'Al momento')}
+              >
+                <Text style={[styles.optionChipText, activo && styles.optionChipTextActive]}>
+                  {opcion}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {alMomento ? (
           <Text style={styles.helperText}>
-            Hoy solo se pueden elegir horas posteriores a las {formatearHora(desdeHoy)}.
+            La alerta se publica ahora y se mantiene {MINUTOS_AL_MOMENTO} minutos en los grupos; en
+            los últimos {AVISO_DE_CIERRE_MINUTOS} avisa con cuenta atrás.
           </Text>
-        ) : null}
+        ) : (
+          <>
+            <Text style={styles.label}>Fecha del servicio</Text>
+            <TouchableOpacity
+              style={styles.pickerField}
+              onPress={() => setAbriendoCalendario(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.pickerIcon}>🗓️</Text>
+              <Text style={styles.pickerValue}>{formatearFecha(fechaServicio)}</Text>
+              {etiquetaRelativa(fechaServicio) ? (
+                <Text style={styles.pickerHint}>{etiquetaRelativa(fechaServicio)}</Text>
+              ) : null}
+              <Text style={styles.pickerChevron}>›</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.label}>Hora específica</Text>
+            <TouchableOpacity
+              style={[styles.pickerField, coherenciaPendiente && styles.pickerFieldError]}
+              onPress={() => setAbriendoReloj(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.pickerIcon}>🕐</Text>
+              <Text style={styles.pickerValue}>{formatearHora(horaServicio)}</Text>
+              <Text style={styles.pickerChevron}>›</Text>
+            </TouchableOpacity>
+            {restringeHoy ? (
+              <Text style={styles.helperText}>
+                Hoy solo se pueden elegir horas posteriores a las {formatearHora(desdeHoy)}.
+              </Text>
+            ) : null}
+            <Text style={styles.helperText}>
+              La alerta se mantiene {MINUTOS_CON_HORA} minutos en los grupos.
+            </Text>
+          </>
+        )}
 
         {/* Observación */}
         <Text style={styles.label}>Observación</Text>

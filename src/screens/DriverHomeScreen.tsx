@@ -1,6 +1,6 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { Fab } from '../components/Fab';
@@ -25,6 +25,8 @@ type HomeNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
 const BLUE = '#3F51B5';
 const LIGHT_BG = '#F0F2F5';
 const BADGE_RED = '#C2333F';
+/** Cuánto se queda a la vista la tarjeta del rechazo recién llegado (3 segundos). */
+const VISTA_DE_RECHAZO_MS = 3000;
 
 type StatusFilter = 'Todos' | 'En proceso' | 'Reservas';
 
@@ -89,14 +91,22 @@ export function DriverHomeScreen() {
 
   const isScheduledService = (service: ServiceAlert) => esProgramado(service);
 
-  const isAcceptedByMe = (service: ServiceAlert) =>
+  /**
+   * El servicio ya es MÍO: el proveedor me aceptó (aunque el viaje todavía no arranque)
+   * y sigue vivo. Antes solo contaba desde que había movimiento (en camino / en el
+   * origen), así que la tarjeta recién aceptada se quedaba en "Todos".
+   */
+  const esAceptadoMio = (service: ServiceAlert) =>
     service.assigned_driver_id === currentDriverId &&
-    (service.status === 'STATUS_EN_ROUTE_ORIGIN' || service.status === 'STATUS_AT_ORIGIN');
+    service.status !== 'STATUS_COMPLETED' &&
+    service.status !== 'STATUS_CANCELLED' &&
+    !estaPagadoYCerrado(service);
 
   const isReserva = (service: ServiceAlert) =>
-    isAcceptedByMe(service) && isScheduledService(service);
+    esAceptadoMio(service) && isScheduledService(service);
+  /** Aceptado pasa a "En proceso" (regla del usuario); las reservas a su apartado. */
   const isEnProceso = (service: ServiceAlert) =>
-    (isAcceptedByMe(service) && !isScheduledService(service)) ||
+    (esAceptadoMio(service) && !isScheduledService(service)) ||
     service.status === 'STATUS_IN_PROGRESS';
 
   const isOpenAndAvailable = (service: ServiceAlert) =>
@@ -115,18 +125,91 @@ export function DriverHomeScreen() {
   });
 
   /**
-   * Postulé y quedé fuera —me rechazó el proveedor o eligió a otro conductor, que la
-   * base marca igual— pero el servicio sigue vivo: lo sigo viendo con la franja roja
-   * que me lo explica.
+   * Rechazos recién llegados: la tarjeta con el aviso se muestra **3 segundos** y
+   * después desaparece de la lista (regla del usuario). Antes se quedaba para siempre.
    *
-   * Antes desaparecía de mi lista (una postulación rechazada ya no cuenta como
-   * "postulado") y solo volvía si el proveedor editaba el servicio.
+   * El reloj arranca cuando el conductor PUEDE verla: si el rechazo llega mientras
+   * está en el chat, se guarda y se muestran los 3 segundos al volver al inicio.
    */
-  const quedeFueraDelServicio = (service: ServiceAlert) =>
-    estadoDeMiPostulacion(applications, service.id, currentDriverId) === 'RECHAZADA' &&
-    service.status !== 'STATUS_COMPLETED' &&
-    service.status !== 'STATUS_CANCELLED' &&
-    !estaPagadoYCerrado(service);
+  const [rechazosVisibles, setRechazosVisibles] = useState<Record<string, number>>({});
+  const rechazosYaVistos = useRef<Set<string>>(new Set());
+  const rechazosPendientes = useRef<Set<string>>(new Set());
+  const inicioConFoco = useRef(false);
+  const lineaBaseLista = useRef(false);
+
+  const mostrarRechazos = (ids: string[]) => {
+    if (ids.length === 0) return;
+    if (!inicioConFoco.current) {
+      ids.forEach((id) => rechazosPendientes.current.add(id));
+      return;
+    }
+    const hasta = Date.now() + VISTA_DE_RECHAZO_MS;
+    setRechazosVisibles((actuales) => ({
+      ...actuales,
+      ...Object.fromEntries(ids.map((id) => [id, hasta])),
+    }));
+  };
+
+  useEffect(() => {
+    if (!currentDriverId) return;
+
+    // Volvió a postularse: se olvida el rechazo, así un rechazo posterior sí avisa.
+    applications
+      .filter((a) => a.driverId === currentDriverId && a.status !== 'REJECTED')
+      .forEach((a) => {
+        rechazosYaVistos.current.delete(a.serviceId);
+        rechazosPendientes.current.delete(a.serviceId);
+      });
+
+    const rechazados = applications.filter(
+      (a) => a.driverId === currentDriverId && a.status === 'REJECTED'
+    );
+    if (!lineaBaseLista.current) {
+      // Primera lectura: lo que ya estaba rechazado no es noticia de ahora.
+      rechazados.forEach((a) => rechazosYaVistos.current.add(a.serviceId));
+      if (applications.length > 0) lineaBaseLista.current = true;
+      return;
+    }
+
+    const nuevos = rechazados.filter((a) => !rechazosYaVistos.current.has(a.serviceId));
+    if (nuevos.length === 0) return;
+    nuevos.forEach((a) => rechazosYaVistos.current.add(a.serviceId));
+    mostrarRechazos(nuevos.map((a) => a.serviceId));
+  }, [applications, currentDriverId]);
+
+  /** Al volver al inicio se muestran los rechazos que llegaron mientras estaba fuera. */
+  useFocusEffect(
+    useCallback(() => {
+      inicioConFoco.current = true;
+      const pendientes = [...rechazosPendientes.current];
+      if (pendientes.length > 0) {
+        rechazosPendientes.current.clear();
+        const hasta = Date.now() + VISTA_DE_RECHAZO_MS;
+        setRechazosVisibles((actuales) => ({
+          ...actuales,
+          ...Object.fromEntries(pendientes.map((id) => [id, hasta])),
+        }));
+      }
+      return () => {
+        inicioConFoco.current = false;
+      };
+    }, [])
+  );
+
+  /** Un solo temporizador: al cumplirse los 3 segundos la tarjeta se va sola. */
+  useEffect(() => {
+    if (Object.keys(rechazosVisibles).length === 0) return;
+    const temporizador = setTimeout(() => {
+      setRechazosVisibles((actuales) =>
+        Object.fromEntries(Object.entries(actuales).filter(([, hasta]) => hasta > Date.now()))
+      );
+    }, VISTA_DE_RECHAZO_MS + 120);
+    return () => clearTimeout(temporizador);
+  }, [rechazosVisibles]);
+
+  /** ¿Todavía toca pintar la tarjeta del rechazo recién llegado? */
+  const rechazoReciente = (service: ServiceAlert) =>
+    (rechazosVisibles[service.id] ?? 0) > Date.now();
 
   const driverVehicleType = userProfile?.vehicleType || 'Auto';
 
@@ -150,7 +233,7 @@ export function DriverHomeScreen() {
       // Pagado y cerrado: el viaje ya se consulta en "Mis servicios" (con su
       // historial de pago), no en el inicio.
       if (estaPagadoYCerrado(s)) return false;
-      if (!isVisibleAsDriver(s, currentDriverId, groupIdList) && !quedeFueraDelServicio(s)) {
+      if (!isVisibleAsDriver(s, currentDriverId, groupIdList) && !rechazoReciente(s)) {
         return false;
       }
       if (!matchesVehicleType(s)) return false;
@@ -159,17 +242,14 @@ export function DriverHomeScreen() {
     return filtered;
   }, [services, showArchived, driverVehicleType, currentDriverId, groupIdList, applications]);
 
-  // "Todos": alertas nuevas, postuladas y aceptadas (la tarjeta verde permanece aquí hasta tocarla)
+  // "Todos": alertas nuevas y postuladas. Lo ya aceptado se fue a "En proceso"
+  // (regla del usuario); el rechazo recién llegado se asoma 3 segundos y se va.
   const todosServices = useMemo(
     () =>
       myActiveServices.filter(
-        (s) =>
-          isOpenAndAvailable(s) ||
-          !!getApplication(s.id) ||
-          isAcceptedByMe(s) ||
-          quedeFueraDelServicio(s)
+        (s) => isOpenAndAvailable(s) || !!getApplication(s.id) || rechazoReciente(s)
       ),
-    [myActiveServices, applications]
+    [myActiveServices, applications, rechazosVisibles]
   );
 
   // Ordenamiento estricto en "Todos": Aceptados > Postulados > Nuevos
@@ -179,7 +259,7 @@ export function DriverHomeScreen() {
     const news: ServiceAlert[] = [];
 
     todosServices.forEach((s) => {
-      if (isAcceptedByMe(s)) accepted.push(s);
+      if (esAceptadoMio(s)) accepted.push(s);
       else if (getApplication(s.id)) applied.push(s);
       else news.push(s);
     });
@@ -230,7 +310,7 @@ export function DriverHomeScreen() {
     // significaba reportar el hito 2 ("Servicio en Proceso") de un solo toque,
     // saltándose "Ubicado". La tarjeta aceptada ya aparece en "En proceso"
     // desde que el proveedor acepta.
-    if (isAcceptedByMe(service)) {
+    if (esAceptadoMio(service)) {
       navigation.navigate('Chat', {
         serviceId: service.id,
         driverId: currentDriverId,
@@ -396,7 +476,7 @@ export function DriverHomeScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const application = getApplication(item.id);
-          const accepted = isAcceptedByMe(item);
+          const accepted = esAceptadoMio(item);
           const inEnProceso = activeStatus === 'En proceso';
           const inReservas = activeStatus === 'Reservas';
           const notificationCount = getDriverNotification(item.id);

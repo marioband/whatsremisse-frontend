@@ -101,7 +101,7 @@ export interface ServiceAlert {
   payment_term?: string;
   payment_method?: string;
   // Fecha/hora programada del servicio (ISO 8601)
-  scheduled_at?: string;
+  scheduled_at?: string | null;
   // Progreso del conductor en el slider de chat
   driver_progress_step?: number;
   // Estados de liquidación P2P

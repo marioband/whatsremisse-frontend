@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import { estadoDeServicio, MiPostulacionEnLaTarjeta, VistaServicio } from '../lib/estadoServicio';
@@ -35,7 +35,24 @@ export function EstadoServicioBar({
   detalle,
   radius = 12,
 }: Props) {
-  const { etiqueta, color } = estadoDeServicio(service, postulantes, vista, miPostulacion);
+  const { etiqueta, color, porCerrar, aviso } = estadoDeServicio(
+    service,
+    postulantes,
+    vista,
+    miPostulacion
+  );
+
+  /**
+   * La cuenta atrás tiene que ser REAL: mientras a la alerta le queden menos de 5
+   * minutos se vuelve a calcular cada segundo (el texto sale de `estadoDeServicio`,
+   * que mira el reloj en cada render).
+   */
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!porCerrar) return;
+    const temporizador = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(temporizador);
+  }, [porCerrar]);
 
   // Sin nada que comunicar no se pinta franja: la tarjeta del conductor ya muestra
   // el servicio, la hora, el recorrido y la tarifa.
@@ -53,6 +70,7 @@ export function EstadoServicioBar({
       ]}
     >
       <Text style={styles.texto}>{etiqueta}</Text>
+      {!!aviso && <Text style={styles.detalle}>{aviso}</Text>}
       {!!detalle && <Text style={styles.detalle}>{detalle}</Text>}
     </View>
   );

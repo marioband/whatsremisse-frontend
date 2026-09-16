@@ -256,11 +256,13 @@ const styles = StyleSheet.create({
   dispatchType: {
     fontSize: 12,
     color: '#666',
-    marginBottom: 8,
   },
   dispatchRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // Con `center` la hora y el rótulo "Reserva" quedaban desalineados (la hora
+    // arrastraba un marginBottom propio que la subía respecto del texto). Ahora las
+    // dos cajas comparten línea base: es lo que pidió el usuario.
+    alignItems: 'baseline',
     marginBottom: 8,
   },
   reservaLabel: {
