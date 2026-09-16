@@ -36,6 +36,12 @@ export interface MiPostulacionEnLaTarjeta {
   estado: EstadoDeMiPostulacion;
   /** Puesto de la postulación (lo asigna la base); solo se muestra si se conoce. */
   numero?: number | null;
+  /**
+   * El conductor ya cumplió la orden "toca para iniciar" en este servicio (la
+   * tarjeta ya vive en el apartado "En proceso", aunque todavía no haya reportado
+   * ningún hito). La marca es local del dispositivo: `lib/inicioDelViaje.ts`.
+   */
+  iniciado?: boolean;
 }
 
 /** El ciclo de pago terminó: el servicio está pagado y cerrado. */
@@ -105,9 +111,17 @@ export function estadoDeServicio(
   }
 
   if (asignado) {
-    // Aceptado y todavía sin arrancar: verde y a la vista, con la instrucción.
+    // Aceptado y todavía sin arrancar: verde y a la vista. La franja del conductor
+    // lleva la instrucción mientras no haya cumplido el toque; una vez cumplido (su
+    // tarjeta ya vive en "En proceso") la instrucción sobra y queda el estado.
     if (soyConductor && paso === 0) {
-      return { etiqueta: 'Servicio aceptado, toca para iniciar', color: VERDE_ACCION, compartido };
+      return {
+        etiqueta: miPostulacion?.iniciado
+          ? 'Servicio aceptado'
+          : 'Servicio aceptado, toca para iniciar',
+        color: VERDE_ACCION,
+        compartido,
+      };
     }
     if (paso === 1) return { etiqueta: 'Conductor ubicado', color: OSCURO, compartido };
     if (paso === 2) return { etiqueta: 'Servicio en Proceso', color: OSCURO, compartido };

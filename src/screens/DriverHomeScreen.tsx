@@ -13,6 +13,13 @@ import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import {
+  guardarIniciosDelViaje,
+  IniciosDelViaje,
+  leerIniciosDelViaje,
+  marcarInicio,
+  yaInicio,
+} from '../lib/inicioDelViaje';
+import {
   contarEnProceso,
   contarReservas,
   esAceptadoMio as esAceptadoMioDe,
@@ -52,7 +59,6 @@ export function DriverHomeScreen() {
     unarchiveService,
     applyToService,
     cancelApplication,
-    advanceDriverProgress,
     driverDebt,
     debtThreshold,
     emitChatNotification,
@@ -99,10 +105,30 @@ export function DriverHomeScreen() {
 
   /**
    * El servicio ya es MÍO: el proveedor me aceptó (aunque el viaje todavía no
-   * arranque) y sigue vivo. Es la condición que lleva la tarjeta al apartado
-   * "En proceso", sin importar si la alerta tiene hora específica o es al momento.
+   * arranque) y sigue vivo. Con esto se reconoce la tarjeta aceptada: se queda en
+   * "Todos" con la franja "Servicio aceptado, toca para iniciar" hasta que el
+   * conductor cumple ese toque, y entonces pasa a "En proceso".
    */
   const esAceptadoMio = (service: ServiceAlert) => esAceptadoMioDe(service, currentDriverId);
+
+  /**
+   * Marca local de "ya cumplí el toque de inicio" (ver `lib/inicioDelViaje.ts`): el
+   * toque NO reporta ningún hito, solo mueve la tarjeta a "En proceso". Se guarda en
+   * el dispositivo, así que sobrevive a recargar la app.
+   */
+  const [inicios, setInicios] = useState<IniciosDelViaje>({});
+
+  useEffect(() => {
+    let vivo = true;
+    leerIniciosDelViaje().then((guardados) => {
+      if (vivo) setInicios(guardados);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  const inicioCumplido = (serviceId: string) => yaInicio(inicios, serviceId, currentDriverId);
 
   /**
    * Mi postulación en este servicio, para la franja de la tarjeta: el puesto que
@@ -114,6 +140,7 @@ export function DriverHomeScreen() {
     return {
       estado: estadoEfectivoDeMiPostulacion(service, fila),
       numero: fila?.order ?? null,
+      iniciado: inicioCumplido(service.id),
     };
   };
 
@@ -223,8 +250,9 @@ export function DriverHomeScreen() {
       tipoDeVehiculo: driverVehicleType,
       mostrarArchivados: showArchived,
       rechazoReciente,
+      inicioCumplido,
     }),
-    [currentDriverId, groupIdList, driverVehicleType, showArchived, rechazosVisibles]
+    [currentDriverId, groupIdList, driverVehicleType, showArchived, rechazosVisibles, inicios]
   );
 
   const myActiveServices = useMemo(
@@ -258,13 +286,13 @@ export function DriverHomeScreen() {
 
   // Contadores para badges (misma condición que las listas de cada apartado)
   const enProcesoCount = useMemo(
-    () => contarEnProceso(myActiveServices, currentDriverId),
-    [myActiveServices, currentDriverId]
+    () => contarEnProceso(myActiveServices, opcionesDelInicio),
+    [myActiveServices, opcionesDelInicio]
   );
 
   const reservasCount = useMemo(
-    () => contarReservas(myActiveServices, currentDriverId),
-    [myActiveServices, currentDriverId]
+    () => contarReservas(myActiveServices, opcionesDelInicio),
+    [myActiveServices, opcionesDelInicio]
   );
 
   const handleCardPress = async (service: ServiceAlert) => {
@@ -287,14 +315,16 @@ export function DriverHomeScreen() {
       `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Conductor';
 
     // Servicio aceptado: la franja dice "Servicio aceptado, toca para iniciar", así
-    // que ESTE toque cumple esa orden y es el inicio del viaje (regla del usuario):
-    // reporta el primer hito y la tarjeta pasa al apartado "En proceso". Antes se
-    // escribía STATUS_IN_PROGRESS, que en el store es el hito 2, y eso se saltaba
-    // "Ubicado". Si el viaje ya está iniciado, el toque solo abre el chat: los
-    // hitos siguientes (En proceso → Finalizado) los reporta el deslizamiento.
+    // que ESTE toque cumple esa orden: la tarjeta pasa al apartado "En proceso"
+    // (regla del usuario). El toque NO reporta ningún hito —el conductor todavía no
+    // se ha dirigido al punto de origen, así que "Ubicado" no tiene sentido ahí—:
+    // eso se marca en el dispositivo (`lib/inicioDelViaje.ts`) y los hitos del viaje
+    // los reporta el deslizamiento dentro del chat (Ubicado → En proceso → Finalizado).
     if (esAceptadoMio(service)) {
-      if (esperaElToqueDeInicio(service, currentDriverId)) {
-        await advanceDriverProgress(service.id);
+      if (esperaElToqueDeInicio(service, currentDriverId, inicioCumplido(service.id))) {
+        const actualizados = marcarInicio(inicios, service.id, currentDriverId);
+        setInicios(actualizados);
+        await guardarIniciosDelViaje(actualizados);
       }
       navigation.navigate('Chat', {
         serviceId: service.id,

@@ -61,22 +61,32 @@ export function pasoDelViaje(service: ServiceAlert): number {
 /**
  * Aceptado pero **todavía sin iniciar**: el conductor no ha cumplido aún la orden
  * "toca para iniciar" (regla del usuario). Su tarjeta se queda en "Todos" con la
- * franja verde y solo después del toque —que es el inicio del viaje— pasa a
- * "En proceso". El toque escribe el primer hito (el deslizamiento del chat sigue
- * con "En proceso" y "Finalizado").
+ * franja verde y solo después del toque pasa a "En proceso".
+ *
+ * El toque **no reporta ningún hito** (`yaIniciadoElViaje` es la marca local del
+ * dispositivo, ver `lib/inicioDelViaje.ts`): el conductor todavía no se ha dirigido al
+ * punto de origen, así que "Ubicado" lo activa él cuando desliza la barra en el chat.
  */
-export function esperaElToqueDeInicio(service: ServiceAlert, userId: string): boolean {
-  return esAceptadoMio(service, userId) && pasoDelViaje(service) < 1;
+export function esperaElToqueDeInicio(
+  service: ServiceAlert,
+  userId: string,
+  yaIniciadoElViaje = false
+): boolean {
+  return esAceptadoMio(service, userId) && pasoDelViaje(service) < 1 && !yaIniciadoElViaje;
 }
 
 /**
  * Apartado "En proceso": el viaje **ya se inició** (el conductor cumplió el toque de
- * inicio o reportó algún hito), sin importar si el servicio tiene hora específica o
+ * inicio o ya reportó algún hito), sin importar si el servicio tiene hora específica o
  * es "al momento".
  */
-export function esEnProcesoDelConductor(service: ServiceAlert, userId: string): boolean {
+export function esEnProcesoDelConductor(
+  service: ServiceAlert,
+  userId: string,
+  yaIniciadoElViaje = false
+): boolean {
   return (
-    (esAceptadoMio(service, userId) && pasoDelViaje(service) >= 1) ||
+    (esAceptadoMio(service, userId) && (pasoDelViaje(service) >= 1 || yaIniciadoElViaje)) ||
     service.status === 'STATUS_IN_PROGRESS'
   );
 }
@@ -168,10 +178,15 @@ export interface OpcionesDelInicioDelConductor {
   mostrarArchivados?: boolean;
   /** Ventana de 3 segundos del rechazo recién llegado (la gestiona la pantalla). */
   rechazoReciente?: (serviceId: string) => boolean;
+  /** El conductor ya cumplió el toque de inicio de ese servicio (marca local). */
+  inicioCumplido?: (serviceId: string) => boolean;
 }
 
 /** Siempre false: el valor por defecto de "no acabo de ser rechazado". */
 const nuncaReciente = () => false;
+
+/** Siempre false: el valor por defecto de "todavía no cumplió el toque de inicio". */
+const nuncaIniciado = () => false;
 
 /**
  * Lista base del inicio del conductor: las tarjetas que PUEDE ver, ya sin
@@ -227,10 +242,13 @@ export function serviciosDelInicio(
   opciones: OpcionesDelInicioDelConductor
 ): ServiceAlert[] {
   const reciente = opciones.rechazoReciente ?? nuncaReciente;
+  const inicioCumplido = opciones.inicioCumplido ?? nuncaIniciado;
 
   if (filtro === 'En proceso') {
     return base.filter(
-      (s) => esEnProcesoDelConductor(s, opciones.userId) && s.status !== 'STATUS_COMPLETED'
+      (s) =>
+        esEnProcesoDelConductor(s, opciones.userId, inicioCumplido(s.id)) &&
+        s.status !== 'STATUS_COMPLETED'
     );
   }
   if (filtro === 'Reservas') {
@@ -240,23 +258,28 @@ export function serviciosDelInicio(
     (s) =>
       estaDisponibleParaPostular(s, applications, opciones.userId) ||
       tengoPostulacionViva(applications, s.id, opciones.userId) ||
-      esAceptadoEsperandoElToque(s, opciones.userId) ||
+      esperaElToqueDeInicio(s, opciones.userId, inicioCumplido(s.id)) ||
       reciente(s.id)
   );
 }
 
-/** Alias corto para la regla que deja la tarjeta aceptada en "Todos". */
-function esAceptadoEsperandoElToque(service: ServiceAlert, userId: string): boolean {
-  return esperaElToqueDeInicio(service, userId);
-}
-
 /** Contador de la píldora "En proceso" (la MISMA condición que la lista). */
-export function contarEnProceso(base: ServiceAlert[], userId: string): number {
-  return base.filter((s) => esEnProcesoDelConductor(s, userId) && s.status !== 'STATUS_COMPLETED')
-    .length;
+export function contarEnProceso(
+  base: ServiceAlert[],
+  opciones: OpcionesDelInicioDelConductor
+): number {
+  const inicioCumplido = opciones.inicioCumplido ?? nuncaIniciado;
+  return base.filter(
+    (s) =>
+      esEnProcesoDelConductor(s, opciones.userId, inicioCumplido(s.id)) &&
+      s.status !== 'STATUS_COMPLETED'
+  ).length;
 }
 
 /** Contador de la píldora "Reservas" (la MISMA condición que la lista). */
-export function contarReservas(base: ServiceAlert[], userId: string): number {
-  return base.filter((s) => esReservaDelConductor(s, userId)).length;
+export function contarReservas(
+  base: ServiceAlert[],
+  opciones: OpcionesDelInicioDelConductor
+): number {
+  return base.filter((s) => esReservaDelConductor(s, opciones.userId)).length;
 }
