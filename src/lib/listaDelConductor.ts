@@ -1,6 +1,7 @@
 import { Application, ServiceAlert } from '../types';
 import { esProgramado } from './datetime';
 import { estaPagadoYCerrado } from './estadoServicio';
+import { huellaDeLaAlerta } from './marcaDePostulacion';
 import { EstadoDeMiPostulacion } from './miPostulacion';
 import { isVisibleAsDriver } from './visibility';
 
@@ -116,41 +117,30 @@ export function coincideConElVehiculo(service: ServiceAlert, tipoDeVehiculo: str
   return requerido === tipoDeVehiculo;
 }
 
-const enFecha = (valor?: string | null): number | null => {
-  if (!valor) return null;
-  const t = new Date(valor).getTime();
-  return Number.isFinite(t) ? t : null;
-};
-
 /**
  * ¿El rechazo de MI postulación sigue en pie?
  *
  * Regla del usuario: rechazado el conductor, ya no puede ver el servicio, **a
- * menos que el proveedor edite la alerta** (eso reabre la cola: la migración 0016
- * descarta las postulaciones viejas y él puede volver a postularse).
+ * menos que el proveedor edite la alerta** (esa edición descarta la cola vieja por
+ * la migración 0016 y él puede volver a postularse).
  *
- * El discriminador no puede ser `applications.updated_at` —esa columna no
- * existe—, así que se comparan dos marcas que la base sí escribe:
- *   - `applications.created_at`: cuándo me postulé (la app lo refresca en cada
- *     nueva postulación, así que es mi última postulación).
- *   - `service_alerts.updated_at`: la última escritura del proveedor sobre la
- *     alerta (editar, reenviar o aceptar a otro la tocan; rechazarme a mí NO la
- *     toca, porque el rechazo solo escribe `applications`).
- * Si la alerta se escribió DESPUÉS de mi postulación, es que el proveedor la
- * editó y el rechazo caducó. Sin marcas (datos viejos o sin Supabase) se respeta
- * el rechazo: quitarla de la vista es lo que pidió el usuario.
+ * El discriminador NO puede ser una comparación de tiempos: rechazar también
+ * escribe en `service_alerts` (la app reabre la alerta con `status` y
+ * `assigned_driver_id`), así que `updated_at` queda siempre después de mi
+ * postulación y todo rechazo parecería una edición (ese era el fallo: la tarjeta se
+ * veía como disponible, sin el mensaje). Se compara la HUELLA de los campos
+ * editables (`lib/marcaDePostulacion.ts`): si no cambió, nadie editó la alerta.
+ * Sin marca (postulación vieja, otro dispositivo) manda el rechazo, que es la regla
+ * principal que pidió el usuario.
  */
 export function rechazoVigente(
   service: ServiceAlert,
-  filaDeMiPostulacion: Application | undefined
+  filaDeMiPostulacion: Application | undefined,
+  huellaAlPostular?: string
 ): boolean {
   if (!filaDeMiPostulacion || filaDeMiPostulacion.status !== 'REJECTED') return false;
-
-  const alerta = enFecha(service.updated_at);
-  const postulacion = enFecha(filaDeMiPostulacion.createdAt);
-  if (alerta === null || postulacion === null) return true;
-
-  return alerta <= postulacion;
+  if (!huellaAlPostular) return true;
+  return huellaAlPostular === huellaDeLaAlerta(service);
 }
 
 /**
@@ -163,12 +153,13 @@ export function rechazoVigente(
  */
 export function estadoEfectivoDeMiPostulacion(
   service: ServiceAlert,
-  filaDeMiPostulacion: Application | undefined
+  filaDeMiPostulacion: Application | undefined,
+  huellaAlPostular?: string
 ): EstadoDeMiPostulacion {
   if (!filaDeMiPostulacion) return 'NINGUNA';
   if (filaDeMiPostulacion.status === 'PENDING') return 'PENDIENTE';
   if (filaDeMiPostulacion.status === 'APPROVED') return 'ACEPTADA';
-  return rechazoVigente(service, filaDeMiPostulacion) ? 'RECHAZADA' : 'NINGUNA';
+  return rechazoVigente(service, filaDeMiPostulacion, huellaAlPostular) ? 'RECHAZADA' : 'NINGUNA';
 }
 
 export interface OpcionesDelInicioDelConductor {
@@ -180,6 +171,8 @@ export interface OpcionesDelInicioDelConductor {
   rechazoReciente?: (serviceId: string) => boolean;
   /** El conductor ya cumplió el toque de inicio de ese servicio (marca local). */
   inicioCumplido?: (serviceId: string) => boolean;
+  /** Huella de la alerta cuando me postulé (marca local): ver `rechazoVigente`. */
+  huellaAlPostular?: (serviceId: string) => string | undefined;
 }
 
 /** Siempre false: el valor por defecto de "no acabo de ser rechazado". */
@@ -187,6 +180,9 @@ const nuncaReciente = () => false;
 
 /** Siempre false: el valor por defecto de "todavía no cumplió el toque de inicio". */
 const nuncaIniciado = () => false;
+
+/** Sin huella guardada: el rechazo se respeta (regla principal del usuario). */
+const nuncaPostulado = () => undefined;
 
 /**
  * Lista base del inicio del conductor: las tarjetas que PUEDE ver, ya sin
@@ -200,6 +196,7 @@ export function listaBaseDelConductor(
 ): ServiceAlert[] {
   const { userId, groupIds, tipoDeVehiculo, mostrarArchivados, rechazoReciente } = opciones;
   const reciente = rechazoReciente ?? nuncaReciente;
+  const huellaAlPostular = opciones.huellaAlPostular ?? nuncaPostulado;
   const vistos = new Set<string>();
 
   return services.filter((s) => {
@@ -221,7 +218,7 @@ export function listaBaseDelConductor(
     // …pero si el rechazo sigue en pie, la tarjeta se va al cumplirse los 3
     // segundos: el conductor ya no ve el servicio.
     const fila = filaDeMiPostulacion(applications, s.id, userId);
-    if (rechazoVigente(s, fila) && !recienRechazado) return false;
+    if (rechazoVigente(s, fila, huellaAlPostular(s.id)) && !recienRechazado) return false;
 
     if (!coincideConElVehiculo(s, tipoDeVehiculo)) return false;
     return true;

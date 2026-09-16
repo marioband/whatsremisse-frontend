@@ -29,6 +29,11 @@ import {
   listaBaseDelConductor,
   serviciosDelInicio,
 } from '../lib/listaDelConductor';
+import {
+  huellaDeMiPostulacion,
+  HuellasDePostulacion,
+  leerHuellasDePostulacion,
+} from '../lib/marcaDePostulacion';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -117,11 +122,22 @@ export function DriverHomeScreen() {
    * el dispositivo, así que sobrevive a recargar la app.
    */
   const [inicios, setInicios] = useState<IniciosDelViaje>({});
+  /** Huella de la alerta cuando me postulé (para saber si el proveedor la editó). */
+  const [huellas, setHuellas] = useState<HuellasDePostulacion>({});
+
+  /** Relee las marcas del dispositivo (al montar y después de postularme). */
+  const releerMarcas = useCallback(async () => {
+    const [i, h] = await Promise.all([leerIniciosDelViaje(), leerHuellasDePostulacion()]);
+    setInicios(i);
+    setHuellas(h);
+  }, []);
 
   useEffect(() => {
     let vivo = true;
-    leerIniciosDelViaje().then((guardados) => {
-      if (vivo) setInicios(guardados);
+    Promise.all([leerIniciosDelViaje(), leerHuellasDePostulacion()]).then(([i, h]) => {
+      if (!vivo) return;
+      setInicios(i);
+      setHuellas(h);
     });
     return () => {
       vivo = false;
@@ -129,6 +145,8 @@ export function DriverHomeScreen() {
   }, []);
 
   const inicioCumplido = (serviceId: string) => yaInicio(inicios, serviceId, currentDriverId);
+  const huellaAlPostular = (serviceId: string) =>
+    huellaDeMiPostulacion(huellas, serviceId, currentDriverId);
 
   /**
    * Mi postulación en este servicio, para la franja de la tarjeta: el puesto que
@@ -138,7 +156,7 @@ export function DriverHomeScreen() {
   const miPostulacionDe = (service: ServiceAlert): MiPostulacionEnLaTarjeta => {
     const fila = filaDeMiPostulacion(applications, service.id, currentDriverId);
     return {
-      estado: estadoEfectivoDeMiPostulacion(service, fila),
+      estado: estadoEfectivoDeMiPostulacion(service, fila, huellaAlPostular(service.id)),
       numero: fila?.order ?? null,
       iniciado: inicioCumplido(service.id),
     };
@@ -212,9 +230,24 @@ export function DriverHomeScreen() {
       }
       return () => {
         inicioConFoco.current = false;
+        // Si sale de la pantalla antes de que se cumplan los 3 segundos, el aviso se
+        // vuelve a mostrar al volver: el conductor tiene que alcanzar a verlo.
+        const ahora = Date.now();
+        Object.entries(visiblesRef.current).forEach(([id, hasta]) => {
+          if (hasta > ahora) rechazosPendientes.current.add(id);
+        });
       };
     }, [])
   );
+
+  /**
+   * Espejo de `rechazosVisibles` para poder mirarlo desde el cleanup del foco (ahí
+   * no se puede leer el estado sin re-renderizar).
+   */
+  const visiblesRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    visiblesRef.current = rechazosVisibles;
+  }, [rechazosVisibles]);
 
   /** Un solo temporizador: al cumplirse los 3 segundos la tarjeta se va sola. */
   useEffect(() => {
@@ -251,8 +284,17 @@ export function DriverHomeScreen() {
       mostrarArchivados: showArchived,
       rechazoReciente,
       inicioCumplido,
+      huellaAlPostular,
     }),
-    [currentDriverId, groupIdList, driverVehicleType, showArchived, rechazosVisibles, inicios]
+    [
+      currentDriverId,
+      groupIdList,
+      driverVehicleType,
+      showArchived,
+      rechazosVisibles,
+      inicios,
+      huellas,
+    ]
   );
 
   const myActiveServices = useMemo(
@@ -360,7 +402,7 @@ export function DriverHomeScreen() {
       return;
     }
 
-    applyToService(service.id, currentDriverId);
+    applyToService(service.id, currentDriverId).then(releerMarcas);
     emitChatNotification(
       'Nueva postulaci\u00f3n',
       `Un conductor postul\u00f3 al servicio: ${service.title}`,

@@ -48,6 +48,11 @@ import {
 import { describeError } from '../lib/errors';
 import { conGrupos } from '../lib/gruposDeServicio';
 import {
+  guardarHuellasDePostulacion,
+  leerHuellasDePostulacion,
+  marcarPostulacion,
+} from '../lib/marcaDePostulacion';
+import {
   fusionarLista,
   fusionarServicio,
   pasoDelSiguienteHito,
@@ -569,7 +574,8 @@ interface MockContextValue extends MockState {
   updateService: (service: ServiceAlert) => void;
   /** Anula la tarjeta: la borra de la base y de la lista. */
   deleteService: (serviceId: string) => Promise<boolean>;
-  applyToService: (serviceId: string, driverId: string) => void;
+  /** Postularme a una alerta. Es asíncrona (escribe la fila y devuelve el puesto). */
+  applyToService: (serviceId: string, driverId: string) => Promise<void>;
   approveApplication: (serviceId: string, driverId: string) => void;
   rejectApplication: (serviceId: string) => void;
   rejectApplicationFrom: (serviceId: string, driverId: string) => void;
@@ -1054,6 +1060,15 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       return true;
     },
     applyToService: async (serviceId, driverId) => {
+      // La huella de la alerta AHORA es la referencia para saber si el proveedor la
+      // edita después: es la única forma de distinguir una edición (que descarta la
+      // cola, migración 0016) de un rechazo. Ver `lib/marcaDePostulacion.ts`.
+      const servicioAqui = state.services.find((s) => s.id === serviceId);
+      if (servicioAqui) {
+        await guardarHuellasDePostulacion(
+          marcarPostulacion(await leerHuellasDePostulacion(), serviceId, driverId, servicioAqui)
+        );
+      }
       if (isSupabaseConfigured) {
         try {
           const fila = await postularAServicio(serviceId, driverId);
