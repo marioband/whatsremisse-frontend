@@ -184,6 +184,35 @@ export function ChatScreen() {
     };
   }, [isProvider, effectiveDriverId]);
 
+  /**
+   * Nombre del PROVEEDOR para el título de la pantalla del conductor.
+   *
+   * La vía principal es `datos_de_pago_del_proveedor` (0014, campo `nombre`, que ya
+   * se lee para los datos de pago); si esa función no está disponible se usa
+   * `public_profile` (0005), que autoriza a la contraparte del servicio. Si no
+   * llega ninguno, la cabecera pinta el rol ("Proveedor"), nunca un nombre vacío.
+   */
+  const [nombreDelProveedor, setNombreDelProveedor] = useState('');
+
+  useEffect(() => {
+    if (!isDriver || !service?.provider_id) return;
+    let vigente = true;
+    const proveedorId = service.provider_id;
+    (async () => {
+      try {
+        const fila = await fetchProfileById(proveedorId);
+        if (!vigente) return;
+        const perfil = datosDesdePerfilPublico(fila);
+        setNombreDelProveedor(`${perfil.nombres} ${perfil.apellidos}`.trim());
+      } catch (err) {
+        console.warn('[chat] no se pudo leer el perfil del proveedor:', err);
+      }
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [isDriver, service?.provider_id]);
+
   /** Lo que se copia: el conductor asignado (lo ve el proveedor) o mis propios datos. */
   const datosParaCopiar: DatosPublicos = isDriver
     ? {
@@ -642,7 +671,7 @@ export function ChatScreen() {
       >
         <ChatHeader
           title={nombreDeLaContraparte(isDriver, {
-            nombreProveedor: datosDelProveedor?.nombre,
+            nombreProveedor: datosDelProveedor?.nombre || nombreDelProveedor,
             nombreConductor: perfilDelConductor
               ? `${perfilDelConductor.nombres} ${perfilDelConductor.apellidos}`.trim()
               : driverName,
