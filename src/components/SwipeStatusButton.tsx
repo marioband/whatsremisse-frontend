@@ -30,10 +30,10 @@ interface GenericProps {
 
 interface RoleProps {
   role: 'DRIVER' | 'PROVIDER';
-  step: 'IN_PROGRESS' | 'COMMISSION_PAID' | 'PAYMENT_RECEIVED' | 'FINISHED';
+  /** El deslizamiento solo existe durante el viaje: al finalizar pasa al pago. */
+  step: 'IN_PROGRESS';
   progressIndex?: number;
   onAdvance: () => void;
-  /** Sin nada más que reportar (p. ej. servicio finalizado sin cuadre). */
   disabled?: boolean;
 }
 
@@ -46,41 +46,8 @@ function isGeneric(props: Props): props is GenericProps {
 /** Hitos del viaje, en el vocabulario de la app: Ubicado → En proceso → Finalizado. */
 const ETAPAS = ['Ubicado', 'En proceso', 'Finalizado'];
 
-function buildRoleStates(
-  role: 'DRIVER' | 'PROVIDER',
-  step: 'IN_PROGRESS' | 'COMMISSION_PAID' | 'PAYMENT_RECEIVED' | 'FINISHED'
-): SwipeState[] {
-  if (step === 'IN_PROGRESS') {
-    return ETAPAS.map((label) => ({ label, color: VERDE_ACCION }));
-  }
-  if (step === 'COMMISSION_PAID') {
-    return [
-      {
-        label:
-          role === 'DRIVER'
-            ? 'Deslizar para marcar: Comisión entregada'
-            : 'Deslizar para marcar: Comisión recibida',
-        color: VERDE_ACCION,
-      },
-    ];
-  }
-  if (step === 'PAYMENT_RECEIVED') {
-    return [
-      {
-        label:
-          role === 'DRIVER'
-            ? 'Deslizar para marcar: Pago recibido'
-            : 'Deslizar para marcar: Abonado / Finalizado',
-        color: VERDE_ACCION,
-      },
-    ];
-  }
-  return [
-    {
-      label: 'Servicio cerrado',
-      color: VERDE_ACCION,
-    },
-  ];
+function buildRoleStates(): SwipeState[] {
+  return ETAPAS.map((label) => ({ label, color: VERDE_ACCION }));
 }
 
 const clamp = (valor: number, minimo: number, maximo: number) =>
@@ -96,14 +63,12 @@ const clamp = (valor: number, minimo: number, maximo: number) =>
  */
 export function SwipeStatusButton(props: Props) {
   const generic = isGeneric(props);
-  const role = generic ? undefined : props.role;
   const step = generic ? undefined : props.step;
   const progressIndex = generic ? undefined : (props.progressIndex ?? 0);
 
-  const states = generic ? props.states : buildRoleStates(role!, step!);
+  const states = generic ? props.states : buildRoleStates();
   const currentIndex = generic ? props.currentIndex : (progressIndex ?? 0);
-  const disabledByRole = generic ? false : role === 'PROVIDER' && step === 'IN_PROGRESS';
-  const disabled = Boolean(props.disabled) || disabledByRole;
+  const disabled = Boolean(props.disabled);
 
   const [dragging, setDragging] = useState(false);
   const [listo, setListo] = useState(false);
@@ -117,7 +82,11 @@ export function SwipeStatusButton(props: Props) {
   const maxTranslate = Math.max(trackWidth - THUMB_SIZE - 8, 1);
 
   const current = states[currentIndex] || states[states.length - 1];
-  const isFinal = disabled || (generic ? currentIndex >= states.length - 1 : step === 'FINISHED');
+  // Durante el viaje siempre hay algo que reportar (el último hito es la última
+  // vez que se desliza): después de eso la zona pasa a la interfaz de pago.
+  const isFinal = generic
+    ? disabled || currentIndex >= states.length - 1
+    : disabled || step !== 'IN_PROGRESS';
 
   const resetThumb = () => {
     translateX.setValue(0);

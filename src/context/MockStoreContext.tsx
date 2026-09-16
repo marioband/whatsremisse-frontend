@@ -22,9 +22,11 @@ import {
   fetchGroupsForUser,
   deleteServiceAlert,
   reportarProgresoDelConductor,
-  marcarHitoDePagoDelConductor,
   archivarServicio,
   esFuncionAusente,
+  declararPagoDelServicio as declararPagoEnDb,
+  resolverDeclaracionDePago as resolverDeclaracionEnDb,
+  confirmarPagoDelServicio as confirmarPagoEnDb,
   fetchServicesForDriver,
   fetchServicesForProvider,
   insertApplication,
@@ -527,8 +529,14 @@ interface MockContextValue extends MockState {
   setDebtThreshold: (amount: number) => void;
   loadGroupMembers: (groupId: string) => Promise<void>;
   reloadGroups: () => Promise<void>;
-  payCommission: (serviceId: string) => Promise<boolean>;
-  confirmDriverPayment: (serviceId: string) => Promise<boolean>;
+  /** Pago del servicio (migración 0013): declaración, resolución y confirmación. */
+  declararPago: (
+    serviceId: string,
+    direccion: 'DRIVER_PAYS_PROVIDER' | 'PROVIDER_PAYS_DRIVER',
+    monto: number
+  ) => Promise<boolean>;
+  resolverDeclaracionDePago: (serviceId: string, aceptar: boolean) => Promise<boolean>;
+  confirmarPagoRecibido: (serviceId: string) => Promise<boolean>;
   toggleFavoriteGroup: (groupId: string) => void;
   addGroup: (group: GroupItem) => Promise<void>;
   addMember: (member: GroupMember) => void;
@@ -798,26 +806,6 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /** Cuadre del servicio: comisión entregada / pago recibido. */
-  const marcarHitoDelCuadre = async (
-    serviceId: string,
-    hito: 'comision' | 'pago',
-    cambios: Partial<ServiceAlert>
-  ): Promise<boolean> => {
-    if (!isSupabaseConfigured) return true;
-    try {
-      const actualizado = esServicioPropio(serviceId)
-        ? await updateServiceAlert(serviceId, cambios)
-        : await marcarHitoDePagoDelConductor(serviceId, hito);
-      if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
-      return true;
-    } catch (err) {
-      console.error('[MockStore] marcarHitoDelCuadre error:', err);
-      Alert.alert('No se pudo marcar el cuadre', detalleDe(err, 'El backend rechazó el cuadre'));
-      return false;
-    }
-  };
-
   const archivarSegunRol = async (serviceId: string, archivado: boolean) => {
     if (!isSupabaseConfigured) return;
     try {
@@ -964,17 +952,47 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     setDebtThreshold: (amount) => dispatch({ type: 'SET_DEBT_THRESHOLD', payload: amount }),
     loadGroupMembers,
     reloadGroups,
-    payCommission: async (serviceId) => {
-      const ok = await marcarHitoDelCuadre(serviceId, 'comision', { commission_paid: true });
-      if (!ok) return false;
-      dispatch({ type: 'PAY_COMMISSION', payload: { serviceId } });
-      return true;
+    declararPago: async (serviceId, direccion, monto) => {
+      try {
+        const actualizado = await declararPagoEnDb(serviceId, direccion, monto);
+        if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+        return true;
+      } catch (err) {
+        console.error('[MockStore] declararPago error:', err);
+        Alert.alert(
+          'No se pudo declarar el pago',
+          detalleDe(err, 'El backend rechazó la declaración')
+        );
+        return false;
+      }
     },
-    confirmDriverPayment: async (serviceId) => {
-      const ok = await marcarHitoDelCuadre(serviceId, 'pago', { driver_payment_received: true });
-      if (!ok) return false;
-      dispatch({ type: 'CONFIRM_DRIVER_PAYMENT', payload: { serviceId } });
-      return true;
+    resolverDeclaracionDePago: async (serviceId, aceptar) => {
+      try {
+        const actualizado = await resolverDeclaracionEnDb(serviceId, aceptar);
+        if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+        return true;
+      } catch (err) {
+        console.error('[MockStore] resolverDeclaracionDePago error:', err);
+        Alert.alert(
+          aceptar ? 'No se pudo aceptar el monto' : 'No se pudo rechazar el monto',
+          detalleDe(err, 'El backend rechazó el cambio')
+        );
+        return false;
+      }
+    },
+    confirmarPagoRecibido: async (serviceId) => {
+      try {
+        const actualizado = await confirmarPagoEnDb(serviceId);
+        if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+        return true;
+      } catch (err) {
+        console.error('[MockStore] confirmarPagoRecibido error:', err);
+        Alert.alert(
+          'No se pudo confirmar el pago',
+          detalleDe(err, 'El backend rechazó la confirmación')
+        );
+        return false;
+      }
     },
     toggleFavoriteGroup: async (groupId) => {
       const group = state.groups.find((g) => g.id === groupId);
@@ -1092,15 +1110,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'MARK_DRIVER_SEEN_CHAT', payload: { serviceId, driverId } });
     },
     enableSettlement: async (serviceId) => {
-      // El conductor ya la activa en la base con su paso 3; el proveedor la escribe.
-      if (esServicioPropio(serviceId)) {
-        const ok = await escribirServicio(
-          serviceId,
-          { settlement_enabled: true },
-          'No se pudo abrir el cuadre'
-        );
-        if (!ok) return;
-      }
+      // El cuadre actual (0013) no usa esta bandera: se conserva por compatibilidad.
       dispatch({ type: 'ENABLE_SETTLEMENT', payload: { serviceId } });
     },
     advanceDriverProgress: async (serviceId) => {

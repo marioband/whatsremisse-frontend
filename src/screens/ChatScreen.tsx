@@ -19,22 +19,24 @@ import {
   ChatHeader,
   EvaluationBar,
   MessageList,
+  PagoDelServicio,
   ProviderStatusBar,
   ServiceSummaryCard,
-  SettlementPanel,
 } from '../components/chat';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
-import { useServiceProgress } from '../hooks/useServiceProgress';
+import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
 import { Alert } from '../lib/alert';
 import {
+  datosDePagoDelConductor,
   esTablaAusente,
   fetchServiceMessages,
   insertServiceMessage,
   ServiceMessage,
 } from '../lib/database';
 import { describeError } from '../lib/errors';
+import { DireccionPago, montoEnTexto } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
 
@@ -58,8 +60,6 @@ const EXECUTION_MESSAGES = [
   'Sistema: Viaje finalizado.',
 ];
 
-/** Último hito del viaje: después de este ya no hay nada que reportar. */
-const ULTIMO_HITO = 3;
 /** Sondeo de respaldo por si el tiempo real del proyecto no está activado. */
 const SONDEO_MS = 6000;
 
@@ -81,11 +81,12 @@ export function ChatScreen() {
     services,
     approveApplication,
     rejectApplicationFrom,
-    payCommission,
-    confirmDriverPayment,
     startProviderChat,
     markDriverSeenChat,
     advanceDriverProgress,
+    declararPago,
+    resolverDeclaracionDePago,
+    confirmarPagoRecibido,
     emitChatNotification,
     userProfile,
   } = useMockStore();
@@ -98,6 +99,12 @@ export function ChatScreen() {
   const [chatCompartido, setChatCompartido] = useState(true);
   const [buscarAbierto, setBuscarAbierto] = useState(false);
   const [consulta, setConsulta] = useState('');
+  const [pagoOcupado, setPagoOcupado] = useState(false);
+  const [datosDelConductor, setDatosDelConductor] = useState<{
+    yape?: string;
+    bcpAccount?: string;
+    bcpCci?: string;
+  } | null>(null);
   const isAdvancingRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -113,8 +120,6 @@ export function ChatScreen() {
   const isAssigned = service?.assigned_driver_id === effectiveDriverId;
   const isEvaluationMode =
     isProvider && service && !isAssigned && service.status !== 'STATUS_COMPLETED';
-  const sinMasHitos =
-    currentStep === 'IN_PROGRESS' && (service?.driver_progress_step ?? 0) >= ULTIMO_HITO;
 
   const profile: DriverProfile = useMemo(
     () => ({
@@ -130,11 +135,37 @@ export function ChatScreen() {
     [driverName]
   );
 
-  const showSlider = isDriver && isAssigned && service && !isEvaluationMode;
-  const showSettlement =
-    service &&
-    service.settlement_enabled &&
-    (currentStep === 'COMMISSION_PAID' || currentStep === 'PAYMENT_RECEIVED');
+  // El viaje se reporta con el deslizamiento; al llegar a "Finalizado" esa zona
+  // pasa a la interfaz de pago (declaración → aceptación → confirmación).
+  const showSlider =
+    isDriver && isAssigned && service && !isEvaluationMode && currentStep === 'IN_PROGRESS';
+  const showPago =
+    !!isAssigned && !isEvaluationMode && currentStep === 'PAGO' && service !== undefined;
+
+  const rol: 'CONDUCTOR' | 'PROVEEDOR' = isDriver ? 'CONDUCTOR' : 'PROVEEDOR';
+  // Se leen campos sueltos (no un objeto derivado, que sería nuevo en cada render)
+  // para que el efecto de abajo no se dispare en bucle.
+  const direccionDePago = service?.pago_direccion ?? null;
+  const idDelServicio = service?.id;
+
+  // El proveedor necesita los datos de pago del conductor solo en el caso B
+  // ("Me deben"): los trae una función autorizada de la base.
+  useEffect(() => {
+    if (!isProvider || !idDelServicio) return;
+    if (direccionDePago !== 'PROVIDER_PAYS_DRIVER') return;
+    let vigente = true;
+    (async () => {
+      try {
+        const datos = await datosDePagoDelConductor(idDelServicio);
+        if (vigente) setDatosDelConductor(datos);
+      } catch (err) {
+        console.warn('[chat] no se pudieron leer los datos de pago del conductor:', err);
+      }
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [isProvider, idDelServicio, direccionDePago]);
 
   // ---------------------------------------------------------------- mensajes
   const cargarMensajes = useCallback(
@@ -289,8 +320,8 @@ export function ChatScreen() {
 
   const handleStepAdvance = async () => {
     if (!service || isAdvancingRef.current) return;
-    if (currentStep === 'IN_PROGRESS' && (service.driver_progress_step ?? 0) >= ULTIMO_HITO) {
-      // El viaje ya está reportado como finalizado: no se repite el hito.
+    if ((service.driver_progress_step ?? 0) >= ULTIMO_HITO_VIAJE) {
+      // El viaje ya está reportado como finalizado: sigue el pago, no el reporte.
       Alert.alert('Viaje ya reportado', 'El servicio ya figura como finalizado.');
       return;
     }
@@ -299,45 +330,72 @@ export function ChatScreen() {
       isAdvancingRef.current = false;
     }, 700);
 
-    if (currentStep === 'IN_PROGRESS') {
-      if (progressIndex < 0 || progressIndex > 2) return;
+    if (progressIndex < 0 || progressIndex > 2) return;
 
-      // Primero se guarda en la base (el conductor con la RPC de la 0012) y solo
-      // entonces se anuncia el hito: así el proceso no se queda en bucle ni
-      // reaparece al recargar.
-      const guardado = await advanceDriverProgress(service.id);
-      if (!guardado) return;
+    // Primero se guarda en la base (el conductor con la RPC de la 0012) y solo
+    // entonces se anuncia el hito: así el proceso no se queda en bucle ni
+    // reaparece al recargar.
+    const guardado = await advanceDriverProgress(service.id);
+    if (!guardado) return;
 
-      addSystemMessage(EXECUTION_MESSAGES[progressIndex]);
-      emitChatNotification(
-        'Hito del viaje',
-        EXECUTION_MESSAGES[progressIndex].replace('Sistema: ', '')
-      );
-    } else if (currentStep === 'COMMISSION_PAID') {
-      const guardado = await payCommission(service.id);
-      if (!guardado) return;
-      addSystemMessage(
-        isDriver
-          ? 'Sistema: Comisión entregada al proveedor.'
-          : 'Sistema: Comisión recibida del conductor.'
-      );
-      emitChatNotification(
-        'Cuadre financiero',
-        isDriver ? 'Comisión entregada al proveedor.' : 'Comisión recibida del conductor.'
-      );
-    } else if (currentStep === 'PAYMENT_RECEIVED') {
-      const guardado = await confirmDriverPayment(service.id);
-      if (!guardado) return;
-      addSystemMessage(
-        isDriver
-          ? 'Sistema: Pago recibido. Servicio cerrado.'
-          : 'Sistema: Abonado al conductor. Servicio cerrado.'
-      );
-      emitChatNotification(
-        'Servicio cerrado',
-        isDriver ? 'Pago recibido. Servicio cerrado.' : 'Abonado al conductor. Servicio cerrado.'
-      );
-    }
+    addSystemMessage(EXECUTION_MESSAGES[progressIndex]);
+    emitChatNotification(
+      'Hito del viaje',
+      EXECUTION_MESSAGES[progressIndex].replace('Sistema: ', '')
+    );
+  };
+
+  // ------------------------------------------------------------------- pago
+  /** El conductor declara "Yo pago" / "Me deben" con el monto. */
+  const handleDeclararPago = async (direccion: DireccionPago, monto: number) => {
+    if (!service) return;
+    setPagoOcupado(true);
+    const guardado = await declararPago(service.id, direccion, monto);
+    setPagoOcupado(false);
+    if (!guardado) return;
+
+    addSystemMessage(
+      direccion === 'DRIVER_PAYS_PROVIDER'
+        ? `Sistema: El conductor declara que le debe ${montoEnTexto(monto)} al proveedor.`
+        : `Sistema: El conductor declara que el proveedor le debe ${montoEnTexto(monto)}.`
+    );
+    emitChatNotification(
+      'Monto declarado',
+      direccion === 'DRIVER_PAYS_PROVIDER'
+        ? `El conductor declara que te debe ${montoEnTexto(monto)}`
+        : `El conductor declara que le debes ${montoEnTexto(monto)}`
+    );
+  };
+
+  /** El proveedor acepta o rechaza el monto declarado. */
+  const handleResolverDeclaracion = async (aceptar: boolean) => {
+    if (!service) return;
+    setPagoOcupado(true);
+    const guardado = await resolverDeclaracionDePago(service.id, aceptar);
+    setPagoOcupado(false);
+    if (!guardado) return;
+
+    addSystemMessage(
+      aceptar
+        ? 'Sistema: El proveedor aceptó el monto. Pago en camino.'
+        : 'Sistema: El proveedor rechazó el monto. El conductor debe corregirlo.'
+    );
+    emitChatNotification(
+      aceptar ? 'Monto aceptado' : 'Monto rechazado',
+      aceptar ? 'El pago está en camino.' : 'Corrige el monto y vuelve a declararlo.'
+    );
+  };
+
+  /** Confirma el pago recibido: solo quien recibe el dinero. */
+  const handleConfirmarPago = async () => {
+    if (!service) return;
+    setPagoOcupado(true);
+    const guardado = await confirmarPagoRecibido(service.id);
+    setPagoOcupado(false);
+    if (!guardado) return;
+
+    addSystemMessage('Sistema: Pago confirmado. Servicio pagado y cerrado.');
+    emitChatNotification('Pago confirmado', 'El servicio quedó pagado y cerrado.');
   };
 
   const handleSend = (content: string, type: 'TEXT' | 'VOICE' = 'TEXT') => {
@@ -468,20 +526,31 @@ Placa: ${profile.plate}`;
         {showSlider ? (
           <SwipeStatusButton
             role="DRIVER"
-            step={currentStep}
+            step="IN_PROGRESS"
             progressIndex={progressIndex}
-            disabled={sinMasHitos}
             onAdvance={handleStepAdvance}
           />
-        ) : isProvider && isAssigned ? (
+        ) : isProvider && isAssigned && currentStep === 'IN_PROGRESS' && service ? (
           <ProviderStatusBar service={service} />
         ) : null}
 
-        {showSettlement && (
-          <SettlementPanel
+        {/* Zona de pago: aparece cuando el viaje ya terminó y la ve cada rol
+            según el ciclo (declaración, aceptación/rechazo, confirmación). */}
+        {showPago && service && (
+          <PagoDelServicio
             service={service}
-            userProfile={userProfile ?? undefined}
-            onCopy={handleCopyBank}
+            rol={rol}
+            misDatos={{
+              yapeNumber: userProfile?.yapeNumber,
+              bcpAccount: userProfile?.bcpAccount,
+              bcpCci: userProfile?.bcpCci,
+            }}
+            datosDelConductor={datosDelConductor}
+            ocupado={pagoOcupado}
+            onDeclarar={handleDeclararPago}
+            onResolver={handleResolverDeclaracion}
+            onConfirmar={handleConfirmarPago}
+            onCopiar={handleCopyBank}
           />
         )}
 

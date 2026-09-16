@@ -108,6 +108,16 @@ export interface ServiceAlert {
   provider_yape?: string;
   provider_bcp_account?: string;
   provider_bcp_cci?: string;
+  // Pago entre conductor y proveedor (migración 0013): declaración del conductor,
+  // aceptación del proveedor y confirmación de quien recibe el dinero.
+  pago_estado?: 'SIN_DECLARAR' | 'DECLARADO' | 'RECHAZADO' | 'ACEPTADO' | 'CONFIRMADO';
+  pago_direccion?: 'DRIVER_PAYS_PROVIDER' | 'PROVIDER_PAYS_DRIVER' | null;
+  pago_monto?: number | null;
+  pago_declarado_at?: string | null;
+  pago_aceptado_at?: string | null;
+  pago_aceptado_por?: string | null;
+  pago_confirmado_at?: string | null;
+  pago_confirmado_por?: string | null;
 }
 
 export interface Application {

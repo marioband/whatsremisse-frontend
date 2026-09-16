@@ -31,7 +31,11 @@ export function estadoDeServicio(service: ServiceAlert, postulantesPendientes = 
   }
 
   if (service.status === 'STATUS_COMPLETED' || paso >= 3) {
-    return { etiqueta: 'Servicio Finalizado', color: VERDE_ACCION, compartido };
+    // El viaje terminó: lo que falta es el pago entre conductor y proveedor.
+    if (service.pago_estado === 'CONFIRMADO') {
+      return { etiqueta: 'Pagado y cerrado', color: VERDE_ACCION, compartido };
+    }
+    return { etiqueta: 'Pendiente de pago', color: OSCURO, compartido };
   }
 
   if (asignado) {

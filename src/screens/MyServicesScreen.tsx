@@ -5,7 +5,9 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { VERDE_ACCION } from '../lib/colors';
 import { estadoDeServicio } from '../lib/estadoServicio';
+import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 
@@ -88,6 +90,11 @@ export function MyServicesScreen() {
             <Text style={styles.fare}>S/ {service.fare}</Text>
             <Text style={styles.payment}>{service.payment_method || 'BCP'}</Text>
           </View>
+
+          {/* Historial del cierre: monto, quién pagó y quién confirmó (0013). */}
+          {!!historialDePago(service) && (
+            <Text style={styles.pagoText}>✅ {historialDePago(service)}</Text>
+          )}
         </View>
       </View>
     );
@@ -231,6 +238,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  pagoText: {
+    color: VERDE_ACCION,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
   },
   routeText: {
     fontSize: 13,

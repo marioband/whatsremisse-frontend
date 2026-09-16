@@ -47,6 +47,15 @@ export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
     provider_yape: row.provider_yape ?? undefined,
     provider_bcp_account: row.provider_bcp_account ?? undefined,
     provider_bcp_cci: row.provider_bcp_cci ?? undefined,
+    // Pago entre conductor y proveedor (0013)
+    pago_estado: (row.pago_estado || 'SIN_DECLARAR') as ServiceAlert['pago_estado'],
+    pago_direccion: (row.pago_direccion || null) as ServiceAlert['pago_direccion'],
+    pago_monto: row.pago_monto ?? null,
+    pago_declarado_at: row.pago_declarado_at ?? null,
+    pago_aceptado_at: row.pago_aceptado_at ?? null,
+    pago_aceptado_por: row.pago_aceptado_por ?? null,
+    pago_confirmado_at: row.pago_confirmado_at ?? null,
+    pago_confirmado_por: row.pago_confirmado_por ?? null,
     scheduled_at: row.scheduled_at ?? undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -398,6 +407,95 @@ export async function fetchServiceArchivesForDriver(userId: string): Promise<str
     .eq('user_id', userId);
   if (error) throw error;
   return ((data || []) as { service_id: string }[]).map((row) => row.service_id);
+}
+
+// ---------------------------------------------------------------------------
+// Pago del servicio (migración 0013)
+// El ciclo entero vive en la base: declaración del conductor, aceptación del
+// proveedor y confirmación de quien recibe. Las funciones devuelven la fila ya
+// actualizada para que la UI se sincronice con lo que quedó guardado.
+// ---------------------------------------------------------------------------
+
+function aFilaDeRpc(data: unknown): ServiceAlert | null {
+  // `RETURNS public.service_alerts` llega como objeto; se acepta también un array
+  // de una fila por si PostgREST lo envuelve.
+  const fila = Array.isArray(data) ? data[0] : data;
+  return fila ? mapServiceAlertFromDb(fila as DbServiceAlert) : null;
+}
+
+/** El conductor declara ("Yo pago" / "Me deben") el monto del servicio finalizado. */
+export async function declararPagoDelServicio(
+  serviceId: string,
+  direccion: 'DRIVER_PAYS_PROVIDER' | 'PROVIDER_PAYS_DRIVER',
+  monto: number
+): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: fila, error } = await supabase.rpc('declarar_pago_servicio', {
+      p_service_id: serviceId,
+      p_direccion: direccion,
+      p_monto: monto,
+    });
+    if (error) throw error;
+    return fila;
+  });
+  return aFilaDeRpc(data);
+}
+
+/** El proveedor acepta o rechaza el monto declarado. */
+export async function resolverDeclaracionDePago(
+  serviceId: string,
+  aceptar: boolean
+): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: fila, error } = await supabase.rpc('resolver_declaracion_de_pago', {
+      p_service_id: serviceId,
+      p_aceptar: aceptar,
+    });
+    if (error) throw error;
+    return fila;
+  });
+  return aFilaDeRpc(data);
+}
+
+/** Confirma el pago recibido: solo quien recibe el dinero. */
+export async function confirmarPagoDelServicio(serviceId: string): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: fila, error } = await supabase.rpc('confirmar_pago_recibido', {
+      p_service_id: serviceId,
+    });
+    if (error) throw error;
+    return fila;
+  });
+  return aFilaDeRpc(data);
+}
+
+/** Datos de pago del conductor: solo el proveedor del servicio y solo en el caso B. */
+export async function datosDePagoDelConductor(serviceId: string): Promise<{
+  yape?: string;
+  bcpAccount?: string;
+  bcpCci?: string;
+} | null> {
+  if (!isSupabaseConfigured) return null;
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: filas, error } = await supabase.rpc('datos_de_pago_del_conductor', {
+      p_service_id: serviceId,
+    });
+    if (error) throw error;
+    return filas;
+  });
+  const fila = (Array.isArray(data) ? data[0] : data) as
+    | { yape?: string | null; bcp_account?: string | null; bcp_cci?: string | null }
+    | null
+    | undefined;
+  if (!fila) return null;
+  return {
+    yape: fila.yape || undefined,
+    bcpAccount: fila.bcp_account || undefined,
+    bcpCci: fila.bcp_cci || undefined,
+  };
 }
 
 /**

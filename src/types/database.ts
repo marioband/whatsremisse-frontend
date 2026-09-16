@@ -39,6 +39,15 @@ export interface DbServiceAlert {
   provider_bcp_account: string | null;
   provider_bcp_cci: string | null;
   scheduled_at: string | null;
+  // Pago entre conductor y proveedor (migración 0013)
+  pago_estado: string;
+  pago_direccion: string | null;
+  pago_monto: number | null;
+  pago_declarado_at: string | null;
+  pago_aceptado_at: string | null;
+  pago_aceptado_por: string | null;
+  pago_confirmado_at: string | null;
+  pago_confirmado_por: string | null;
   created_at: string;
   updated_at: string;
 }
