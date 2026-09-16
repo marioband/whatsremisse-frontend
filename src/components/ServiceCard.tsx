@@ -2,7 +2,6 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 
-import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
 import { textoProgramado } from '../lib/datetime';
 import { ServiceAlert } from '../types';
@@ -197,10 +196,11 @@ export function ServiceCard({
         )}
       </View>
 
-      {/* Franja de estado del servicio (fuente única: estadoDeServicio).
-          Vista de conductor: "Disponible" / "No disponible", nunca la señal del
-          proveedor que publicó la alerta. */}
-      <EstadoServicioBar service={service} radius={RADIUS.xl} vista="CONDUCTOR" />
+      {/* La tarjeta del conductor NO lleva franja de estado (regla fijada con el
+          usuario): su estado se comunica con la capa (azul = postulado, verde =
+          aceptado) y el resto del proceso vive en el chat. La franja es de las
+          tarjetas del proveedor (ProviderServiceCard/ProviderHomeScreen) y de la
+          insignia de Mis servicios. */}
     </TouchableOpacity>
   );
 
