@@ -29,7 +29,7 @@ import {
   confirmarPagoDelServicio as confirmarPagoEnDb,
   fetchServicesForDriver,
   fetchServicesForProvider,
-  insertApplication,
+  postularAServicio,
   insertGroup,
   insertGroupMember,
   insertServiceAlert,
@@ -244,8 +244,12 @@ function mockReducer(state: MockState, action: MockAction): MockState {
       };
 
     case 'APPLY_TO_SERVICE': {
+      // Respaldo local (sin Supabase configurado). El puesto real lo asigna la
+      // base; aquí se replica su regla contando SOLO las postulaciones vigentes,
+      // porque contar las anuladas era justo lo que hacía salir "Postulante N° 2"
+      // al primero de la tarjeta.
       const existingCount = state.applications.filter(
-        (a) => a.serviceId === action.payload.serviceId
+        (a) => a.serviceId === action.payload.serviceId && a.status === 'PENDING'
       ).length;
       // OJO: aquí NO se toca `services`. La alerta sigue abierta en la base hasta
       // que el proveedor acepta a un conductor, así que la tarjeta tiene que
@@ -891,11 +895,22 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     applyToService: async (serviceId, driverId) => {
       if (isSupabaseConfigured) {
         try {
-          await insertApplication(serviceId, driverId);
+          const fila = await postularAServicio(serviceId, driverId);
+          if (fila) {
+            // El puesto lo trae la base (trigger de la 0015): la tarjeta se pinta
+            // con el número real y no con una suposición del cliente.
+            dispatch({ type: 'UPSERT_APPLICATION', payload: fila });
+            return;
+          }
         } catch (err) {
-          console.error('[MockStore] insertApplication error:', err);
+          // Antes el error se tragaba y la tarjeta quedaba pintada como postulada
+          // sin fila en la base (el proveedor no veía al postulante).
+          console.error('[MockStore] postularAServicio error:', err);
+          Alert.alert('No se pudo postular', describeError(err));
+          return;
         }
       }
+      // Solo sin base configurada: respaldo local.
       dispatch({ type: 'APPLY_TO_SERVICE', payload: { serviceId, driverId } });
     },
     approveApplication: async (serviceId, driverId) => {

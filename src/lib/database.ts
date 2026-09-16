@@ -217,21 +217,44 @@ export async function fetchApplicationsForProvider(serviceIds: string[]): Promis
   return (data || []).map(mapApplicationFromDb);
 }
 
-export async function insertApplication(serviceId: string, driverId: string): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  const { count, error: countError } = await supabase
+/**
+ * Postulación del conductor a una alerta.
+ *
+ * Devuelve la fila tal como quedó en la base, que es la ÚNICA que conoce el
+ * puesto ("Postulante N° X"): lo asigna el trigger de la migración 0015 contando
+ * las postulaciones VIGENTES del servicio. El cliente no puede calcularlo —la
+ * política RLS de `applications` solo le deja ver sus propias filas—, y ese era
+ * el bug: dos conductores podían ver el mismo número y un intento anterior
+ * anulado dejaba al primero en "N° 2".
+ *
+ * Es un upsert a propósito: anular deja la fila en REJECTED, así que un INSERT
+ * pelado chocaba con UNIQUE(service_id, driver_id) y el error se perdía en
+ * consola (la tarjeta se pintaba como postulada sin postulación viva). Al
+ * reactivar se refresca `created_at` para que el trigger lo ponga al final de la
+ * cola, según la regla acordada con el usuario.
+ */
+export async function postularAServicio(
+  serviceId: string,
+  driverId: string
+): Promise<Application | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase
     .from('applications')
-    .select('*', { count: 'exact', head: true })
-    .eq('service_id', serviceId);
-  if (countError) throw countError;
-
-  const { error } = await supabase.from('applications').insert({
-    service_id: serviceId,
-    driver_id: driverId,
-    status: 'PENDING',
-    order: (count || 0) + 1,
-  });
+    .upsert(
+      {
+        service_id: serviceId,
+        driver_id: driverId,
+        status: 'PENDING',
+        created_at: new Date().toISOString(),
+        seen_by_driver: false,
+        provider_chat_started: false,
+      },
+      { onConflict: 'service_id,driver_id' }
+    )
+    .select()
+    .maybeSingle();
   if (error) throw error;
+  return data ? mapApplicationFromDb(data as unknown as DbApplication) : null;
 }
 
 export async function approveApplicationInDb(serviceId: string, driverId: string): Promise<void> {
