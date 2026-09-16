@@ -205,11 +205,13 @@ export function ApplicantsScreen() {
           style: 'destructive',
           onPress: () => {
             rejectApplication(service.id);
+            // Sin `driver_progress_step: 0`: el paso del viaje solo avanza (regla de
+            // `fusionarServicio`); aquí vale 0 de todas formas porque la tarjeta
+            // todavía no tiene conductor asignado.
             const sinCompartir = {
               ...service,
               group_id: '',
               assigned_driver_id: null,
-              driver_progress_step: 0,
             };
             updateService(sinCompartir);
             navigation.navigate('CreateService', { service: sinCompartir });

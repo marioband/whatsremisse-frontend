@@ -44,6 +44,11 @@ import {
   ProfilePatch,
 } from '../lib/database';
 import { describeError } from '../lib/errors';
+import {
+  fusionarLista,
+  fusionarServicio,
+  pasoDelSiguienteHito,
+} from '../lib/serviciosSincronizados';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { isVisibleAsDriver, isVisibleAsProvider } from '../lib/visibility';
 import { notifyHighPriority } from '../services/notifications';
@@ -220,19 +225,33 @@ function mockReducer(state: MockState, action: MockAction): MockState {
       };
 
     case 'SET_SERVICES':
-      return { ...state, services: action.payload };
+      // La lista entrante decide QUÉ servicios se ven; de cada uno se conserva la
+      // versión más nueva (una lectura que llegó tarde no puede hacer retroceder
+      // el viaje ni el cuadre de pagos).
+      return { ...state, services: fusionarLista(state.services, action.payload) };
 
     case 'SET_APPLICATIONS':
       return { ...state, applications: action.payload };
 
-    case 'ADD_SERVICE':
-      return { ...state, services: [action.payload, ...state.services] };
-
-    case 'UPDATE_SERVICE':
+    case 'ADD_SERVICE': {
+      const existente = state.services.find((s) => s.id === action.payload.id);
+      const fila = fusionarServicio(existente, action.payload);
       return {
         ...state,
-        services: state.services.map((s) => (s.id === action.payload.id ? action.payload : s)),
+        services: existente
+          ? state.services.map((s) => (s.id === fila.id ? fila : s))
+          : [fila, ...state.services],
       };
+    }
+
+    case 'UPDATE_SERVICE': {
+      const actual = state.services.find((s) => s.id === action.payload.id);
+      const fila = fusionarServicio(actual, action.payload);
+      return {
+        ...state,
+        services: state.services.map((s) => (s.id === fila.id ? fila : s)),
+      };
+    }
 
     case 'UPDATE_APPLICATION':
       return {
@@ -579,7 +598,13 @@ interface MockContextValue extends MockState {
   startProviderChat: (serviceId: string, driverId: string) => void;
   markDriverSeenChat: (serviceId: string, driverId: string) => void;
   enableSettlement: (serviceId: string) => void;
-  advanceDriverProgress: (serviceId: string) => Promise<boolean>;
+  /**
+   * Reporta el hito siguiente del viaje. Devuelve el paso que quedó escrito en la
+   * base (1..3) o `null` si no se pudo reportar. Antes devolvía `boolean` y el
+   * paso se sumaba también en local: el store quedaba un hito por delante de la
+   * base y el cuadre de pagos se adelantaba.
+   */
+  advanceDriverProgress: (serviceId: string) => Promise<number | null>;
 }
 
 const MockContext = createContext<MockContextValue | undefined>(undefined);
@@ -860,7 +885,16 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       const actualizado = esServicioPropio(serviceId)
         ? await updateServiceAlert(serviceId, { driver_progress_step: paso })
         : await reportarProgresoDelConductor(serviceId, paso);
-      if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+      // Sin fila devuelta no se reportó nada: se avisa en vez de dar por hecho el
+      // avance (antes se devolvía `true` y el hito se anunciaba sin haberse escrito).
+      if (!actualizado) {
+        Alert.alert(
+          'No se pudo reportar el avance',
+          'La base no devolvió el servicio. Revisa que tú seas el conductor asignado y que el viaje no esté ya finalizado.'
+        );
+        return false;
+      }
+      dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
       return true;
     } catch (err) {
       console.error('[MockStore] reportarAvance error:', err);
@@ -1215,12 +1249,20 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     },
     advanceDriverProgress: async (serviceId) => {
       const service = state.services.find((s) => s.id === serviceId);
-      // El paso se calcula sobre el estado actual y la base solo permite avanzar.
-      const paso = Math.min((service?.driver_progress_step ?? 0) + 1, 3);
+      // El paso se calcula sobre la fila vigente (la base solo permite avanzar).
+      const paso = pasoDelSiguienteHito(service);
+      if (!isSupabaseConfigured) {
+        // Sin backend no hay fila que confirmar: el paso avanza solo en memoria.
+        dispatch({ type: 'ADVANCE_DRIVER_PROGRESS', payload: { serviceId } });
+        return paso;
+      }
+      // La fila que devuelve la base es la ÚNICA fuente del paso. Aquí NO se suma
+      // otra vez en local: ese +1 dejaba el paso un hito por delante de la base, el
+      // cuadre de pagos aparecía antes de "Finalizado" y volvía a desaparecer en la
+      // siguiente lectura (era el cuadre que "hacía una pequeña aparición" al
+      // deslizar y el que reseteaba el formulario del monto).
       const ok = await reportarAvance(serviceId, paso);
-      if (!ok) return false;
-      dispatch({ type: 'ADVANCE_DRIVER_PROGRESS', payload: { serviceId } });
-      return true;
+      return ok ? paso : null;
     },
   };
 

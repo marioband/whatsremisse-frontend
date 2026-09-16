@@ -157,18 +157,13 @@ export function ChatScreen() {
   );
 
   // El viaje se reporta con el deslizamiento; al llegar a "Finalizado" esa zona
-  // pasa a la interfaz de pago (declaración → aceptación → confirmación).
+  // pasa a la interfaz de pago (declaración → aceptación → confirmación). Las dos
+  // zonas salen de la MISMA etapa (`etapaDelServicio`): antes cada una tenía su
+  // propia condición y llegaron a verse a la vez (el cuadre aparecía un hito antes
+  // de tiempo y el formulario del monto se reseteaba solo).
   const showSlider =
-    isDriver && isAssigned && service && !isEvaluationMode && currentStep === 'IN_PROGRESS';
-  // El cierre del viaje llega por dos señales equivalentes (0012 escribe las dos:
-  // driver_progress_step = 3 y status = STATUS_COMPLETED). Basta con una para que
-  // la zona de pago aparezca en los DOS dispositivos.
-  const viajeTerminado =
-    currentStep === 'PAGO' ||
-    (!!service &&
-      (service.status === 'STATUS_COMPLETED' ||
-        (service.driver_progress_step ?? 0) >= ULTIMO_HITO_VIAJE));
-  const showPago = !!service && esParteDelServicio && viajeTerminado && !isEvaluationMode;
+    isDriver && isAssigned && !!service && !isEvaluationMode && currentStep === 'IN_PROGRESS';
+  const showPago = !!service && esParteDelServicio && !isEvaluationMode && currentStep === 'PAGO';
 
   const rol: 'CONDUCTOR' | 'PROVEEDOR' = isDriver ? 'CONDUCTOR' : 'PROVEEDOR';
   // Se leen campos sueltos (no un objeto derivado, que sería nuevo en cada render)
@@ -402,15 +397,13 @@ export function ChatScreen() {
 
     // Primero se guarda en la base (el conductor con la RPC de la 0012) y solo
     // entonces se anuncia el hito: así el proceso no se queda en bucle ni
-    // reaparece al recargar.
-    const guardado = await advanceDriverProgress(service.id);
-    if (!guardado) return;
+    // reaparece al recargar. El paso que vale es el que confirmó la base.
+    const paso = await advanceDriverProgress(service.id);
+    if (paso === null) return;
 
-    addSystemMessage(EXECUTION_MESSAGES[progressIndex]);
-    emitChatNotification(
-      'Hito del viaje',
-      EXECUTION_MESSAGES[progressIndex].replace('Sistema: ', '')
-    );
+    const mensaje = EXECUTION_MESSAGES[Math.min(paso - 1, EXECUTION_MESSAGES.length - 1)];
+    addSystemMessage(mensaje);
+    emitChatNotification('Hito del viaje', mensaje.replace('Sistema: ', ''));
   };
 
   // ------------------------------------------------------------------- pago

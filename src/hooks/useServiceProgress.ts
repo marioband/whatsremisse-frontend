@@ -11,7 +11,7 @@ import { ServiceAlert } from '../types';
  */
 export type ServiceStep = 'IN_PROGRESS' | 'PAGO';
 
-interface UseServiceProgressResult {
+interface EtapaDelServicio {
   currentStep: ServiceStep;
   progressIndex: number;
 }
@@ -19,13 +19,26 @@ interface UseServiceProgressResult {
 /** El último hito del viaje: a partir de aquí solo queda el pago. */
 export const ULTIMO_HITO_VIAJE = 3;
 
-export function useServiceProgress(service: ServiceAlert | undefined): UseServiceProgressResult {
-  return useMemo(() => {
-    if (!service) return { currentStep: 'IN_PROGRESS' as ServiceStep, progressIndex: 0 };
+/**
+ * Etapa del servicio. Es la ÚNICA fuente de verdad de qué zona se pinta en el
+ * chat (el deslizamiento del viaje o el cuadre de pagos): antes cada zona tenía
+ * su propia condición y podían contradecirse — el deslizamiento y el cuadre
+ * llegaron a verse a la vez.
+ *
+ * El cierre del viaje llega por dos señales equivalentes (0012 escribe las dos:
+ * `driver_progress_step = 3` y `status = STATUS_COMPLETED`); basta con una.
+ */
+export function etapaDelServicio(service: ServiceAlert | undefined): EtapaDelServicio {
+  if (!service) return { currentStep: 'IN_PROGRESS', progressIndex: 0 };
 
-    const paso = service.driver_progress_step ?? 0;
-    if (paso >= ULTIMO_HITO_VIAJE) return { currentStep: 'PAGO' as ServiceStep, progressIndex: 2 };
+  const paso = service.driver_progress_step ?? 0;
+  if (paso >= ULTIMO_HITO_VIAJE || service.status === 'STATUS_COMPLETED') {
+    return { currentStep: 'PAGO', progressIndex: 2 };
+  }
 
-    return { currentStep: 'IN_PROGRESS' as ServiceStep, progressIndex: paso };
-  }, [service]);
+  return { currentStep: 'IN_PROGRESS', progressIndex: paso };
+}
+
+export function useServiceProgress(service: ServiceAlert | undefined): EtapaDelServicio {
+  return useMemo(() => etapaDelServicio(service), [service]);
 }
