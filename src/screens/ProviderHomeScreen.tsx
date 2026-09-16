@@ -8,7 +8,7 @@ import { Fab } from '../components/Fab';
 import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
-import { Alert } from '../lib/alert';
+import { destinoDeLaTarjetaDelProveedor } from '../lib/accionDeLaTarjeta';
 import { cierreDeLaAlerta, estaPagadoYCerrado, estaVencido } from '../lib/estadoServicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
@@ -128,35 +128,39 @@ export function ProviderHomeScreen() {
   }, [myProviderServices, activeDedupedServices, activeStatus, showArchived]);
 
   const handleCardPress = (service: ServiceAlert) => {
-    // Tarjeta guardada sin compartir: se termina de configurar en "nuevo servicio"
-    // (con todos los datos guardados) y desde ahí se eligen grupos.
-    if (!estaCompartido(service)) {
-      navigation.navigate('CreateService', { service });
-      return;
-    }
-
-    // Servicios vencidos dentro de las 24h de gracia van a edición para reprogramar
-    if (isExpired(service) && !isGraceExpired(service)) {
-      navigation.navigate('CreateService', { service });
-      return;
-    }
-
-    const hasDriver = !!service.assigned_driver_id;
-    const pendingApplicants = applications.filter(
+    const postulantesPendientes = applications.filter(
       (a) => a.serviceId === service.id && a.status === 'PENDING'
-    );
+    ).length;
 
-    if (hasDriver) {
+    // La decisión (y su ORDEN) vive en `lib/accionDeLaTarjeta`: el caso reportado por
+    // el usuario fallaba justo por el orden — una alerta con hora específica ya
+    // pasada caía en "vencida en gracia" y abría el editor aunque el viaje estuviera
+    // en curso con conductor asignado.
+    const destino = destinoDeLaTarjetaDelProveedor({
+      tieneConductor: !!service.assigned_driver_id,
+      compartido: estaCompartido(service),
+      vencidaEnGracia: isExpired(service) && !isGraceExpired(service),
+      postulantesPendientes,
+    });
+
+    if (destino === 'CHAT') {
       navigation.navigate('Chat', {
         serviceId: service.id,
         driverId: service.assigned_driver_id!,
         driverName: 'Conductor',
       });
-    } else if (pendingApplicants.length > 0) {
-      navigation.navigate('ApplicantsScreen', { serviceId: service.id });
-    } else {
-      Alert.alert('Sin postulantes', 'No hay postulantes pendientes');
+      return;
     }
+
+    if (destino === 'POSTULANTES') {
+      navigation.navigate('ApplicantsScreen', { serviceId: service.id });
+      return;
+    }
+
+    // Editar el servicio completo, como si se lanzara de nuevo: tarjeta sin compartir,
+    // vencida dentro de la gracia, o —el otro caso reportado— compartida y SIN ningún
+    // postulante (antes solo salía el aviso "Sin postulantes" y no dejaba hacer nada).
+    navigation.navigate('CreateService', { service });
   };
 
   const handleArchive = (serviceId: string) => {
