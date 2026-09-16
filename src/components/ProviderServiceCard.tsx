@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 
+import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
 import { ServiceAlert } from '../types';
 
@@ -14,6 +15,8 @@ const DARK_GRAY = '#2D2D2D';
 const BLUE = '#3F51B5';
 
 export function ProviderServiceCard({ service, onArchive }: Props) {
+  const nombreDelProveedor = useNombreDelProveedor(service);
+
   const renderRightActions = () => (
     <TouchableOpacity style={styles.archiveAction} onPress={onArchive}>
       <Text style={styles.archiveText}>Archivar</Text>
@@ -26,12 +29,10 @@ export function ProviderServiceCard({ service, onArchive }: Props) {
         {/* Columna izquierda: nombre + avatar */}
         <View style={styles.leftColumn}>
           <Text style={styles.groupName} numberOfLines={1}>
-            {service.company_name || service.provider_name || 'Grupo'}
+            {nombreDelProveedor}
           </Text>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(service.company_name || service.provider_name || '?').charAt(0)}
-            </Text>
+            <Text style={styles.avatarText}>{(nombreDelProveedor || '?').charAt(0)}</Text>
           </View>
         </View>
 

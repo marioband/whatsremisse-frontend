@@ -11,6 +11,8 @@
  * nunca inventar un dato. Cuando falta, queda vacío y la pantalla muestra "—".
  */
 
+import { VehicleData } from '../types';
+
 export interface DatosPublicos {
   nombres: string;
   apellidos: string;
@@ -30,6 +32,11 @@ export interface FilaPerfilPublico {
   phone?: string | null;
   vehicle_data?: Record<string, unknown> | null;
 }
+
+/** Mismo objeto, pero admite VehicleData sin perder la tipificación. */
+export type FilaPerfilConVehicleData = Omit<FilaPerfilPublico, 'vehicle_data'> & {
+  vehicle_data?: Record<string, unknown> | VehicleData | null;
+};
 
 function texto(valor: unknown): string {
   if (typeof valor === 'string') return valor.trim();

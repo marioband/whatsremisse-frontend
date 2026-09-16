@@ -5,8 +5,10 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { useNombresDeProveedores } from '../hooks/useNombreDelProveedor';
 import { AZUL, OSCURO, VERDE_ACCION } from '../lib/colors';
 import { estadoDeServicio } from '../lib/estadoServicio';
+import { nombreParaMostrar } from '../lib/nombreDelProveedor';
 import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
@@ -30,6 +32,9 @@ export function MyServicesScreen() {
   const navigation = useNavigation<MyServicesNav>();
   const { services, applications } = useMockStore();
   const { session } = useAuth();
+  // Nombre del proveedor de cada servicio (el que configuró en su perfil o, si no lo
+  // configuró, su primer nombre y su primer apellido): una sola llamada por proveedor.
+  const nombresDeProveedor = useNombresDeProveedores(services);
   const userId = session?.user?.id;
 
   /**
@@ -118,7 +123,7 @@ export function MyServicesScreen() {
         <View style={styles.cardLeft}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {(service.company_name || service.provider_name || '?').charAt(0)}
+              {nombreParaMostrar(service, nombresDeProveedor[service.provider_id]).charAt(0)}
             </Text>
           </View>
         </View>
@@ -126,7 +131,7 @@ export function MyServicesScreen() {
         <View style={styles.cardCenter}>
           <View style={styles.cardHeader}>
             <Text style={styles.companyName} numberOfLines={1}>
-              {service.company_name || service.provider_name || 'Empresa'}
+              {nombreParaMostrar(service, nombresDeProveedor[service.provider_id])}
             </Text>
             {!!estado.etiqueta && (
               <View style={[styles.statusBadge, { backgroundColor: estado.color }]}>

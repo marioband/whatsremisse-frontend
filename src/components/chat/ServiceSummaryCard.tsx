@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 import { BankDetailsRow } from './BankDetailsRow';
+import { useNombreDelProveedor } from '../../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../../lib/datetime';
 import { ServiceAlert } from '../../types';
 
@@ -24,6 +25,8 @@ export function ServiceSummaryCard({
   onCopyData,
   onCopyBank,
 }: ServiceSummaryCardProps) {
+  const nombreDelProveedor = useNombreDelProveedor(service);
+
   const handleBankCopy = (label: string, value: string) => {
     onCopyBank?.(label, value);
   };
@@ -34,7 +37,7 @@ export function ServiceSummaryCard({
         <View style={styles.avatarPlaceholder} />
         <View style={styles.cardBody}>
           <Text style={styles.companyName} numberOfLines={1}>
-            {service.company_name || service.provider_name || 'Empresa'}
+            {nombreDelProveedor}
           </Text>
           <Text style={styles.timeText}>{textoProgramado(service)}</Text>
           <Text style={styles.routeText}>

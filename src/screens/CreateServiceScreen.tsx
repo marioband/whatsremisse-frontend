@@ -37,6 +37,8 @@ import {
   MINUTOS_CON_HORA,
 } from '../lib/estadoServicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
+import { nombreDelProveedorDesdeElPerfil, PROVEEDOR_SIN_NOMBRE } from '../lib/nombreDelProveedor';
+import { FilaPerfilConVehicleData } from '../lib/perfilPublico';
 import { hayApiDeDirecciones } from '../lib/places';
 import { esPremium } from '../lib/premium';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -233,7 +235,14 @@ export function CreateServiceScreen() {
     ].filter(Boolean);
 
     const scheduledAt = alMomento ? null : programada.toISOString();
-    const providerName = profile?.full_name || editingService?.provider_name || 'Proveedor';
+    // Nombre que verán los conductores en la tarjeta: el "Nombre de proveedor" que el
+    // usuario configuró en su perfil y, si no lo configuró, su primer nombre y su
+    // primer apellido (regla del usuario). Antes iba el nombre completo y, cuando la
+    // fila venía de la base, la tarjeta caía en el respaldo "Empresa".
+    const providerName =
+      nombreDelProveedorDesdeElPerfil(profile as FilaPerfilConVehicleData) ||
+      editingService?.provider_name ||
+      PROVEEDOR_SIN_NOMBRE;
 
     const base: ServiceAlert = editingService ?? {
       id: `service-${Date.now()}`,

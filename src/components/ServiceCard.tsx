@@ -4,6 +4,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 
 import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
+import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { ServiceAlert } from '../types';
@@ -54,6 +55,9 @@ export function ServiceCard({
   groupName,
 }: Props) {
   const swipeableRef = useRef<Swipeable>(null);
+  // El nombre lo configura el proveedor en su perfil; si no lo configuró, van su
+  // primer nombre y su primer apellido (nunca "Empresa").
+  const nombreDelProveedor = useNombreDelProveedor(service);
 
   const cardBackground = COLORS.cardNew;
 
@@ -103,16 +107,14 @@ export function ServiceCard({
       <View style={styles.cardBody}>
         <View style={styles.avatarColumn}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(service.company_name || service.provider_name || '?').charAt(0)}
-            </Text>
+            <Text style={styles.avatarText}>{(nombreDelProveedor || '?').charAt(0)}</Text>
           </View>
         </View>
 
         {/* Columna central */}
         <View style={styles.centerColumn}>
           <Text style={styles.companyName} numberOfLines={1}>
-            {service.company_name || service.provider_name || 'Empresa'}
+            {nombreDelProveedor}
           </Text>
 
           {groupName && (
