@@ -350,14 +350,14 @@ const styles = StyleSheet.create({
   },
   errorBox: {
     backgroundColor: '#FDECEA',
-    borderColor: '#9B3B43',
+    borderColor: '#C2333F',
     borderWidth: 1,
     borderRadius: 10,
     padding: 14,
     marginBottom: 24,
   },
   errorTitle: {
-    color: '#9B3B43',
+    color: '#C2333F',
     fontWeight: 'bold',
     fontSize: 14,
     marginBottom: 6,

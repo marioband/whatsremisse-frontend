@@ -16,21 +16,22 @@ export const COLORS = {
   cardAppliedOverlay: 'rgba(139, 149, 201, 0.60)',
   // La capa verde de "Servicio Aceptado" es tan translúcida como la azul: el
   // conductor tiene que seguir leyendo los datos del servicio bajo la capa.
-  cardAcceptedOverlay: 'rgba(53, 140, 82, 0.60)',
+  // (Verde nuevo #2E9E5B al 60 % sobre blanco: rgb(130, 197, 157).)
+  cardAcceptedOverlay: 'rgba(46, 158, 91, 0.60)',
   // Tinta del rótulo sobre la capa verde translúcida: el blanco sobre el verde
-  // al 60 % da 2,2:1 (ilegible), este verde oscuro da 4,9:1.
+  // al 60 % da 2,2:1 (ilegible), este verde oscuro da 5,4:1.
   cardAcceptedInk: '#17452A',
-  cardAccepted: '#358C52',
+  cardAccepted: '#2E9E5B',
 
   // Acentos
   primary: '#3F51B5',
   primaryDark: '#303F9F',
   headerDark: '#2D2D2D',
-  brightGreen: '#358C52',
+  brightGreen: '#2E9E5B',
   orange: '#FF9800',
 
   // Estados / sistema
-  danger: '#9B3B43',
+  danger: '#C2333F',
   warningBg: '#FFF3E0',
   warningText: '#E65100',
   successBg: '#E8F5E9',

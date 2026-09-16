@@ -9,7 +9,7 @@ type MembershipNav = StackNavigationProp<RootStackParamList, 'Membership'>;
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
-const GREEN = '#358C52';
+const GREEN = '#2E9E5B';
 
 const PLANS = [
   { days: 30, price: 'S/ 29.90', popular: true },

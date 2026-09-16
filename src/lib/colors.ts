@@ -7,12 +7,24 @@
  *     cancelar).
  * El azul sigue siendo el color de marca y de las acciones neutras (chatear,
  * navegar); el oscuro es para cabeceras y avatares sin foto.
+ *
+ * Cambio de códigos (16/09/2026, pedido del usuario): el verde pasa de #358C52 a
+ * #2E9E5B y el rojo de #9B3B43 a #C2333F. Se barrieron TODAS las copias literales
+ * del código viejo en src (ver `/opt/data/.diag-bundle/barrido_paleta.py` y la
+ * prueba `pruebas_paleta.js`, que falla si alguien vuelve a escribir el viejo).
  */
 
 export const AZUL = '#3F51B5';
 export const OSCURO = '#2D2D2D';
-export const VERDE_ACCION = '#358C52';
-export const ROJO_ACCION = '#9B3B43';
+export const VERDE_ACCION = '#2E9E5B';
+export const ROJO_ACCION = '#C2333F';
+
+/**
+ * Verde del deslizamiento: el relleno que sigue al pulgar y el pulgar mismo en la
+ * barra de proceso. Es más claro que VERDE_ACCION a propósito (modelo del usuario):
+ * sobre el fondo #2E9E5B la zona deslizable se lee como "avanza".
+ */
+export const VERDE_DESLIZABLE = '#00D647';
 
 /** Fondo de tarjeta y separadores, ya usados en las pantallas. */
 export const FONDO_TARJETA = '#F2F2F2';

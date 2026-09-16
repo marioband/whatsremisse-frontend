@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   archiveAction: {
-    backgroundColor: '#9B3B43',
+    backgroundColor: '#C2333F',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,

@@ -657,12 +657,7 @@ export function ChatScreen() {
         {isEvaluationMode && <EvaluationBar onAccept={handleAccept} onReject={handleReject} />}
 
         {showSlider ? (
-          <SwipeStatusButton
-            role="DRIVER"
-            step="IN_PROGRESS"
-            progressIndex={progressIndex}
-            onAdvance={handleStepAdvance}
-          />
+          <SwipeStatusButton progressIndex={progressIndex} onAdvance={handleStepAdvance} />
         ) : isProvider && isAssigned && currentStep === 'IN_PROGRESS' && service ? (
           <ProviderStatusBar service={service} />
         ) : null}

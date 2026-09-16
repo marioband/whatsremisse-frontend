@@ -47,7 +47,7 @@ const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
 const LIGHT_BG = '#F0F2F5';
 const OSCURO = '#2D2D2D';
-const ROJO_ACCION = '#9B3B43';
+const ROJO_ACCION = '#C2333F';
 
 const PAYMENT_TYPES = ['BCP', 'Yape', 'Plin', 'Efectivo', 'Otro'];
 const PAYMENT_DATES = ['Al término', 'Durante el día', 'Mañana', 'Escribir'];
@@ -670,11 +670,11 @@ const styles = StyleSheet.create({
   },
   pickerFieldError: {
     borderWidth: 1,
-    borderColor: '#9B3B43',
+    borderColor: '#C2333F',
   },
   helperText: {
     fontSize: 12,
-    color: '#9B3B43',
+    color: '#C2333F',
     marginTop: 6,
     lineHeight: 16,
   },
@@ -699,7 +699,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   removeText: {
-    color: '#9B3B43',
+    color: '#C2333F',
     fontSize: 18,
     fontWeight: 'bold',
   },
