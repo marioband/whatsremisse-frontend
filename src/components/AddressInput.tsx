@@ -44,6 +44,12 @@ interface Props {
   estilo?: StyleProp<ViewStyle>;
   /** Texto de ayuda bajo el campo (por ejemplo, avisos de coherencia). */
   ayuda?: string;
+  /**
+   * Avisa cuando las sugerencias se despliegan o se cierran. Lo usa la pantalla para
+   * levantar (zIndex) la FILA de este campo: en web, si dos filas comparten capa,
+   * gana la de abajo en el documento y el desplegable de la de arriba queda tapado.
+   */
+  onSugerenciasVisibles?: (visibles: boolean) => void;
 }
 
 const ESPERA_MS = 400;
@@ -65,6 +71,7 @@ export function AddressInput({
   ubicacion,
   estilo,
   ayuda,
+  onSugerenciasVisibles,
 }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -110,6 +117,21 @@ export function AddressInput({
     () => filasDeSugerencias({ abierto, premium, texto: valor, sugerencias, cargando }),
     [abierto, premium, valor, sugerencias, cargando]
   );
+
+  // El desplegable solo ocupa pantalla cuando tiene filas: eso es lo que avisa a la
+  // pantalla para levantar esta fila (zIndex) sobre las demás.
+  const desplegado = filas.length > 0;
+  const avisarRef = useRef(onSugerenciasVisibles);
+  useEffect(() => {
+    avisarRef.current = onSugerenciasVisibles;
+  }, [onSugerenciasVisibles]);
+
+  useEffect(() => {
+    avisarRef.current?.(desplegado);
+    return () => {
+      if (desplegado) avisarRef.current?.(false);
+    };
+  }, [desplegado]);
 
   const elegirMiTexto = (texto: string) => {
     onChangeText(texto);
@@ -240,9 +262,10 @@ export function necesitaPremium(): boolean {
 
 const styles = StyleSheet.create({
   contenedor: {
-    // Cada campo con sugerencias levanta su propia "capa" (zIndex) para que el
-    // desplegable quede por encima de los campos que vienen después (tarifa,
-    // fecha, hora...) y no tapado por ellos.
+    // Cada campo con sugerencias levanta su propia "capa" (zIndex) DENTRO de su fila.
+    // La capa que decide contra las filas vecinas es la de la fila (ver
+    // src/lib/desplegables.ts): si dos filas comparten zIndex, el desplegable de la
+    // de arriba queda tapado por el campo de abajo.
     position: 'relative',
     zIndex: 1000,
   },

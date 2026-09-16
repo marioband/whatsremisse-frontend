@@ -32,29 +32,20 @@ import {
   datosDePagoDelConductor,
   datosDePagoDelProveedor,
   esTablaAusente,
+  fetchProfileById,
   fetchServiceMessages,
   insertServiceMessage,
   ServiceMessage,
 } from '../lib/database';
 import { describeError } from '../lib/errors';
 import { AVISO_DE_RECHAZO, chatCerradoParaElConductor } from '../lib/miPostulacion';
-import { DireccionPago, montoEnTexto } from '../lib/pagoServicio';
+import { DireccionPago, montoEnTexto, resumenDePago } from '../lib/pagoServicio';
+import { DatosPublicos, datosDesdePerfilPublico, textoParaCopiar } from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
 
 type ChatNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
 type ChatRoute = RouteProp<RootStackParamList, 'Chat'>;
-
-interface DriverProfile {
-  firstName: string;
-  lastName: string;
-  dni: string;
-  phone: string;
-  brand: string;
-  model: string;
-  color: string;
-  plate: string;
-}
 
 const EXECUTION_MESSAGES = [
   'Sistema: Conductor en el punto de origen (Ubicado).',
@@ -64,6 +55,12 @@ const EXECUTION_MESSAGES = [
 
 /** Sondeo de respaldo por si el tiempo real del proyecto no está activado. */
 const SONDEO_MS = 6000;
+
+/**
+ * Cuánto se deja ver el cierre del pago antes de salir de la conversación. No es 0
+ * para que se alcance a leer "Pagado y cerrado" y no parezca que la app se cayó.
+ */
+const CIERRE_MS = 3000;
 
 /** Sin acentos ni mayúsculas, para que "vehiculo" encuentre "Vehículo". */
 function normalizar(texto: string): string {
@@ -159,19 +156,47 @@ export function ChatScreen() {
     asignadoAMi: soyConductorAsignado,
   });
 
-  const profile: DriverProfile = useMemo(
-    () => ({
-      firstName: driverName || 'Conductor',
-      lastName: '',
-      dni: '-',
-      phone: '-',
-      brand: '-',
-      model: '-',
-      color: '-',
-      plate: '-',
-    }),
-    [driverName]
-  );
+  /**
+   * Datos del conductor para el botón "Copiar datos" (lo usa el proveedor).
+   *
+   * Antes salían de un objeto de relleno con el nombre de la ruta (`driverName`) y
+   * todo lo demás en "-": el texto copiado solo tenía nombres (y ahí iban nombres y
+   * apellidos juntos). Ahora se leen del perfil real del conductor: `public_profile`
+   * (0005) devuelve `full_name` y `vehicle_data`, y `datosDesdePerfilPublico` parte
+   * nombres/apellidos y saca DNI, marca, modelo, color y placa.
+   */
+  const [perfilDelConductor, setPerfilDelConductor] = useState<DatosPublicos | null>(null);
+
+  useEffect(() => {
+    if (!isProvider || !effectiveDriverId) return;
+    let vigente = true;
+    (async () => {
+      try {
+        const fila = await fetchProfileById(effectiveDriverId);
+        if (vigente) setPerfilDelConductor(datosDesdePerfilPublico(fila));
+      } catch (err) {
+        console.warn('[chat] no se pudo leer el perfil del conductor:', err);
+      }
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [isProvider, effectiveDriverId]);
+
+  /** Lo que se copia: el conductor asignado (lo ve el proveedor) o mis propios datos. */
+  const datosParaCopiar: DatosPublicos = isDriver
+    ? {
+        nombres: userProfile?.firstName || '',
+        apellidos: userProfile?.lastName || '',
+        telefono: userProfile?.phone || '',
+        dni: userProfile?.dni || '',
+        marca: userProfile?.brand || '',
+        modelo: userProfile?.model || '',
+        color: userProfile?.color || '',
+        placa: userProfile?.plate || '',
+        foto: userProfile?.driverPhotoUrl || '',
+      }
+    : perfilDelConductor || datosDesdePerfilPublico(null);
 
   // El viaje se reporta con el deslizamiento; al llegar a "Finalizado" esa zona
   // pasa a la interfaz de pago (declaración → aceptación → confirmación). Las dos
@@ -189,6 +214,26 @@ export function ChatScreen() {
     !!service && esParteDelServicio && !isEvaluationMode && !chatCerrado && currentStep === 'PAGO';
 
   const rol: 'CONDUCTOR' | 'PROVEEDOR' = isDriver ? 'CONDUCTOR' : 'PROVEEDOR';
+
+  /**
+   * Cierre automático al confirmarse el pago (0013): quien recibe el dinero lo
+   * confirma y la conversación ya no tiene nada más que hacer. Se deja ver el cierre
+   * y se sale a "Mis servicios", donde el servicio queda como "Pagado y cerrado" con
+   * su historial de pago.
+   *
+   * Si al abrir el chat el pago YA estaba confirmado no se cierra solo: en ese caso
+   * el usuario está revisando el historial a propósito.
+   */
+  const pagoConfirmado = !!service && resumenDePago(service).estado === 'CONFIRMADO';
+  const yaEstabaConfirmado = useRef(pagoConfirmado);
+  const [cierreEnCurso, setCierreEnCurso] = useState(false);
+
+  useEffect(() => {
+    if (!pagoConfirmado || yaEstabaConfirmado.current) return;
+    setCierreEnCurso(true);
+    const temporizador = setTimeout(() => navigation.navigate('MyServices'), CIERRE_MS);
+    return () => clearTimeout(temporizador);
+  }, [pagoConfirmado, navigation]);
   // Se leen campos sueltos (no un objeto derivado, que sería nuevo en cada render)
   // para que el efecto de abajo no se dispare en bucle.
   const direccionDePago = service?.pago_direccion ?? null;
@@ -558,20 +603,7 @@ export function ChatScreen() {
   };
 
   const handleCopyData = async () => {
-    const text = `Datos del Conductor
-=====================
-Nombres: ${profile.firstName}
-Apellidos: ${profile.lastName}
-DNI: ${profile.dni}
-
-Datos del Vehículo
-=====================
-Marca: ${profile.brand}
-Modelo: ${profile.model}
-Color: ${profile.color}
-Placa: ${profile.plate}`;
-
-    await copyToClipboard(text);
+    await copyToClipboard(textoParaCopiar(datosParaCopiar));
   };
 
   const renderHeader = () => (
@@ -648,6 +680,7 @@ Placa: ${profile.plate}`;
             }}
             datosDelConductor={datosDelConductor}
             datosDelProveedor={datosDelProveedor}
+            cerrando={cierreEnCurso}
             ocupado={pagoOcupado}
             onDeclarar={handleDeclararPago}
             onResolver={handleResolverDeclaracion}

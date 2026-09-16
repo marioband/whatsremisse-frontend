@@ -29,6 +29,7 @@ import {
   primerInstanteValido,
   proximaHoraRedondeada,
 } from '../lib/datetime';
+import { filaDestino, FILA_ORIGEN, zIndexDeFila } from '../lib/desplegables';
 import { estaVencido } from '../lib/estadoServicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { hayApiDeDirecciones } from '../lib/places';
@@ -94,6 +95,18 @@ export function CreateServiceScreen() {
   const [horaServicio, setHoraServicio] = useState<Date>(initialDateTime.hora);
   const [abriendoCalendario, setAbriendoCalendario] = useState(false);
   const [abriendoReloj, setAbriendoReloj] = useState(false);
+  /**
+   * Qué campo tiene el desplegable de sugerencias abierto. La fila abierta se
+   * levanta sobre las demás: sin esto, el desplegable del distrito de ORIGEN queda
+   * tapado por el campo Destino 1 (en web, con el mismo zIndex gana la fila que va
+   * después en el documento).
+   */
+  const [campoConSugerencias, setCampoConSugerencias] = useState<string | null>(null);
+
+  /** Aviso de un campo: al abrir se levanta; al cerrar, solo si sigue siendo el mío. */
+  const avisoDeSugerencias = (campo: string) => (visibles: boolean) => {
+    setCampoConSugerencias((actual) => (visibles ? campo : actual === campo ? null : actual));
+  };
 
   // Bloqueo de coherencia: para hoy, la primera hora agendable es el siguiente
   // tramo de 5 minutos (a las 11:15 a.m. ya no se pueden elegir las 11:00 a.m.).
@@ -347,13 +360,19 @@ export function CreateServiceScreen() {
       <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
         {/* Origen */}
         <Text style={styles.label}>Distrito de origen</Text>
-        <View style={styles.campoConSugerencias}>
+        <View
+          style={[
+            styles.campoConSugerencias,
+            { zIndex: zIndexDeFila(campoConSugerencias, FILA_ORIGEN) },
+          ]}
+        >
           <AddressInput
             valor={origin}
             placeholder="Distrito de origen"
             premium={premium}
             onChangeText={setOrigin}
             onConfirmar={confirmarOrigen}
+            onSugerenciasVisibles={avisoDeSugerencias(FILA_ORIGEN)}
           />
         </View>
         {!premium && (
@@ -372,7 +391,13 @@ export function CreateServiceScreen() {
         {/* Destinos */}
         <Text style={styles.label}>Distrito de destino</Text>
         {destinations.map((dest, index) => (
-          <View key={index} style={styles.destinationRow}>
+          <View
+            key={index}
+            style={[
+              styles.destinationRow,
+              { zIndex: zIndexDeFila(campoConSugerencias, filaDestino(index)) },
+            ]}
+          >
             <View style={styles.destinationInput}>
               <AddressInput
                 valor={dest}
@@ -380,6 +405,7 @@ export function CreateServiceScreen() {
                 premium={premium}
                 onChangeText={(texto) => updateDestination(index, texto)}
                 onConfirmar={(direccion) => confirmarDestino(index, direccion)}
+                onSugerenciasVisibles={avisoDeSugerencias(filaDestino(index))}
               />
             </View>
             {destinations.length > 1 && (
@@ -656,15 +682,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-    // La fila entera se levanta: así el desplegable de sugerencias de este
-    // destino queda por encima de los campos que vienen después (tarifa, fecha,
-    // hora...) en lugar de quedar tapado por ellos.
+    // `position: relative` crea el contexto de apilado; el zIndex lo pone la pantalla
+    // según qué desplegable esté abierto (ver src/lib/desplegables.ts): un zIndex fijo
+    // igual al de la fila de origen hacía que "Destino 1" tapara las sugerencias del
+    // distrito de origen.
     position: 'relative',
-    zIndex: 1000,
   },
   campoConSugerencias: {
     position: 'relative',
-    zIndex: 1000,
   },
   destinationInput: {
     flex: 1,

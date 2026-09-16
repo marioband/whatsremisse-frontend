@@ -48,6 +48,11 @@ interface Props {
   onCopiar: (label: string, value: string) => void;
   /** Hay una operación en curso: se bloquean los botones. */
   ocupado?: boolean;
+  /**
+   * El pago acaba de confirmarse en esta pantalla y la conversación se va a cerrar
+   * sola: se avisa para que no parezca que la app se cayó.
+   */
+  cerrando?: boolean;
 }
 
 /**
@@ -69,6 +74,7 @@ export function PagoDelServicio({
   onConfirmar,
   onCopiar,
   ocupado = false,
+  cerrando = false,
 }: Props) {
   const resumen = resumenDePago(service);
   const [direccion, setDireccion] = useState<DireccionPago | null>(null);
@@ -319,7 +325,14 @@ export function PagoDelServicio({
 
         {/* ------------------------------------------------ cerrado */}
         {resumen.estado === 'CONFIRMADO' && (
-          <Text style={styles.historial}>✅ {historialDePago(service) || 'Pago confirmado'}</Text>
+          <>
+            <Text style={styles.historial}>✅ {historialDePago(service) || 'Pago confirmado'}</Text>
+            {cerrando && (
+              <Text style={[styles.espera, styles.cierre]}>
+                Cerrando la conversación… el servicio queda en Mis servicios.
+              </Text>
+            )}
+          </>
         )}
 
         {/* ------------------------------------------------ datos de pago */}
@@ -410,6 +423,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   espera: { color: TEXTO_SUAVE, fontSize: 13, textAlign: 'center' },
+  cierre: { marginTop: 8 },
   historial: { color: VERDE_ACCION, fontSize: 13, fontWeight: '600', textAlign: 'center' },
   error: { color: ROJO_ACCION, fontSize: 12, marginTop: 8, textAlign: 'center' },
   datosPago: { marginTop: 14 },

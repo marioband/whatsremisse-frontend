@@ -88,6 +88,30 @@ export function conGuion(valor: string): string {
   return valor && valor.length > 0 ? valor : '—';
 }
 
+/**
+ * Texto que copia el botón "Copiar datos" del chat del servicio.
+ *
+ * Nombres y apellidos van en campos SEPARADOS: el bug era que el nombre completo
+ * caía en "Nombres" (nombres + apellidos juntos) y todo lo demás salía vacío, porque
+ * el dato no se leía de ningún perfil. Ahora sale del perfil real y lo que de verdad
+ * falta se marca con "—" (nunca se inventa un dato).
+ */
+export function textoParaCopiar(datos: DatosPublicos, titulo = 'Datos del Conductor'): string {
+  return `${titulo}
+=====================
+Nombres: ${conGuion(datos.nombres)}
+Apellidos: ${conGuion(datos.apellidos)}
+DNI: ${conGuion(datos.dni)}
+Teléfono: ${conGuion(datos.telefono)}
+
+Datos del Vehículo
+=====================
+Marca: ${conGuion(datos.marca)}
+Modelo: ${conGuion(datos.modelo)}
+Color: ${conGuion(datos.color)}
+Placa: ${conGuion(datos.placa)}`;
+}
+
 /** Primera letra para el avatar cuando no hay foto. */
 export function inicialDe(datos: DatosPublicos): string {
   const base = datos.nombres || datos.apellidos;
