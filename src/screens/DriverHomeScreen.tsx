@@ -16,6 +16,7 @@ import {
   contarEnProceso,
   contarReservas,
   esAceptadoMio as esAceptadoMioDe,
+  esperaElToqueDeInicio,
   estadoEfectivoDeMiPostulacion,
   filaDeMiPostulacion,
   listaBaseDelConductor,
@@ -51,6 +52,7 @@ export function DriverHomeScreen() {
     unarchiveService,
     applyToService,
     cancelApplication,
+    advanceDriverProgress,
     driverDebt,
     debtThreshold,
     emitChatNotification,
@@ -265,7 +267,7 @@ export function DriverHomeScreen() {
     [myActiveServices, currentDriverId]
   );
 
-  const handleCardPress = (service: ServiceAlert) => {
+  const handleCardPress = async (service: ServiceAlert) => {
     const application = getApplication(service.id);
     const notificationCount = getDriverNotification(service.id);
 
@@ -284,13 +286,16 @@ export function DriverHomeScreen() {
     const driverName =
       `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Conductor';
 
-    // Servicio aceptado: abrir el chat. El viaje NO se marca desde la tarjeta:
-    // los hitos (Ubicado → En proceso → Finalizado) se reportan con el
-    // deslizamiento dentro del chat, y escribir aquí STATUS_IN_PROGRESS
-    // significaba reportar el hito 2 ("Servicio en Proceso") de un solo toque,
-    // saltándose "Ubicado". La tarjeta aceptada ya aparece en "En proceso"
-    // desde que el proveedor acepta.
+    // Servicio aceptado: la franja dice "Servicio aceptado, toca para iniciar", así
+    // que ESTE toque cumple esa orden y es el inicio del viaje (regla del usuario):
+    // reporta el primer hito y la tarjeta pasa al apartado "En proceso". Antes se
+    // escribía STATUS_IN_PROGRESS, que en el store es el hito 2, y eso se saltaba
+    // "Ubicado". Si el viaje ya está iniciado, el toque solo abre el chat: los
+    // hitos siguientes (En proceso → Finalizado) los reporta el deslizamiento.
     if (esAceptadoMio(service)) {
+      if (esperaElToqueDeInicio(service, currentDriverId)) {
+        await advanceDriverProgress(service.id);
+      }
       navigation.navigate('Chat', {
         serviceId: service.id,
         driverId: currentDriverId,

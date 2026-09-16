@@ -51,13 +51,34 @@ export function esAceptadoMio(service: ServiceAlert, userId: string): boolean {
 }
 
 /**
- * Apartado "En proceso": **ya es mío** (regla del usuario), sin importar si el
- * servicio tiene hora específica o es "al momento". Antes se excluían las
- * programadas para dejarlas solo en "Reservas", así que a un servicio con hora
- * recién aceptado no llegaba nunca a "En proceso".
+ * Hito del viaje que tiene el servicio (0 = aceptado y todavía sin iniciar).
+ * 1 Ubicado · 2 En proceso · 3 Finalizado.
+ */
+export function pasoDelViaje(service: ServiceAlert): number {
+  return service.driver_progress_step ?? 0;
+}
+
+/**
+ * Aceptado pero **todavía sin iniciar**: el conductor no ha cumplido aún la orden
+ * "toca para iniciar" (regla del usuario). Su tarjeta se queda en "Todos" con la
+ * franja verde y solo después del toque —que es el inicio del viaje— pasa a
+ * "En proceso". El toque escribe el primer hito (el deslizamiento del chat sigue
+ * con "En proceso" y "Finalizado").
+ */
+export function esperaElToqueDeInicio(service: ServiceAlert, userId: string): boolean {
+  return esAceptadoMio(service, userId) && pasoDelViaje(service) < 1;
+}
+
+/**
+ * Apartado "En proceso": el viaje **ya se inició** (el conductor cumplió el toque de
+ * inicio o reportó algún hito), sin importar si el servicio tiene hora específica o
+ * es "al momento".
  */
 export function esEnProcesoDelConductor(service: ServiceAlert, userId: string): boolean {
-  return esAceptadoMio(service, userId) || service.status === 'STATUS_IN_PROGRESS';
+  return (
+    (esAceptadoMio(service, userId) && pasoDelViaje(service) >= 1) ||
+    service.status === 'STATUS_IN_PROGRESS'
+  );
 }
 
 /** Apartado "Reservas": ya aceptado y con hora específica (no "al momento"). */
@@ -194,8 +215,9 @@ export function listaBaseDelConductor(
 
 /**
  * Las tarjetas de un apartado concreto del inicio del conductor.
- *   - "Todos": lo que puedo tomar, lo que postulé y el rechazo recién llegado.
- *   - "En proceso": lo que ya es mío (aceptado) o está en curso.
+ *   - "Todos": lo que puedo tomar, lo que postulé, el rechazo recién llegado (3 s) y
+ *     lo aceptado que todavía espera el toque de inicio.
+ *   - "En proceso": el viaje ya iniciado (o en curso).
  *   - "Reservas": lo mío con hora específica.
  */
 export function serviciosDelInicio(
@@ -218,8 +240,14 @@ export function serviciosDelInicio(
     (s) =>
       estaDisponibleParaPostular(s, applications, opciones.userId) ||
       tengoPostulacionViva(applications, s.id, opciones.userId) ||
+      esAceptadoEsperandoElToque(s, opciones.userId) ||
       reciente(s.id)
   );
+}
+
+/** Alias corto para la regla que deja la tarjeta aceptada en "Todos". */
+function esAceptadoEsperandoElToque(service: ServiceAlert, userId: string): boolean {
+  return esperaElToqueDeInicio(service, userId);
 }
 
 /** Contador de la píldora "En proceso" (la MISMA condición que la lista). */
