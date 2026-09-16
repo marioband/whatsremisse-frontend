@@ -10,10 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
+import { BotonDeNavegacion } from '../components/BotonDeNavegacion';
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
+import { ServiceCard } from '../components/ServiceCard';
 import { SwipeStatusButton } from '../components/SwipeStatusButton';
 import {
   ChatHeader,
@@ -21,13 +24,13 @@ import {
   MessageList,
   PagoDelServicio,
   ProviderStatusBar,
-  ServiceSummaryCard,
 } from '../components/chat';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
 import { Alert } from '../lib/alert';
+import { AZUL } from '../lib/colors';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import {
   datosDePagoDelConductor,
@@ -39,6 +42,13 @@ import {
   ServiceMessage,
 } from '../lib/database';
 import { describeError } from '../lib/errors';
+import { IniciosDelViaje, leerIniciosDelViaje, yaInicio } from '../lib/inicioDelViaje';
+import { estadoEfectivoDeMiPostulacion, filaDeMiPostulacion } from '../lib/listaDelConductor';
+import {
+  huellaDeMiPostulacion,
+  HuellasDePostulacion,
+  leerHuellasDePostulacion,
+} from '../lib/marcaDePostulacion';
 import { AVISO_DE_RECHAZO, chatCerradoParaElConductor } from '../lib/miPostulacion';
 import { DireccionPago, montoEnTexto, resumenDePago } from '../lib/pagoServicio';
 import { DatosPublicos, datosDesdePerfilPublico, textoParaCopiar } from '../lib/perfilPublico';
@@ -156,6 +166,40 @@ export function ChatScreen() {
     userId,
     asignadoAMi: soyConductorAsignado,
   });
+
+  /**
+   * Marcas locales del conductor (las MISMAS que usa el inicio del conductor): con
+   * ellas la franja de esta tarjeta dice lo mismo que la de la pantalla "Todos".
+   */
+  const [marcasDelConductor, setMarcasDelConductor] = useState<{
+    huellas: HuellasDePostulacion;
+    inicios: IniciosDelViaje;
+  }>({ huellas: {}, inicios: {} });
+
+  useEffect(() => {
+    let vigente = true;
+    Promise.all([leerHuellasDePostulacion(), leerIniciosDelViaje()]).then(([huellas, inicios]) => {
+      if (vigente) setMarcasDelConductor({ huellas, inicios });
+    });
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
+  /** Mi postulación en este servicio, para la franja (igual que en "Todos"). */
+  const miPostulacionEnLaTarjeta = (() => {
+    if (!service) return { estado: 'NINGUNA' as const, numero: null, iniciado: false };
+    const fila = filaDeMiPostulacion(applications, service.id, effectiveDriverId);
+    return {
+      estado: estadoEfectivoDeMiPostulacion(
+        service,
+        fila,
+        huellaDeMiPostulacion(marcasDelConductor.huellas, service.id, effectiveDriverId)
+      ),
+      numero: fila?.order ?? null,
+      iniciado: yaInicio(marcasDelConductor.inicios, service.id, effectiveDriverId),
+    };
+  })();
 
   /**
    * Datos del conductor para el botón "Copiar datos" (lo usa el proveedor).
@@ -651,11 +695,32 @@ export function ChatScreen() {
           year: 'numeric',
         })}
       </Text>
-      <ServiceSummaryCard
+      {/* La tarjeta del chat es la MISMA que la del inicio del conductor (estructura y
+          orden), con un pie debajo de la franja: el botón azul de navegación para el
+          conductor y, para el proveedor, los datos a copiar. */}
+      <ServiceCard
         service={service!}
-        isProvider={isProvider}
-        showCopyData={isProvider && currentStep === 'IN_PROGRESS'}
-        onCopyData={handleCopyData}
+        disableSwipe
+        vista={isProvider ? 'PROVEEDOR' : 'CONDUCTOR'}
+        miPostulacion={isDriver ? miPostulacionEnLaTarjeta : undefined}
+        pie={
+          <>
+            {isDriver && isAssigned && currentStep === 'IN_PROGRESS' && (
+              <BotonDeNavegacion service={service!} conductor={effectiveDriverId} />
+            )}
+            {isProvider && currentStep === 'IN_PROGRESS' && (
+              <View style={styles.copyDataRow}>
+                <TouchableOpacity
+                  style={styles.copyDataBtn}
+                  onPress={handleCopyData}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.copyDataBtnText}>Copiar datos</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        }
       />
     </>
   );
@@ -814,6 +879,26 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 12,
     marginVertical: 10,
+  },
+  /** Pie de la tarjeta del servicio: los botones van centrados. */
+  copyDataRow: {
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    paddingTop: 12,
+  },
+  copyDataBtn: {
+    backgroundColor: AZUL,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  copyDataBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   avisoBusqueda: {
     textAlign: 'center',

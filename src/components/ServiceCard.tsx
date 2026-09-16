@@ -10,14 +10,23 @@ import { ServiceAlert } from '../types';
 
 interface Props {
   service: ServiceAlert;
-  onPress: () => void;
-  onArchive: () => void;
+  /** En el chat la tarjeta no se toca ni se archiva: los dos son opcionales. */
+  onPress?: () => void;
+  onArchive?: () => void;
   onUnarchive?: () => void;
   onCancelApplication?: () => void;
   showArchived?: boolean;
   disableSwipe?: boolean;
   showReservaIndicator?: boolean;
   isApplied?: boolean;
+  /**
+   * Franja inferior según QUIÉN mira la tarjeta. En el chat la ve el proveedor
+   * también, y su señal es la de su alerta (¿la compartió?, ¿hay postulantes?),
+   * no la del conductor.
+   */
+  vista?: 'CONDUCTOR' | 'PROVEEDOR';
+  /** Pie de la tarjeta (debajo de la franja): datos a copiar, botón de navegación… */
+  pie?: React.ReactNode;
   /**
    * Mi postulación en este servicio: con ella la franja inferior dice el puesto
    * ("Postulante 2"), que quedó aceptado o que quedó fuera. Antes esto se pintaba
@@ -38,6 +47,8 @@ export function ServiceCard({
   disableSwipe = false,
   showReservaIndicator = false,
   isApplied = false,
+  vista = 'CONDUCTOR',
+  pie,
   miPostulacion,
   notificationCount = 0,
   groupName,
@@ -60,7 +71,7 @@ export function ServiceCard({
 
   const handleAction = () => {
     swipeableRef.current?.close();
-    action.handler();
+    action.handler?.();
   };
 
   const renderRightActions = (_progress: any, _dragX: any) => {
@@ -164,16 +175,22 @@ export function ServiceCard({
           justamente por esto. Va dentro de la tarjeta para heredar su redondeo. */}
       <EstadoServicioBar
         service={service}
-        vista="CONDUCTOR"
+        vista={vista}
         miPostulacion={miPostulacion}
         radius={RADIUS.xl}
       />
+
+      {/* Pie de la tarjeta: en el chat, el botón de navegación del conductor (y los
+          datos a copiar del proveedor). Va dentro de la tarjeta para heredar su
+          redondeo, y después de la franja para que la estructura de arriba sea
+          idéntica a la de la pantalla "Todos" del conductor. */}
+      {pie}
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.cardWrapper}>
-      {disableSwipe ? (
+      {disableSwipe || !action.handler ? (
         cardContent
       ) : (
         <Swipeable
