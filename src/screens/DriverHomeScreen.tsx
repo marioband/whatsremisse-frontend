@@ -11,12 +11,18 @@ import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
-import { esProgramado } from '../lib/datetime';
-import { estaPagadoYCerrado, MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
-import { estadoDeMiPostulacion } from '../lib/miPostulacion';
+import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
+import {
+  contarEnProceso,
+  contarReservas,
+  esAceptadoMio as esAceptadoMioDe,
+  estadoEfectivoDeMiPostulacion,
+  filaDeMiPostulacion,
+  listaBaseDelConductor,
+  serviciosDelInicio,
+} from '../lib/listaDelConductor';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
-import { isVisibleAsDriver } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 
@@ -89,40 +95,25 @@ export function DriverHomeScreen() {
     return best?.name;
   };
 
-  const isScheduledService = (service: ServiceAlert) => esProgramado(service);
-
   /**
-   * El servicio ya es MÍO: el proveedor me aceptó (aunque el viaje todavía no arranque)
-   * y sigue vivo. Antes solo contaba desde que había movimiento (en camino / en el
-   * origen), así que la tarjeta recién aceptada se quedaba en "Todos".
+   * El servicio ya es MÍO: el proveedor me aceptó (aunque el viaje todavía no
+   * arranque) y sigue vivo. Es la condición que lleva la tarjeta al apartado
+   * "En proceso", sin importar si la alerta tiene hora específica o es al momento.
    */
-  const esAceptadoMio = (service: ServiceAlert) =>
-    service.assigned_driver_id === currentDriverId &&
-    service.status !== 'STATUS_COMPLETED' &&
-    service.status !== 'STATUS_CANCELLED' &&
-    !estaPagadoYCerrado(service);
-
-  const isReserva = (service: ServiceAlert) =>
-    esAceptadoMio(service) && isScheduledService(service);
-  /** Aceptado pasa a "En proceso" (regla del usuario); las reservas a su apartado. */
-  const isEnProceso = (service: ServiceAlert) =>
-    (esAceptadoMio(service) && !isScheduledService(service)) ||
-    service.status === 'STATUS_IN_PROGRESS';
-
-  const isOpenAndAvailable = (service: ServiceAlert) =>
-    service.status === 'STATUS_OPEN' && !service.assigned_driver_id && !getApplication(service.id);
+  const esAceptadoMio = (service: ServiceAlert) => esAceptadoMioDe(service, currentDriverId);
 
   /**
    * Mi postulación en este servicio, para la franja de la tarjeta: el puesto que
-   * ocupo, o el aviso de que quedé fuera. Es la única señal del estado de la
-   * tarjeta del conductor.
+   * ocupo, el aviso de que quedé fuera, o nada si el proveedor reabrió la alerta
+   * (rechazo caducado). Es la única señal del estado de la tarjeta del conductor.
    */
-  const miPostulacionDe = (service: ServiceAlert): MiPostulacionEnLaTarjeta => ({
-    estado: estadoDeMiPostulacion(applications, service.id, currentDriverId),
-    numero:
-      applications.find((a) => a.serviceId === service.id && a.driverId === currentDriverId)
-        ?.order ?? null,
-  });
+  const miPostulacionDe = (service: ServiceAlert): MiPostulacionEnLaTarjeta => {
+    const fila = filaDeMiPostulacion(applications, service.id, currentDriverId);
+    return {
+      estado: estadoEfectivoDeMiPostulacion(service, fila),
+      numero: fila?.order ?? null,
+    };
+  };
 
   /**
    * Rechazos recién llegados: la tarjeta con el aviso se muestra **3 segundos** y
@@ -207,58 +198,47 @@ export function DriverHomeScreen() {
     return () => clearTimeout(temporizador);
   }, [rechazosVisibles]);
 
-  /** ¿Todavía toca pintar la tarjeta del rechazo recién llegado? */
-  const rechazoReciente = (service: ServiceAlert) =>
-    (rechazosVisibles[service.id] ?? 0) > Date.now();
+  /**
+   * ¿Todavía toca pintar la tarjeta del rechazo recién llegado? Dentro de los 3
+   * segundos siguientes al rechazo la tarjeta se ve (es el aviso); al cumplirse, se
+   * va y el conductor ya no ve el servicio.
+   */
+  const rechazoReciente = (serviceId: string) => (rechazosVisibles[serviceId] ?? 0) > Date.now();
 
   const driverVehicleType = userProfile?.vehicleType || 'Auto';
 
-  const matchesVehicleType = (service: ServiceAlert) => {
-    const required = service.vehicle_requirements?.vehicle_type;
-    if (!required || required === 'Todos') return true;
-    return required === driverVehicleType;
-  };
-
   const groupIdList = useMemo(() => groups.map((g) => g.id), [groups]);
 
-  const myActiveServices = useMemo(() => {
-    // Deduplicación estricta por service_id (anti-spam cuando un proveedor comparte la misma alerta en varios grupos)
-    const seen = new Set<string>();
-    const filtered = services.filter((s) => {
-      if (seen.has(s.id)) return false;
-      seen.add(s.id);
-      if (showArchived) return s.archived;
-      if (s.archived) return false;
-      if (s.status === 'STATUS_CANCELLED') return false;
-      // Pagado y cerrado: el viaje ya se consulta en "Mis servicios" (con su
-      // historial de pago), no en el inicio.
-      if (estaPagadoYCerrado(s)) return false;
-      if (!isVisibleAsDriver(s, currentDriverId, groupIdList) && !rechazoReciente(s)) {
-        return false;
-      }
-      if (!matchesVehicleType(s)) return false;
-      return true;
-    });
-    return filtered;
-  }, [services, showArchived, driverVehicleType, currentDriverId, groupIdList, applications]);
-
-  // "Todos": alertas nuevas y postuladas. Lo ya aceptado se fue a "En proceso"
-  // (regla del usuario); el rechazo recién llegado se asoma 3 segundos y se va.
-  const todosServices = useMemo(
-    () =>
-      myActiveServices.filter(
-        (s) => isOpenAndAvailable(s) || !!getApplication(s.id) || rechazoReciente(s)
-      ),
-    [myActiveServices, applications, rechazosVisibles]
+  /**
+   * Reglas del inicio del conductor (lib/listaDelConductor): las listas y los
+   * contadores salen de la MISMA función, así el apartado y su píldora no pueden
+   * contradecirse.
+   */
+  const opcionesDelInicio = useMemo(
+    () => ({
+      userId: currentDriverId,
+      groupIds: groupIdList,
+      tipoDeVehiculo: driverVehicleType,
+      mostrarArchivados: showArchived,
+      rechazoReciente,
+    }),
+    [currentDriverId, groupIdList, driverVehicleType, showArchived, rechazosVisibles]
   );
 
-  // Ordenamiento estricto en "Todos": Aceptados > Postulados > Nuevos
+  const myActiveServices = useMemo(
+    () => listaBaseDelConductor(services, applications, opcionesDelInicio),
+    [services, applications, opcionesDelInicio]
+  );
+
+  // "Todos": alertas nuevas, postuladas y el rechazo recién llegado (3 segundos).
+  // Lo ya aceptado se fue a "En proceso" y un rechazo en pie ya no se ve.
+  // Ordenamiento estricto: Aceptados > Postulados > Nuevos.
   const sortedServices = useMemo(() => {
     const accepted: ServiceAlert[] = [];
     const applied: ServiceAlert[] = [];
     const news: ServiceAlert[] = [];
 
-    todosServices.forEach((s) => {
+    serviciosDelInicio(myActiveServices, applications, 'Todos', opcionesDelInicio).forEach((s) => {
       if (esAceptadoMio(s)) accepted.push(s);
       else if (getApplication(s.id)) applied.push(s);
       else news.push(s);
@@ -272,17 +252,17 @@ export function DriverHomeScreen() {
       ...applied.sort(sortByDateDesc),
       ...news.sort(sortByDateDesc),
     ];
-  }, [todosServices, applications]);
+  }, [myActiveServices, applications, opcionesDelInicio]);
 
-  // Contadores para badges
+  // Contadores para badges (misma condición que las listas de cada apartado)
   const enProcesoCount = useMemo(
-    () => myActiveServices.filter((s) => isEnProceso(s) && s.status !== 'STATUS_COMPLETED').length,
-    [myActiveServices]
+    () => contarEnProceso(myActiveServices, currentDriverId),
+    [myActiveServices, currentDriverId]
   );
 
   const reservasCount = useMemo(
-    () => myActiveServices.filter((s) => isReserva(s)).length,
-    [myActiveServices]
+    () => contarReservas(myActiveServices, currentDriverId),
+    [myActiveServices, currentDriverId]
   );
 
   const handleCardPress = (service: ServiceAlert) => {
@@ -378,21 +358,29 @@ export function DriverHomeScreen() {
 
     if (activeStatus === 'En proceso') {
       // La tarjeta entra aquí en cuanto el PROVEEDOR acepta al conductor (el
-      // servicio queda asignado, STATUS_AT_ORIGIN), no cuando el conductor la
-      // toca: antes el filtro pedía STATUS_IN_PROGRESS y la tarjeta solo llegaba
-      // aquí después de tocarla, mientras el contador de la píldora ya la
-      // contaba con isEnProceso().
-      return myActiveServices
-        .filter((s) => isEnProceso(s) && s.status !== 'STATUS_COMPLETED')
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // servicio queda asignado, STATUS_AT_ORIGIN), no cuando el conductor la toca,
+      // y también si la alerta tenía hora específica (antes se iba a "Reservas").
+      return serviciosDelInicio(
+        myActiveServices,
+        applications,
+        'En proceso',
+        opcionesDelInicio
+      ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
     if (activeStatus === 'Reservas') {
-      return myActiveServices
-        .filter((s) => isReserva(s))
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return serviciosDelInicio(myActiveServices, applications, 'Reservas', opcionesDelInicio).sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }
     return sortedServices;
-  }, [sortedServices, myActiveServices, activeStatus, showArchived]);
+  }, [
+    sortedServices,
+    myActiveServices,
+    applications,
+    activeStatus,
+    showArchived,
+    opcionesDelInicio,
+  ]);
 
   // Medidas de distancia y tiempo (función Premium): del conductor al origen y
   // del origen al destino. Sin premium (o sin clave de Google) no se pide nada.

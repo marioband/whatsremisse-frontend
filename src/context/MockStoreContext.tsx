@@ -291,6 +291,10 @@ function mockReducer(state: MockState, action: MockAction): MockState {
             serviceId: action.payload.serviceId,
             driverId: action.payload.driverId,
             status: 'PENDING',
+            // La base (y el upsert de postularAServicio) refrescan `created_at` en cada
+            // postulación; en el camino sin Supabase se replica para que la regla del
+            // rechazo (ver listaDelConductor) tenga la misma marca.
+            createdAt: new Date().toISOString(),
             order: existingCount + 1,
           },
         ],

@@ -137,6 +137,12 @@ export interface Application {
   order: number;
   providerChatStarted?: boolean;
   seenByDriver?: boolean;
+  /**
+   * Cuándo me postulé (ISO 8601). La app la refresca en cada postulación, así que
+   * es la fecha de MI última postulación: sirve para saber si la alerta se volvió
+   * a editar después (ver `rechazoVigente` en lib/listaDelConductor).
+   */
+  createdAt?: string;
 }
 
 export interface Message {

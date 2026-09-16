@@ -72,6 +72,10 @@ export function mapApplicationFromDb(row: DbApplication): Application {
     order: row.order,
     providerChatStarted: row.provider_chat_started ?? false,
     seenByDriver: row.seen_by_driver ?? false,
+    // La app refresca `created_at` en cada postulación: es la fecha de mi ÚLTIMA
+    // postulación y con ella se sabe si la alerta se editó después (ver
+    // `rechazoVigente` en lib/listaDelConductor).
+    createdAt: row.created_at ?? undefined,
   };
 }
 
