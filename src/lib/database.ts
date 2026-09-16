@@ -129,6 +129,23 @@ export async function fetchServicesForProvider(providerId: string): Promise<Serv
 }
 
 /**
+ * Una sola fila de `service_alerts`, por id. La usa el chat del servicio para
+ * refrescar el ciclo de pago (declaración → rechazo → confirmación) sin volver a
+ * descargar todo el listado: el rechazo lo escribe el OTRO dispositivo y el
+ * conductor no puede enterarse solo por el tiempo real.
+ */
+export async function fetchServiceAlertById(serviceId: string): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase
+    .from('service_alerts')
+    .select('*')
+    .eq('id', serviceId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapServiceAlertFromDb(data as DbServiceAlert) : null;
+}
+
+/**
  * Servicios que puede ver un conductor: los que siguen abiertos y se
  * compartieron a alguno de sus grupos, mas los que ya tiene asignados. Nunca
  * los publicados por el mismo: esos viven en la pestana Proveedor.

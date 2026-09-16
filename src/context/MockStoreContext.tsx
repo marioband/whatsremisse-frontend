@@ -29,6 +29,7 @@ import {
   confirmarPagoDelServicio as confirmarPagoEnDb,
   fetchServicesForDriver,
   fetchServicesForProvider,
+  fetchServiceAlertById,
   postularAServicio,
   insertGroup,
   insertGroupMember,
@@ -551,6 +552,12 @@ interface MockContextValue extends MockState {
    * verse al abrirlo, sin esperar al respaldo periódico del store.
    */
   refrescar: () => void;
+  /**
+   * Relee UNA fila de servicio y la deja en el store. Es la red del chat: quien
+   * rechaza o acepta el monto es el otro dispositivo, así que el conductor no
+   * puede depender solo del tiempo real para enterarse.
+   */
+  refrescarServicio: (serviceId: string) => Promise<void>;
   /** Pago del servicio (migración 0013): declaración, resolución y confirmación. */
   declararPago: (
     serviceId: string,
@@ -704,6 +711,21 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const refrescar = useCallback(() => {
     load();
   }, [load]);
+
+  /**
+   * Relectura de UNA fila. El conductor no puede enterarse del rechazo o de la
+   * aceptación del monto por su cuenta: lo escribe el proveedor. Esto lo pone en
+   * el store en cuanto llegue, sin esperar al respaldo periódico.
+   */
+  const refrescarServicio = useCallback(async (serviceId: string) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const fila = await fetchServiceAlertById(serviceId);
+      if (fila) dispatch({ type: 'UPDATE_SERVICE', payload: fila });
+    } catch (err) {
+      console.warn('[MockStore] no se pudo releer el servicio:', err);
+    }
+  }, []);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -1005,6 +1027,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     loadGroupMembers,
     reloadGroups,
     refrescar,
+    refrescarServicio,
     declararPago: async (serviceId, direccion, monto) => {
       try {
         const actualizado = await declararPagoEnDb(serviceId, direccion, monto);

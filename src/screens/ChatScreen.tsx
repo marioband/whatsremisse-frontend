@@ -90,6 +90,7 @@ export function ChatScreen() {
     confirmarPagoRecibido,
     emitChatNotification,
     refrescar,
+    refrescarServicio,
     userProfile,
   } = useMockStore();
 
@@ -248,6 +249,18 @@ export function ChatScreen() {
   // del store ni a que llegue el evento de tiempo real.
   useEffect(() => {
     refrescar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceId]);
+
+  // ...y mientras el chat está abierto se relee ESA fila cada SONDEO_MS: el
+  // rechazo del monto lo escribe el proveedor y el conductor tiene que verlo sin
+  // recargar (el sondeo de mensajes de más abajo no toca el estado del pago).
+  useEffect(() => {
+    if (!serviceId) return;
+    const id = setInterval(() => {
+      refrescarServicio(serviceId);
+    }, SONDEO_MS);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceId]);
 
