@@ -13,7 +13,7 @@ export const COLORS = {
 
   // Tarjetas de servicio
   cardNew: '#FFFFFF',
-  cardAppliedOverlay: 'rgba(139, 149, 201, 0.85)',
+  cardAppliedOverlay: 'rgba(139, 149, 201, 0.60)',
   cardAccepted: '#358C52',
 
   // Acentos

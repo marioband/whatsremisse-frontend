@@ -41,6 +41,11 @@ export function ServiceCard({
   const swipeableRef = useRef<Swipeable>(null);
 
   const isActive = isApplied || isAccepted;
+  // Texto claro SOLO sobre la capa verde de "Servicio Aceptado". La capa azul de
+  // postulación es translúcida (cardAppliedOverlay): con texto blanco el conductor
+  // no podría leer los datos del servicio que quedan debajo, que es justo lo que
+  // pidió ver.
+  const sobreVerde = isAccepted;
   const cardBackground = isAccepted ? COLORS.brightGreen : COLORS.cardNew;
 
   const getAction = () => {
@@ -88,11 +93,11 @@ export function ServiceCard({
       {/* Columna izquierda: avatar */}
       <View style={styles.cardBody}>
         <View style={styles.avatarColumn}>
-          <View style={[styles.avatar, isActive && styles.avatarActive]}>
+          <View style={[styles.avatar, sobreVerde && styles.avatarActive]}>
             <Text
               style={[
                 styles.avatarText,
-                isActive && { color: isAccepted ? COLORS.brightGreen : COLORS.primary },
+                sobreVerde && { color: isAccepted ? COLORS.brightGreen : COLORS.primary },
               ]}
             >
               {(service.company_name || service.provider_name || '?').charAt(0)}
@@ -102,22 +107,25 @@ export function ServiceCard({
 
         {/* Columna central */}
         <View style={styles.centerColumn}>
-          <Text style={[styles.companyName, isActive && styles.textActive]} numberOfLines={1}>
+          <Text style={[styles.companyName, sobreVerde && styles.textActive]} numberOfLines={1}>
             {service.company_name || service.provider_name || 'Empresa'}
           </Text>
 
           {groupName && (
-            <Text style={[styles.groupName, isActive && styles.textActiveLight]} numberOfLines={1}>
+            <Text
+              style={[styles.groupName, sobreVerde && styles.textActiveLight]}
+              numberOfLines={1}
+            >
               {groupName}
             </Text>
           )}
 
           <View style={styles.dispatchRow}>
-            <Text style={[styles.dispatchType, isActive && styles.textActiveLight]}>
+            <Text style={[styles.dispatchType, sobreVerde && styles.textActiveLight]}>
               {textoProgramado(service)}
             </Text>
             {isReservation && (
-              <Text style={[styles.reservaLabel, isActive && styles.textActiveLight]}>
+              <Text style={[styles.reservaLabel, sobreVerde && styles.textActiveLight]}>
                 {' '}
                 (Reserva)
               </Text>
@@ -125,9 +133,9 @@ export function ServiceCard({
           </View>
 
           <View style={styles.locationRow}>
-            <View style={[styles.dotOrigin, isActive && styles.dotActive]} />
-            <Text style={[styles.locationText, isActive && styles.textActive]} numberOfLines={1}>
-              <Text style={[styles.estimate, isActive && styles.textActive]}>
+            <View style={[styles.dotOrigin, sobreVerde && styles.dotActive]} />
+            <Text style={[styles.locationText, sobreVerde && styles.textActive]} numberOfLines={1}>
+              <Text style={[styles.estimate, sobreVerde && styles.textActive]}>
                 {service.origin_estimate || ''}{' '}
               </Text>
               {service.origin_address}
@@ -135,9 +143,9 @@ export function ServiceCard({
           </View>
 
           <View style={styles.locationRow}>
-            <View style={[styles.dotDestination, isActive && styles.dotActive]} />
-            <Text style={[styles.locationText, isActive && styles.textActive]} numberOfLines={1}>
-              <Text style={[styles.estimate, isActive && styles.textActive]}>
+            <View style={[styles.dotDestination, sobreVerde && styles.dotActive]} />
+            <Text style={[styles.locationText, sobreVerde && styles.textActive]} numberOfLines={1}>
+              <Text style={[styles.estimate, sobreVerde && styles.textActive]}>
                 {service.destination_estimate || ''}{' '}
               </Text>
               {service.destination_address}
@@ -157,11 +165,11 @@ export function ServiceCard({
 
         {/* Columna derecha */}
         <View style={styles.rightColumn}>
-          <Text style={[styles.amount, isActive && styles.textActive]}>S/ {service.fare}</Text>
-          <Text style={[styles.paymentTerm, isActive && styles.textActiveLight]}>
+          <Text style={[styles.amount, sobreVerde && styles.textActive]}>S/ {service.fare}</Text>
+          <Text style={[styles.paymentTerm, sobreVerde && styles.textActiveLight]}>
             {service.payment_term || 'Al término'}
           </Text>
-          <Text style={[styles.paymentMethod, isActive && styles.textActiveLight]}>
+          <Text style={[styles.paymentMethod, sobreVerde && styles.textActiveLight]}>
             {service.payment_method || 'BCP'}
           </Text>
         </View>
@@ -342,7 +350,9 @@ const styles = StyleSheet.create({
   appliedText: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#fff',
+    // Sobre la capa translúcida el blanco no se lee: el número va en azul de
+    // marca oscuro para que destaque sin tapar los datos del servicio.
+    color: COLORS.primaryDark,
     textAlign: 'center',
   },
   acceptedOverlay: {
