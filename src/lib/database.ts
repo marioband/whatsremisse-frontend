@@ -149,12 +149,16 @@ export async function fetchServicesForDriver(
   rows.push(...((assigned.data || []) as DbServiceAlert[]));
 
   if (groupIds.length > 0) {
+    // Las alertas caducadas no se descargan siquiera: el conductor solo ve las que
+    // puede tomar (su hora de inicio todavía no pasó). El proveedor las sigue
+    // viendo en su lista para editarlas y reenviarlas.
     const shared = await supabase
       .from('service_alerts')
       .select('*')
       .eq('status', 'STATUS_OPEN')
       .in('group_id', groupIds)
-      .neq('provider_id', driverId);
+      .neq('provider_id', driverId)
+      .or(`scheduled_at.is.null,scheduled_at.gt.${new Date().toISOString()}`);
     if (shared.error) throw shared.error;
     rows.push(...((shared.data || []) as DbServiceAlert[]));
   }

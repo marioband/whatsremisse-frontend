@@ -68,8 +68,10 @@ export function estadoDeServicio(
   }
 
   if (estaVencido(service)) {
-    // El conductor no puede tomar una alerta caducada: se le dice sin rodeos y sin
-    // la palabra "vencido", que es la señal del proveedor para su propia tarjeta.
+    // Defensivo: con la regla de `isVisibleAsDriver` el conductor ya no ve alertas
+    // caducadas (desaparecen a la hora de inicio y el proveedor las conserva para
+    // editarlas y reenviarlas). Si alguna se colara en un render, igual no le
+    // mostramos la señal del proveedor.
     return {
       etiqueta: soyConductor ? 'No disponible' : 'Servicio vencido',
       color: soyConductor ? TEXTO_TENUE : ROJO_ACCION,
