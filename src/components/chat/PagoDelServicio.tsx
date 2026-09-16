@@ -31,6 +31,17 @@ interface Props {
   misDatos: { yapeNumber?: string; bcpAccount?: string; bcpCci?: string };
   /** Datos de pago del conductor (el proveedor los trae por función autorizada). */
   datosDelConductor: { yape?: string; bcpAccount?: string; bcpCci?: string } | null;
+  /**
+   * Datos de pago del proveedor (el conductor los trae por función autorizada):
+   * en el caso A el conductor es quien transfiere, así que los necesita dentro
+   * del chat, y desde el paso 1 ("siempre visibles").
+   */
+  datosDelProveedor?: {
+    yape?: string;
+    bcpAccount?: string;
+    bcpCci?: string;
+    nombre?: string;
+  } | null;
   onDeclarar: (direccion: DireccionPago, monto: number) => void;
   onResolver: (aceptar: boolean) => void;
   onConfirmar: () => void;
@@ -52,6 +63,7 @@ export function PagoDelServicio({
   rol,
   misDatos,
   datosDelConductor,
+  datosDelProveedor = null,
   onDeclarar,
   onResolver,
   onConfirmar,
@@ -75,16 +87,19 @@ export function PagoDelServicio({
   const puedeDeclararAhora =
     rol === 'CONDUCTOR' && (resumen.estado === 'SIN_DECLARAR' || resumen.estado === 'RECHAZADO');
 
+  /** Medios de pago del proveedor (para el caso A, desde el paso 1). */
+  const datosDelProveedorParaMostrar = {
+    titulo: 'Datos de pago del proveedor',
+    nota: datosDelProveedor?.nombre
+      ? `Transfiere a ${datosDelProveedor.nombre} y luego él confirma la recepción.`
+      : 'Transfiere a estos datos y luego el proveedor confirma la recepción.',
+    yape: datosDelProveedor?.yape || service.provider_yape,
+    cuenta: datosDelProveedor?.bcpAccount || service.provider_bcp_account,
+    cci: datosDelProveedor?.bcpCci || service.provider_bcp_cci,
+  };
+
   const datosDelReceptor = () => {
-    if (resumen.recibe === 'PROVEEDOR') {
-      return {
-        titulo: 'Datos de pago del proveedor',
-        nota: 'Transfiere a estos datos y luego el proveedor confirma la recepción.',
-        yape: service.provider_yape,
-        cuenta: service.provider_bcp_account,
-        cci: service.provider_bcp_cci,
-      };
-    }
+    if (resumen.recibe === 'PROVEEDOR') return datosDelProveedorParaMostrar;
     return {
       titulo: 'Datos de pago del conductor',
       nota:
@@ -96,6 +111,40 @@ export function PagoDelServicio({
       cci: datosDelConductor?.bcpCci || misDatos.bcpCci,
     };
   };
+
+  /** Bloque de medios de pago, con el botón de copiar en cada uno. */
+  const bloqueDatos = (d: {
+    titulo: string;
+    nota: string;
+    yape?: string;
+    cuenta?: string;
+    cci?: string;
+  }) => (
+    <View style={styles.datosPago}>
+      <Text style={styles.datosTitulo}>{d.titulo}</Text>
+      <Text style={styles.datosNota}>{d.nota}</Text>
+      {!!d.yape && (
+        <BankDetailsRow
+          label="Yape / Plin"
+          value={d.yape}
+          onCopy={(v) => onCopiar('Yape / Plin', v)}
+        />
+      )}
+      {!!d.cuenta && (
+        <BankDetailsRow
+          label="Cuenta bancaria"
+          value={d.cuenta}
+          onCopy={(v) => onCopiar('Cuenta bancaria', v)}
+        />
+      )}
+      {!!d.cci && <BankDetailsRow label="CCI" value={d.cci} onCopy={(v) => onCopiar('CCI', v)} />}
+      {!d.yape && !d.cuenta && !d.cci && (
+        <Text style={styles.espera}>
+          No hay medios de pago registrados en el perfil de quien debe recibir.
+        </Text>
+      )}
+    </View>
+  );
 
   const filaDeEstado = () => {
     if (resumen.estado === 'CONFIRMADO') return { texto: 'Pagado y cerrado', color: VERDE_ACCION };
@@ -274,40 +323,19 @@ export function PagoDelServicio({
         )}
 
         {/* ------------------------------------------------ datos de pago */}
+        {/* Paso 1 del conductor: los medios del proveedor, siempre visibles, para
+            que sepa dónde transferir en el caso A. */}
+        {rol === 'CONDUCTOR' &&
+          (resumen.estado === 'SIN_DECLARAR' || resumen.estado === 'RECHAZADO') &&
+          bloqueDatos(datosDelProveedorParaMostrar)}
+
         {resumen.estado !== 'CONFIRMADO' &&
           (resumen.estado === 'SIN_DECLARAR' || resumen.estado === 'RECHAZADO') &&
           !puedeDeclararAhora && (
             <Text style={styles.espera}>Esperando que el conductor declare el monto del pago.</Text>
           )}
 
-        {resumen.direccion !== null && resumen.estado !== 'RECHAZADO' && (
-          <View style={styles.datosPago}>
-            <Text style={styles.datosTitulo}>{detalles.titulo}</Text>
-            <Text style={styles.datosNota}>{detalles.nota}</Text>
-            {!!detalles.yape && (
-              <BankDetailsRow
-                label="Yape / Plin"
-                value={detalles.yape}
-                onCopy={(v) => onCopiar('Yape / Plin', v)}
-              />
-            )}
-            {!!detalles.cuenta && (
-              <BankDetailsRow
-                label="Cuenta bancaria"
-                value={detalles.cuenta}
-                onCopy={(v) => onCopiar('Cuenta bancaria', v)}
-              />
-            )}
-            {!!detalles.cci && (
-              <BankDetailsRow label="CCI" value={detalles.cci} onCopy={(v) => onCopiar('CCI', v)} />
-            )}
-            {!detalles.yape && !detalles.cuenta && !detalles.cci && (
-              <Text style={styles.espera}>
-                No hay medios de pago registrados en el perfil de quien debe recibir.
-              </Text>
-            )}
-          </View>
-        )}
+        {resumen.direccion !== null && resumen.estado !== 'RECHAZADO' && bloqueDatos(detalles)}
       </View>
     </View>
   );

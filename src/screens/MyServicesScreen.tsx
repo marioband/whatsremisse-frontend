@@ -5,7 +5,7 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
-import { VERDE_ACCION } from '../lib/colors';
+import { AZUL, OSCURO, VERDE_ACCION } from '../lib/colors';
 import { estadoDeServicio } from '../lib/estadoServicio';
 import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -17,50 +17,102 @@ const DARK_BG = '#2D2D2D';
 
 interface GroupedServices {
   date: string;
-  services: ServiceAlert[];
+  filas: Fila[];
+}
+
+/** Una fila = un servicio + el rol que tuve en él. */
+interface Fila {
+  service: ServiceAlert;
+  rol: 'PROVEEDOR' | 'CONDUCTOR';
 }
 
 export function MyServicesScreen() {
   const navigation = useNavigation<MyServicesNav>();
-  const { services, applications, role } = useMockStore();
+  const { services, applications } = useMockStore();
   const { session } = useAuth();
   const userId = session?.user?.id;
 
-  const isDriver = role === 'DRIVER';
-
-  const myServices = services.filter((s) =>
-    isDriver ? s.assigned_driver_id === userId : s.provider_id === userId
+  /**
+   * Un mismo usuario puede ser proveedor y conductor, así que "Mis servicios"
+   * lista todos los servicios en los que participa y marca el rol en cada fila
+   * (igual que Estadísticas). Antes se filtraba por el modo abierto de la app y,
+   * con el tab Conductor, un proveedor veía la lista vacía: por eso no llegaba a
+   * la zona de pago de sus propios servicios.
+   */
+  const misServicios = useMemo<Fila[]>(
+    () =>
+      services
+        .map((service): Fila | null => {
+          if (service.provider_id === userId) return { service, rol: 'PROVEEDOR' };
+          if (service.assigned_driver_id === userId) return { service, rol: 'CONDUCTOR' };
+          return null;
+        })
+        .filter((fila): fila is Fila => fila !== null),
+    [services, userId]
   );
 
   const grouped = useMemo<GroupedServices[]>(() => {
-    const sorted = [...myServices].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    const sorted = [...misServicios].sort(
+      (a, b) => new Date(b.service.created_at).getTime() - new Date(a.service.created_at).getTime()
     );
 
-    const map = new Map<string, ServiceAlert[]>();
-    sorted.forEach((service) => {
-      const dateKey = new Date(service.created_at).toLocaleDateString('es-PE', {
+    const map = new Map<string, Fila[]>();
+    sorted.forEach((fila) => {
+      const dateKey = new Date(fila.service.created_at).toLocaleDateString('es-PE', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
       });
       if (!map.has(dateKey)) map.set(dateKey, []);
-      map.get(dateKey)!.push(service);
+      map.get(dateKey)!.push(fila);
     });
 
-    return Array.from(map.entries()).map(([date, services]) => ({ date, services }));
-  }, [myServices]);
+    return Array.from(map.entries()).map(([date, filas]) => ({ date, filas }));
+  }, [misServicios]);
 
   const postulantesDe = (serviceId: string) =>
     applications.filter((a) => a.serviceId === serviceId && a.status === 'PENDING').length;
 
-  const renderServiceCard = (service: ServiceAlert) => {
+  /**
+   * Lleva a cada rol al lugar donde ACTÚA sobre ese servicio: el chat (ahí vive la
+   * zona de pago cuando el viaje terminó), los postulantes, o "nuevo servicio"
+   * para editarlo/cambiarle los grupos cuando todavía no tiene conductor.
+   */
+  const abrirServicio = (service: ServiceAlert, rol: 'PROVEEDOR' | 'CONDUCTOR') => {
+    if (rol === 'CONDUCTOR') {
+      navigation.navigate('Chat', {
+        serviceId: service.id,
+        driverId: userId,
+        driverName: 'Conductor',
+      });
+      return;
+    }
+    if (service.assigned_driver_id) {
+      navigation.navigate('Chat', {
+        serviceId: service.id,
+        driverId: service.assigned_driver_id,
+        driverName: 'Conductor',
+      });
+      return;
+    }
+    if (postulantesDe(service.id) > 0) {
+      navigation.navigate('ApplicantsScreen', { serviceId: service.id });
+      return;
+    }
+    navigation.navigate('CreateService', { service });
+  };
+
+  const renderServiceCard = (service: ServiceAlert, rol: 'PROVEEDOR' | 'CONDUCTOR') => {
     // La señal de la tarjeta sale de `estadoDeServicio`: una sola fuente de verdad
     // (no compartido → buscando → postulantes → en camino → ubicado → proceso → finalizado).
     const estado = estadoDeServicio(service, postulantesDe(service.id));
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.8}
+        onPress={() => abrirServicio(service, rol)}
+      >
         <View style={styles.cardLeft}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -95,16 +147,24 @@ export function MyServicesScreen() {
           {!!historialDePago(service) && (
             <Text style={styles.pagoText}>✅ {historialDePago(service)}</Text>
           )}
+
+          {/* Rol en ese servicio + entrada a la zona donde se actúa. */}
+          <View style={styles.rolFila}>
+            <View style={[styles.rolTag, { backgroundColor: rol === 'CONDUCTOR' ? AZUL : OSCURO }]}>
+              <Text style={styles.rolTexto}>{rol === 'CONDUCTOR' ? 'Conductor' : 'Proveedor'}</Text>
+            </View>
+            <Text style={styles.abrirTexto}>Ver ›</Text>
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
   const renderSection = ({ item }: { item: GroupedServices }) => (
     <View style={styles.section}>
       <Text style={styles.dateHeader}>{item.date}</Text>
-      {item.services.map((service) => (
-        <View key={service.id}>{renderServiceCard(service)}</View>
+      {item.filas.map((fila) => (
+        <View key={fila.service.id}>{renderServiceCard(fila.service, fila.rol)}</View>
       ))}
     </View>
   );
@@ -245,6 +305,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 6,
   },
+  rolFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  rolTag: {
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  rolTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  abrirTexto: { color: AZUL, fontSize: 11, fontWeight: '700' },
   routeText: {
     fontSize: 13,
     color: '#444',

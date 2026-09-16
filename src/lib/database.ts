@@ -499,6 +499,44 @@ export async function datosDePagoDelConductor(serviceId: string): Promise<{
 }
 
 /**
+ * Datos de pago del proveedor del servicio (migración 0014): en el caso A
+ * ("Yo pago") el conductor es quien transfiere, así que necesita ver el
+ * Yape/Plin, la cuenta y el CCI del proveedor dentro del propio chat. Van por
+ * función autorizada porque `profiles` no expone esos campos a terceros.
+ */
+export async function datosDePagoDelProveedor(serviceId: string): Promise<{
+  yape?: string;
+  bcpAccount?: string;
+  bcpCci?: string;
+  nombre?: string;
+} | null> {
+  if (!isSupabaseConfigured) return null;
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: filas, error } = await supabase.rpc('datos_de_pago_del_proveedor', {
+      p_service_id: serviceId,
+    });
+    if (error) throw error;
+    return filas;
+  });
+  const fila = (Array.isArray(data) ? data[0] : data) as
+    | {
+        yape?: string | null;
+        bcp_account?: string | null;
+        bcp_cci?: string | null;
+        nombre?: string | null;
+      }
+    | null
+    | undefined;
+  if (!fila) return null;
+  return {
+    yape: fila.yape || undefined,
+    bcpAccount: fila.bcp_account || undefined,
+    bcpCci: fila.bcp_cci || undefined,
+    nombre: fila.nombre || undefined,
+  };
+}
+
+/**
  * Anula (elimina) una tarjeta de servicio. Sus postulaciones y mensajes caen por
  * `ON DELETE CASCADE`.
  *

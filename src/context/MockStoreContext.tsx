@@ -955,7 +955,17 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     declararPago: async (serviceId, direccion, monto) => {
       try {
         const actualizado = await declararPagoEnDb(serviceId, direccion, monto);
-        if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+        if (!actualizado) {
+          // Sin fila devuelta no hay nada que mostrar: avisar en vez de dejarlo pasar
+          // (antes la declaración se perdía en silencio y parecía que el otro lado
+          // no tenía nada que hacer).
+          Alert.alert(
+            'No se pudo declarar el pago',
+            'La base no devolvió el servicio. Revisa que el viaje esté en Finalizado y que tú seas el conductor asignado, y vuelve a intentarlo.'
+          );
+          return false;
+        }
+        dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
         return true;
       } catch (err) {
         console.error('[MockStore] declararPago error:', err);
@@ -969,7 +979,14 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     resolverDeclaracionDePago: async (serviceId, aceptar) => {
       try {
         const actualizado = await resolverDeclaracionEnDb(serviceId, aceptar);
-        if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+        if (!actualizado) {
+          Alert.alert(
+            aceptar ? 'No se pudo aceptar el monto' : 'No se pudo rechazar el monto',
+            'Ya no hay un monto pendiente de resolver en este servicio (puede haberse resuelto desde el otro dispositivo).'
+          );
+          return false;
+        }
+        dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
         return true;
       } catch (err) {
         console.error('[MockStore] resolverDeclaracionDePago error:', err);
@@ -983,7 +1000,14 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     confirmarPagoRecibido: async (serviceId) => {
       try {
         const actualizado = await confirmarPagoEnDb(serviceId);
-        if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+        if (!actualizado) {
+          Alert.alert(
+            'No se pudo confirmar el pago',
+            'El pago no está en "Pago en camino": solo quien recibe el dinero puede confirmarlo una vez aceptado el monto.'
+          );
+          return false;
+        }
+        dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
         return true;
       } catch (err) {
         console.error('[MockStore] confirmarPagoRecibido error:', err);

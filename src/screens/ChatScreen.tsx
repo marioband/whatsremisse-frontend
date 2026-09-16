@@ -30,6 +30,7 @@ import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgre
 import { Alert } from '../lib/alert';
 import {
   datosDePagoDelConductor,
+  datosDePagoDelProveedor,
   esTablaAusente,
   fetchServiceMessages,
   insertServiceMessage,
@@ -105,6 +106,13 @@ export function ChatScreen() {
     bcpAccount?: string;
     bcpCci?: string;
   } | null>(null);
+  // Caso A ("Yo pago"): el conductor necesita los medios de pago del proveedor.
+  const [datosDelProveedor, setDatosDelProveedor] = useState<{
+    yape?: string;
+    bcpAccount?: string;
+    bcpCci?: string;
+    nombre?: string;
+  } | null>(null);
   const isAdvancingRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -112,12 +120,23 @@ export function ChatScreen() {
   const { currentStep, progressIndex } = useServiceProgress(service);
 
   const userId = session?.user?.id ?? '';
-  const isDriver = role === 'DRIVER';
-  const isProvider = role === 'PROVIDER';
   const mySenderId = userId;
   const effectiveDriverId = driverId ?? service?.assigned_driver_id ?? '';
+  // El rol dentro del chat NO puede salir del tab que el usuario tenga abierto:
+  // si el proveedor entra con el modo Conductor (o desde otra pantalla) vería la
+  // interfaz del conductor y nunca le aparecerían Aceptar / Rechazar. Manda la
+  // relación con ESTE servicio; el modo de la app queda solo como respaldo para
+  // cuando la fila todavía no llega o el usuario aún no es parte del servicio.
+  const soyProveedorDelServicio = !!service && !!userId && service.provider_id === userId;
+  const soyConductorAsignado = !!service && !!userId && service.assigned_driver_id === userId;
+  const esParteDelServicio = soyProveedorDelServicio || soyConductorAsignado;
+  const isDriver = esParteDelServicio ? soyConductorAsignado : role === 'DRIVER';
+  const isProvider = esParteDelServicio ? soyProveedorDelServicio : role === 'PROVIDER';
   const otherSenderId = isDriver ? (service?.provider_id ?? '') : effectiveDriverId;
-  const isAssigned = service?.assigned_driver_id === effectiveDriverId;
+  const isAssigned =
+    service?.assigned_driver_id === effectiveDriverId ||
+    soyConductorAsignado ||
+    (isProvider && !!service?.assigned_driver_id);
   const isEvaluationMode =
     isProvider && service && !isAssigned && service.status !== 'STATUS_COMPLETED';
 
@@ -139,8 +158,15 @@ export function ChatScreen() {
   // pasa a la interfaz de pago (declaración → aceptación → confirmación).
   const showSlider =
     isDriver && isAssigned && service && !isEvaluationMode && currentStep === 'IN_PROGRESS';
-  const showPago =
-    !!isAssigned && !isEvaluationMode && currentStep === 'PAGO' && service !== undefined;
+  // El cierre del viaje llega por dos señales equivalentes (0012 escribe las dos:
+  // driver_progress_step = 3 y status = STATUS_COMPLETED). Basta con una para que
+  // la zona de pago aparezca en los DOS dispositivos.
+  const viajeTerminado =
+    currentStep === 'PAGO' ||
+    (!!service &&
+      (service.status === 'STATUS_COMPLETED' ||
+        (service.driver_progress_step ?? 0) >= ULTIMO_HITO_VIAJE));
+  const showPago = !!service && esParteDelServicio && viajeTerminado && !isEvaluationMode;
 
   const rol: 'CONDUCTOR' | 'PROVEEDOR' = isDriver ? 'CONDUCTOR' : 'PROVEEDOR';
   // Se leen campos sueltos (no un objeto derivado, que sería nuevo en cada render)
@@ -166,6 +192,25 @@ export function ChatScreen() {
       vigente = false;
     };
   }, [isProvider, idDelServicio, direccionDePago]);
+
+  // Caso A: el conductor ve los medios de pago del proveedor (0014). Se piden
+  // desde el principio, no solo tras declarar: el flujo los quiere "siempre
+  // visibles" en el paso 1.
+  useEffect(() => {
+    if (!isDriver || !idDelServicio) return;
+    let vigente = true;
+    (async () => {
+      try {
+        const datos = await datosDePagoDelProveedor(idDelServicio);
+        if (vigente) setDatosDelProveedor(datos);
+      } catch (err) {
+        console.warn('[chat] no se pudieron leer los datos de pago del proveedor:', err);
+      }
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [isDriver, idDelServicio]);
 
   // ---------------------------------------------------------------- mensajes
   const cargarMensajes = useCallback(
@@ -546,6 +591,7 @@ Placa: ${profile.plate}`;
               bcpCci: userProfile?.bcpCci,
             }}
             datosDelConductor={datosDelConductor}
+            datosDelProveedor={datosDelProveedor}
             ocupado={pagoOcupado}
             onDeclarar={handleDeclararPago}
             onResolver={handleResolverDeclaracion}
