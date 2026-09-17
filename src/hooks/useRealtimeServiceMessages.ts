@@ -13,6 +13,11 @@ export interface ServiceMessageCallbacks {
    * así que la pantalla relee la conversación en vez de intentar reconstruirla.
    */
   onDelete?: () => void;
+  /**
+   * Cambió una marca de lectura (0020): la pantalla relee las marcas para
+   * repintar las palomitas de sus mensajes.
+   */
+  onReads?: () => void;
 }
 
 function filaDesdeEvento(row: any): ServiceMessage {
@@ -44,7 +49,7 @@ export function useRealtimeServiceMessages(
   serviceId: string | undefined,
   callbacks: ServiceMessageCallbacks
 ) {
-  const { onMessage, onUpdate, onDelete } = callbacks;
+  const { onMessage, onUpdate, onDelete, onReads } = callbacks;
 
   useEffect(() => {
     if (!isSupabaseConfigured || !serviceId) return;
@@ -86,10 +91,22 @@ export function useRealtimeServiceMessages(
           onDelete?.();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'service_chat_reads',
+          filter: `service_id=eq.${serviceId}`,
+        },
+        () => {
+          onReads?.();
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [serviceId, onMessage, onUpdate, onDelete]);
+  }, [serviceId, onMessage, onUpdate, onDelete, onReads]);
 }

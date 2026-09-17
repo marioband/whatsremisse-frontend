@@ -1,6 +1,7 @@
 import { describeError } from './errors';
 import { conGrupos } from './gruposDeServicio';
 import { displayName } from './names';
+import type { LecturaDeChat } from './palomas';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { GroupItem, GroupMember } from '../context/MockStoreContext';
 import { Application, ServiceAlert, ServiceStatus, VehicleData } from '../types';
@@ -1275,24 +1276,32 @@ export async function insertServiceMessage(params: {
  * ¿El error es "todavía no se puede editar/eliminar mensajes"? Entonces la
  * migración 0019 no está aplicada (falta la columna `edited_at` o la política de
  * UPDATE/DELETE) y hay que decirlo en pantalla en vez de dejar el menú mudo.
+ *
+ * Vale igual para la 0020 (palomitas): tabla ausente, columna ausente o sin
+ * privilegio. En los dos casos lo que falta es aplicar la migración.
  */
-export function esEdicionSinMigracion(err: unknown): boolean {
+export function esMigracionAusente(err: unknown): boolean {
   const e = err as { code?: string; message?: string; details?: string; hint?: string } | null;
   if (!e) return false;
   const codigo = e.code || '';
   const texto = `${e.message || ''} ${e.details || ''} ${e.hint || ''}`.toLowerCase();
   return (
-    codigo === '42501' || // sin privilegio: no existe la política de la 0019
-    codigo === '42703' || // no existe la columna edited_at
+    codigo === '42P01' || // la tabla no existe
+    codigo === '42501' || // sin privilegio: no existe la política de la migración
+    codigo === '42703' || // no existe la columna
     codigo === 'PGRST204' ||
+    codigo === 'PGRST205' ||
     codigo === 'PGRST202' ||
     texto.includes('violates row-level security') ||
     texto.includes('permission denied') ||
-    (texto.includes('column') && texto.includes('does not exist')) ||
+    texto.includes('does not exist') ||
     texto.includes('could not find the') ||
     texto.includes('schema cache')
   );
 }
+
+/** Nombre anterior, todavía usado por los chats: es el mismo detector. */
+export const esEdicionSinMigracion = esMigracionAusente;
 
 /**
  * Editar un mensaje propio del chat del servicio (migración 0019).
@@ -1326,6 +1335,61 @@ export async function deleteServiceMessage(id: string): Promise<boolean> {
     .select('id');
   if (error) throw error;
   return (data || []).length > 0;
+}
+
+// --------------------------------------------- confirmación de lectura (0020)
+// `LecturaDeChat` se define en `lib/palomas.ts` (módulo puro) y se exporta desde
+// aquí para que la app tenga una sola definición.
+export type { LecturaDeChat };
+
+/**
+ * Hasta cuándo leyó cada participante esta conversación del servicio. Con eso la
+ * app decide si un mensaje propio lleva una o dos palomitas.
+ */
+export async function fetchServiceChatReads(
+  serviceId: string,
+  driverId: string
+): Promise<LecturaDeChat[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('service_chat_reads')
+    .select('user_id, last_read_at')
+    .eq('service_id', serviceId)
+    .eq('driver_id', driverId);
+  if (error) throw error;
+  return (data || []) as LecturaDeChat[];
+}
+
+/** Lo mismo para el chat de grupo: la marca de cada integrante. */
+export async function fetchGroupChatReads(groupId: string): Promise<LecturaDeChat[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('group_chat_reads')
+    .select('user_id, last_read_at')
+    .eq('group_id', groupId);
+  if (error) throw error;
+  return (data || []) as LecturaDeChat[];
+}
+
+/**
+ * Marca la conversación del servicio como leída AHORA (se llama al abrir el chat
+ * y en cada relectura). La hora la pone la base: un reloj adelantado en el
+ * teléfono haría que las palomitas mintieran.
+ */
+export async function marcarLecturaDelServicio(serviceId: string, driverId: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.rpc('marcar_lectura_del_servicio', {
+    p_service_id: serviceId,
+    p_driver_id: driverId,
+  });
+  if (error) throw error;
+}
+
+/** Marca el grupo como leído ahora (la hora la pone la base). */
+export async function marcarLecturaDelGrupo(groupId: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.rpc('marcar_lectura_del_grupo', { p_group_id: groupId });
+  if (error) throw error;
 }
 
 export interface SearchableProfile {

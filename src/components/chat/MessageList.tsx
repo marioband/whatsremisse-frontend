@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, FlatList, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 
+import { Palomas } from './Palomas';
 import { AZUL, TEXTO } from '../../lib/colors';
+import { ContextoDePalomas, LecturaDeChat, estadoDePalomas } from '../../lib/palomas';
 import { Message } from '../../types';
 
 interface MessageListProps {
@@ -15,6 +17,12 @@ interface MessageListProps {
    * pueden tocar, así que no se pintan como tocables.
    */
   onActions?: (message: Message) => void;
+  /**
+   * Confirmación de lectura (0020): quiénes más participan, hasta cuándo leyó cada
+   * uno y si el chat tiene base compartida. Sin este contexto no se pinta ninguna
+   * palomita (es lo que pasa si la 0020 no está aplicada).
+   */
+  palomas?: { participantes: string[]; lecturas: LecturaDeChat[]; hayBase: boolean };
 }
 
 /**
@@ -45,6 +53,7 @@ export function MessageList({
   listRef,
   ListHeaderComponent,
   onActions,
+  palomas,
 }: MessageListProps) {
   const renderItem = ({ item }: { item: Message }) => {
     const isSystem = item.type === 'SYSTEM';
@@ -66,6 +75,22 @@ export function MessageList({
     // El mensaje editado solo se declara como editado: el texto anterior no se
     // guarda ni se muestra en ninguna parte (regla del usuario).
     const marca = item.edited_at ? `${time} · editado` : time;
+
+    // Palomitas: solo en los mensajes propios (como WhatsApp).
+    const contextoDePalomas: ContextoDePalomas = {
+      esMio: isMine,
+      participantes: palomas?.participantes ?? [],
+      lecturas: palomas?.lecturas ?? [],
+      hayBase: palomas?.hayBase,
+    };
+    const estado = palomas ? estadoDePalomas(item, contextoDePalomas) : null;
+
+    const horaYPalomas = (
+      <View style={styles.timeRow}>
+        <Text style={[styles.time, { color: palette.time }]}>{marca}</Text>
+        <Palomas estado={estado} />
+      </View>
+    );
 
     // Los mensajes propios se pueden editar o eliminar: el menú se abre con una
     // pulsación larga y, en web (donde no hay costumbre de mantener pulsado), con
@@ -102,7 +127,7 @@ export function MessageList({
               {(item.metadata?.duration as number) || 0}s
             </Text>
           </View>
-          <Text style={[styles.time, { color: palette.time }]}>{marca}</Text>
+          {horaYPalomas}
         </View>
       );
     }
@@ -110,7 +135,7 @@ export function MessageList({
     return fila(
       <View style={[styles.bubble, isMine ? styles.myBubble : styles.otherBubble]}>
         <Text style={[styles.messageText, { color: palette.text }]}>{item.content}</Text>
-        <Text style={[styles.time, { color: palette.time }]}>{marca}</Text>
+        {horaYPalomas}
       </View>
     );
   };
@@ -166,5 +191,13 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 15 },
   systemBubble: { alignSelf: 'center', marginVertical: 8 },
   systemText: { fontSize: 12, color: '#666', fontStyle: 'italic', textAlign: 'center' },
-  time: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
+  /** Hora + palomitas, pegadas al borde derecho de la burbuja. */
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  time: { fontSize: 10 },
 });

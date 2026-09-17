@@ -13,6 +13,11 @@ export interface GroupMessageCallbacks {
    * así que la pantalla relee la conversación en vez de intentar reconstruirla.
    */
   onDelete?: () => void;
+  /**
+   * Cambió una marca de lectura (0020): la pantalla relee las marcas para
+   * repintar las palomitas de sus mensajes.
+   */
+  onReads?: () => void;
 }
 
 function filaDesdeEvento(row: any): ChatMessage {
@@ -37,7 +42,7 @@ function filaDesdeEvento(row: any): ChatMessage {
  * pantalla relea la conversación.
  */
 export function useRealtimeMessages(groupId: string | undefined, callbacks: GroupMessageCallbacks) {
-  const { onMessage, onUpdate, onDelete } = callbacks;
+  const { onMessage, onUpdate, onDelete, onReads } = callbacks;
 
   useEffect(() => {
     if (!groupId) return;
@@ -75,10 +80,22 @@ export function useRealtimeMessages(groupId: string | undefined, callbacks: Grou
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, () => {
         onDelete?.();
       })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'group_chat_reads',
+          filter: `group_id=eq.${groupId}`,
+        },
+        () => {
+          onReads?.();
+        }
+      )
       .subscribe();
 
     return () => {
       channel.unsubscribe();
     };
-  }, [groupId, onMessage, onUpdate, onDelete]);
+  }, [groupId, onMessage, onUpdate, onDelete, onReads]);
 }

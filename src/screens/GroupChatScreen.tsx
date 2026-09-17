@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
+import { Palomas } from '../components/chat/Palomas';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeMessages } from '../hooks/useRealtimeMessages';
@@ -23,8 +24,11 @@ import {
   ChatMessage,
   deleteGroupMessage,
   esEdicionSinMigracion,
+  esMigracionAusente,
+  fetchGroupChatReads,
   fetchMessagesForGroup,
   insertMessage,
+  marcarLecturaDelGrupo,
   updateGroupMessage,
 } from '../lib/database';
 import {
@@ -40,6 +44,7 @@ import {
 } from '../lib/mensajes';
 import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { displayName } from '../lib/names';
+import { AVISO_MIGRACION_0020, LecturaDeChat, estadoDePalomas } from '../lib/palomas';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type GroupChatNav = StackNavigationProp<RootStackParamList, 'GroupChat' | 'Settings'>;
@@ -68,6 +73,9 @@ export function GroupChatScreen() {
   const [accionOcupada, setAccionOcupada] = useState(false);
   // false = falta la migración 0019 (editar y eliminar): se avisa en pantalla.
   const [edicionDisponible, setEdicionDisponible] = useState(true);
+  // Confirmación de lectura (0020): hasta cuándo leyó cada integrante del grupo.
+  const [lecturas, setLecturas] = useState<LecturaDeChat[]>([]);
+  const [lecturasDisponibles, setLecturasDisponibles] = useState(true);
 
   // Nombre real por integrante: `messages` solo guarda el user_id del
   // remitente, así que antes el chat mostraba UUIDs como nombre.
@@ -82,22 +90,75 @@ export function GroupChatScreen() {
   /** Nombre con el que el sistema declara la acción (nunca un UUID). */
   const miNombre = memberNames[userId] || 'Un integrante';
 
+  /**
+   * Los DEMÁS integrantes del grupo: la doble palomita de mis mensajes exige que
+   * TODOS ellos hayan leído (como WhatsApp). Si la lista de integrantes todavía no
+   * llegó queda vacía y se pinta la palomita simple: nunca se afirma "leído" sin
+   * saber quiénes faltan.
+   */
+  const participantesDelGrupo = useMemo(
+    () => Object.keys(memberNames).filter((id) => id !== userId),
+    [memberNames, userId]
+  );
+
   useEffect(() => {
     loadGroupMembers(groupId);
   }, [groupId, loadGroupMembers]);
+
+  /**
+   * Marcas de lectura del grupo (0020): hasta cuándo leyó cada integrante. Se
+   * releen en cada carga y cuando el tiempo real avisa de un cambio.
+   */
+  const cargarLecturas = useCallback(async () => {
+    try {
+      const filas = await fetchGroupChatReads(groupId);
+      setLecturas(filas);
+      setLecturasDisponibles(true);
+    } catch (err) {
+      if (esMigracionAusente(err)) {
+        setLecturasDisponibles(false);
+      } else {
+        console.warn('[GroupChat] no se pudieron leer las marcas de lectura:', err);
+      }
+    }
+  }, [groupId]);
+
+  /**
+   * Marca el grupo como leído AHORA: abre la puerta a la doble palomita de los
+   * demás (que exige que TODOS los integrantes hayan leído). La hora la pone la
+   * base.
+   */
+  const marcarComoLeido = useCallback(async () => {
+    if (!userId) return;
+    try {
+      await marcarLecturaDelGrupo(groupId);
+    } catch (err) {
+      if (esMigracionAusente(err)) {
+        setLecturasDisponibles(false);
+      } else {
+        console.warn('[GroupChat] no se pudo marcar el grupo como leído:', err);
+      }
+    }
+  }, [groupId, userId]);
 
   const cargarMensajes = useCallback(
     async (silencioso = false) => {
       try {
         const data = await fetchMessagesForGroup(groupId);
         setMessages(data);
+        // Con la conversación a la vista se marca leído y se releen las marcas de
+        // los demás: así las palomitas quedan al día en cada relectura.
+        if (data.length > 0) {
+          await marcarComoLeido();
+          await cargarLecturas();
+        }
       } catch (err) {
         if (!silencioso) console.error('[GroupChat] fetchMessagesForGroup error:', err);
       } finally {
         setLoading(false);
       }
     },
-    [groupId]
+    [groupId, marcarComoLeido, cargarLecturas]
   );
 
   useEffect(() => {
@@ -125,12 +186,18 @@ export function GroupChatScreen() {
     return () => clearInterval(id);
   }, [cargarMensajes]);
 
-  const agregarSiEsNuevo = useCallback((msg: ChatMessage) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
-    });
-  }, []);
+  const agregarSiEsNuevo = useCallback(
+    (msg: ChatMessage) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      // Llegó un mensaje con el grupo abierto: se marca leído ya (los demás ven la
+      // doble palomita sin esperar al sondeo).
+      marcarComoLeido();
+    },
+    [marcarComoLeido]
+  );
 
   /** El otro lado editó su mensaje: se reemplaza el texto y la marca. */
   const reemplazarSiExiste = useCallback((msg: ChatMessage) => {
@@ -147,8 +214,9 @@ export function GroupChatScreen() {
       onMessage: agregarSiEsNuevo,
       onUpdate: reemplazarSiExiste,
       onDelete: releerConversacion,
+      onReads: cargarLecturas,
     }),
-    [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion]
+    [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion, cargarLecturas]
   );
 
   useRealtimeMessages(groupId, callbacksTiempoReal);
@@ -367,7 +435,19 @@ export function GroupChatScreen() {
         {!isMe && <Text style={styles.senderName}>{senderLabel}</Text>}
         <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
           <Text style={[styles.bubbleText, isMe && styles.bubbleTextMine]}>{item.content}</Text>
-          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMine]}>{marca}</Text>
+          <View style={styles.timeRow}>
+            <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMine]}>{marca}</Text>
+            {/* Palomitas (0020): solo en mis mensajes. */}
+            <Palomas
+              estado={estadoDePalomas(item, {
+                esMio: isMe,
+                participantes: participantesDelGrupo,
+                lecturas,
+                // El chat de grupo siempre escribe en la base: no hay modo local.
+                hayBase: true,
+              })}
+            />
+          </View>
         </View>
       </>
     );
@@ -422,6 +502,12 @@ export function GroupChatScreen() {
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
           />
+        )}
+
+        {!lecturasDisponibles && (
+          <View style={styles.aviso}>
+            <Text style={styles.avisoTexto}>{AVISO_MIGRACION_0020}</Text>
+          </View>
         )}
 
         {!edicionDisponible && (
@@ -527,6 +613,12 @@ const styles = StyleSheet.create({
   bubbleTime: {
     fontSize: 10,
     color: '#555555',
+  },
+  /** Hora + palomitas (0020), pegadas al borde derecho de la burbuja. */
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     alignSelf: 'flex-end',
     marginTop: 4,
   },

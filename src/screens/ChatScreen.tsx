@@ -37,10 +37,13 @@ import {
   datosDePagoDelProveedor,
   deleteServiceMessage,
   esEdicionSinMigracion,
+  esMigracionAusente,
   esTablaAusente,
   fetchProfileById,
+  fetchServiceChatReads,
   fetchServiceMessages,
   insertServiceMessage,
+  marcarLecturaDelServicio,
   ServiceMessage,
   updateServiceMessage,
 } from '../lib/database';
@@ -67,6 +70,7 @@ import {
 import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { AVISO_DE_RECHAZO, chatCerradoParaElConductor } from '../lib/miPostulacion';
 import { DireccionPago, montoEnTexto, resumenDePago } from '../lib/pagoServicio';
+import { AVISO_MIGRACION_0020, LecturaDeChat } from '../lib/palomas';
 import { DatosPublicos, datosDesdePerfilPublico, textoParaCopiar } from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
@@ -136,6 +140,10 @@ export function ChatScreen() {
   // false = falta la migración 0019 (editar y eliminar): se avisa en pantalla,
   // igual que se hace cuando falta la 0010.
   const [edicionDisponible, setEdicionDisponible] = useState(true);
+  // Confirmación de lectura (0020): hasta cuándo leyó el otro y si la migración
+  // está aplicada (si no, no se pintan palomitas y se avisa en pantalla).
+  const [lecturas, setLecturas] = useState<LecturaDeChat[]>([]);
+  const [lecturasDisponibles, setLecturasDisponibles] = useState(true);
   const [datosDelConductor, setDatosDelConductor] = useState<{
     yape?: string;
     bcpAccount?: string;
@@ -391,6 +399,44 @@ export function ChatScreen() {
   }, [isDriver, idDelServicio]);
 
   // ---------------------------------------------------------------- mensajes
+  /**
+   * Marcas de lectura de la conversación (0020). Se releen en cada carga y cuando
+   * el tiempo real avisa de un cambio: con ellas se decide si un mensaje mío
+   * lleva una palomita o dos.
+   */
+  const cargarLecturas = useCallback(async () => {
+    if (!effectiveDriverId) return;
+    try {
+      const filas = await fetchServiceChatReads(serviceId, effectiveDriverId);
+      setLecturas(filas);
+      setLecturasDisponibles(true);
+    } catch (err) {
+      if (esMigracionAusente(err)) {
+        setLecturasDisponibles(false);
+      } else {
+        console.warn('[chat] no se pudieron leer las marcas de lectura:', err);
+      }
+    }
+  }, [serviceId, effectiveDriverId]);
+
+  /**
+   * Marca la conversación como leída AHORA: es lo que hace aparecer la doble
+   * palomita al otro lado. Se llama al abrir el chat y cada vez que entra un
+   * mensaje nuevo mientras el chat está abierto (la hora la pone la base).
+   */
+  const marcarComoLeido = useCallback(async () => {
+    if (!effectiveDriverId) return;
+    try {
+      await marcarLecturaDelServicio(serviceId, effectiveDriverId);
+    } catch (err) {
+      if (esMigracionAusente(err)) {
+        setLecturasDisponibles(false);
+      } else {
+        console.warn('[chat] no se pudo marcar la conversación como leída:', err);
+      }
+    }
+  }, [serviceId, effectiveDriverId]);
+
   const cargarMensajes = useCallback(
     async (silencioso = false) => {
       if (!effectiveDriverId) {
@@ -401,6 +447,12 @@ export function ChatScreen() {
         const lista = await fetchServiceMessages(serviceId, effectiveDriverId);
         setMensajes(lista);
         setChatCompartido(true);
+        // Con la conversación a la vista se marca leído y se releen las marcas de
+        // los demás: así las palomitas quedan al día en cada relectura.
+        if (lista.length > 0) {
+          await marcarComoLeido();
+          await cargarLecturas();
+        }
       } catch (err) {
         if (esTablaAusente(err)) {
           setChatCompartido(false);
@@ -411,7 +463,7 @@ export function ChatScreen() {
         setCargando(false);
       }
     },
-    [serviceId, effectiveDriverId]
+    [serviceId, effectiveDriverId, marcarComoLeido, cargarLecturas]
   );
 
   useEffect(() => {
@@ -440,9 +492,15 @@ export function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceId]);
 
-  const agregarSiEsNuevo = useCallback((nuevo: ServiceMessage) => {
-    setMensajes((prev) => (prev.some((m) => m.id === nuevo.id) ? prev : [...prev, nuevo]));
-  }, []);
+  const agregarSiEsNuevo = useCallback(
+    (nuevo: ServiceMessage) => {
+      setMensajes((prev) => (prev.some((m) => m.id === nuevo.id) ? prev : [...prev, nuevo]));
+      // El chat está abierto y el mensaje acaba de entrar: se marca leído ya (la
+      // otra parte ve la doble palomita sin esperar al sondeo).
+      marcarComoLeido();
+    },
+    [marcarComoLeido]
+  );
 
   /** El otro lado editó su mensaje (0019): se reemplaza el texto y la marca. */
   const reemplazarSiExiste = useCallback((actualizado: ServiceMessage) => {
@@ -462,8 +520,9 @@ export function ChatScreen() {
       onMessage: agregarSiEsNuevo,
       onUpdate: reemplazarSiExiste,
       onDelete: releerConversacion,
+      onReads: cargarLecturas,
     }),
-    [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion]
+    [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion, cargarLecturas]
   );
 
   useRealtimeServiceMessages(serviceId, callbacksTiempoReal);
@@ -1012,6 +1071,14 @@ export function ChatScreen() {
             mySenderId={mySenderId}
             listRef={flatListRef}
             onActions={chatCerrado ? undefined : handleAccionesDeMensaje}
+            palomas={{
+              // En este chat la única otra parte es la contraparte del servicio.
+              participantes: [otherSenderId],
+              lecturas,
+              // Sin la 0010 no hay base compartida: los mensajes locales no se van
+              // a confirmar nunca, así que no tiene sentido un reloj eterno.
+              hayBase: chatCompartido,
+            }}
             ListHeaderComponent={
               consultaNormalizada ? (
                 <Text style={styles.avisoBusqueda}>
@@ -1036,9 +1103,16 @@ export function ChatScreen() {
           </View>
         )}
 
-        {!edicionDisponible && (
+        {(!edicionDisponible || !lecturasDisponibles) && (
           <View style={styles.aviso}>
-            <Text style={styles.avisoTexto}>{AVISO_MIGRACION_0019}</Text>
+            <Text style={styles.avisoTexto}>
+              {[
+                edicionDisponible ? null : AVISO_MIGRACION_0019,
+                lecturasDisponibles ? null : AVISO_MIGRACION_0020,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            </Text>
           </View>
         )}
 
