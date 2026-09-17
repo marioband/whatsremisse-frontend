@@ -565,7 +565,11 @@ export function DriverHomeScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            {showArchived ? 'No hay servicios archivados' : 'No hay servicios disponibles'}
+            {showArchived
+              ? 'No hay servicios archivados'
+              : activeStatus === 'En proceso'
+                ? 'Todavía no tienes servicios en proceso.'
+                : 'No hay servicios disponibles'}
           </Text>
         }
       />
