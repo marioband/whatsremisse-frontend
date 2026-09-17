@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 
 import { AZUL, TEXTO } from '../../lib/colors';
 import { Message } from '../../types';
@@ -9,6 +9,12 @@ interface MessageListProps {
   mySenderId: string;
   listRef: React.RefObject<FlatList>;
   ListHeaderComponent?: React.ComponentType<any> | React.ReactElement | null;
+  /**
+   * Menú de acciones de un mensaje PROPIO (editar / eliminar). Solo se ofrece en
+   * los mensajes que escribió este usuario; los del sistema y los del otro no se
+   * pueden tocar, así que no se pintan como tocables.
+   */
+  onActions?: (message: Message) => void;
 }
 
 /**
@@ -38,6 +44,7 @@ export function MessageList({
   mySenderId,
   listRef,
   ListHeaderComponent,
+  onActions,
 }: MessageListProps) {
   const renderItem = ({ item }: { item: Message }) => {
     const isSystem = item.type === 'SYSTEM';
@@ -56,9 +63,33 @@ export function MessageList({
       hour: '2-digit',
       minute: '2-digit',
     });
+    // El mensaje editado solo se declara como editado: el texto anterior no se
+    // guarda ni se muestra en ninguna parte (regla del usuario).
+    const marca = item.edited_at ? `${time} · editado` : time;
+
+    // Los mensajes propios se pueden editar o eliminar: el menú se abre con una
+    // pulsación larga y, en web (donde no hay costumbre de mantener pulsado), con
+    // un clic.
+    const tocable = !!onActions && isMine;
+    const abrirMenu = () => onActions?.(item);
+
+    const fila = (burbuja: React.ReactElement) =>
+      tocable ? (
+        <TouchableOpacity
+          style={[styles.row, isMine ? styles.rowRight : styles.rowLeft]}
+          onLongPress={abrirMenu}
+          onPress={Platform.OS === 'web' ? abrirMenu : undefined}
+          delayLongPress={400}
+          activeOpacity={0.85}
+        >
+          {burbuja}
+        </TouchableOpacity>
+      ) : (
+        <View style={[styles.row, isMine ? styles.rowRight : styles.rowLeft]}>{burbuja}</View>
+      );
 
     if (item.type === 'VOICE') {
-      return (
+      return fila(
         <View
           style={[styles.bubble, isMine ? styles.myBubble : styles.otherBubble, styles.voiceBubble]}
         >
@@ -71,15 +102,15 @@ export function MessageList({
               {(item.metadata?.duration as number) || 0}s
             </Text>
           </View>
-          <Text style={[styles.time, { color: palette.time }]}>{time}</Text>
+          <Text style={[styles.time, { color: palette.time }]}>{marca}</Text>
         </View>
       );
     }
 
-    return (
+    return fila(
       <View style={[styles.bubble, isMine ? styles.myBubble : styles.otherBubble]}>
         <Text style={[styles.messageText, { color: palette.text }]}>{item.content}</Text>
-        <Text style={[styles.time, { color: palette.time }]}>{time}</Text>
+        <Text style={[styles.time, { color: palette.time }]}>{marca}</Text>
       </View>
     );
   };
@@ -99,15 +130,21 @@ export function MessageList({
 
 const styles = StyleSheet.create({
   list: { padding: 12 },
+  /**
+   * La fila es la que se pega a un lado y limita el ancho de la burbuja: antes el
+   * `maxWidth` y el `alignSelf` vivían en la burbuja, pero al envolverla para
+   * escuchar la pulsación larga la alineación tiene que ir en el contenedor.
+   */
+  row: { maxWidth: '80%', marginBottom: 8 },
+  rowRight: { alignSelf: 'flex-end' },
+  rowLeft: { alignSelf: 'flex-start' },
   bubble: {
-    maxWidth: '80%',
     padding: 10,
     borderRadius: 12,
-    marginBottom: 8,
     elevation: 1,
   },
-  myBubble: { alignSelf: 'flex-end', backgroundColor: MY_BUBBLE },
-  otherBubble: { alignSelf: 'flex-start', backgroundColor: OTHER_BUBBLE },
+  myBubble: { backgroundColor: MY_BUBBLE },
+  otherBubble: { backgroundColor: OTHER_BUBBLE },
   voiceBubble: { minWidth: 180 },
   voiceRow: {
     flexDirection: 'row',

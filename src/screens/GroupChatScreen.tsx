@@ -7,9 +7,9 @@ import {
   StyleSheet,
   SafeAreaView,
   FlatList,
+  Platform,
   TouchableOpacity,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 
@@ -19,7 +19,26 @@ import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeMessages } from '../hooks/useRealtimeMessages';
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
-import { ChatMessage, fetchMessagesForGroup, insertMessage } from '../lib/database';
+import {
+  ChatMessage,
+  deleteGroupMessage,
+  esEdicionSinMigracion,
+  fetchMessagesForGroup,
+  insertMessage,
+  updateGroupMessage,
+} from '../lib/database';
+import {
+  AVISO_MIGRACION_0019,
+  AVISO_SIN_CAMBIOS,
+  AVISO_VENTANA_VENCIDA,
+  avisoDeEdicion,
+  avisoDeEliminacion,
+  CONFIRMACION_ELIMINAR,
+  dentroDeLaVentanaDeEdicion,
+  idSinGuardar,
+  PLACEHOLDER_EDICION,
+} from '../lib/mensajes';
+import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { displayName } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -27,6 +46,9 @@ type GroupChatNav = StackNavigationProp<RootStackParamList, 'GroupChat' | 'Setti
 type GroupChatRoute = RouteProp<RootStackParamList, 'GroupChat'>;
 
 const DARK_BG = '#2D2D2D';
+
+/** Sondeo de respaldo: las ediciones y los borrados del otro lado llegan igual. */
+const SONDEO_MS = 6000;
 
 export function GroupChatScreen() {
   const navigation = useNavigation<GroupChatNav>();
@@ -40,6 +62,12 @@ export function GroupChatScreen() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  // Mensaje que se está reescribiendo (migración 0019) y bloqueo mientras se
+  // guarda, para no disparar dos veces la misma acción.
+  const [mensajeEnEdicion, setMensajeEnEdicion] = useState<ChatMessage | null>(null);
+  const [accionOcupada, setAccionOcupada] = useState(false);
+  // false = falta la migración 0019 (editar y eliminar): se avisa en pantalla.
+  const [edicionDisponible, setEdicionDisponible] = useState(true);
 
   // Nombre real por integrante: `messages` solo guarda el user_id del
   // remitente, así que antes el chat mostraba UUIDs como nombre.
@@ -51,9 +79,26 @@ export function GroupChatScreen() {
     return map;
   }, [members, groupId]);
 
+  /** Nombre con el que el sistema declara la acción (nunca un UUID). */
+  const miNombre = memberNames[userId] || 'Un integrante';
+
   useEffect(() => {
     loadGroupMembers(groupId);
   }, [groupId, loadGroupMembers]);
+
+  const cargarMensajes = useCallback(
+    async (silencioso = false) => {
+      try {
+        const data = await fetchMessagesForGroup(groupId);
+        setMessages(data);
+      } catch (err) {
+        if (!silencioso) console.error('[GroupChat] fetchMessagesForGroup error:', err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [groupId]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -73,15 +118,55 @@ export function GroupChatScreen() {
     };
   }, [groupId]);
 
-  useRealtimeMessages(
-    groupId,
-    useCallback((msg) => {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
-    }, [])
+  // Respaldo del tiempo real: sin esto, la edición o el borrado del otro lado
+  // solo se veían al volver a abrir la conversación.
+  useEffect(() => {
+    const id = setInterval(() => cargarMensajes(true), SONDEO_MS);
+    return () => clearInterval(id);
+  }, [cargarMensajes]);
+
+  const agregarSiEsNuevo = useCallback((msg: ChatMessage) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+  }, []);
+
+  /** El otro lado editó su mensaje: se reemplaza el texto y la marca. */
+  const reemplazarSiExiste = useCallback((msg: ChatMessage) => {
+    setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+  }, []);
+
+  /** Alguien borró un mensaje (el evento no trae la fila): se relee el grupo. */
+  const releerConversacion = useCallback(() => {
+    cargarMensajes(true);
+  }, [cargarMensajes]);
+
+  const callbacksTiempoReal = useMemo(
+    () => ({
+      onMessage: agregarSiEsNuevo,
+      onUpdate: reemplazarSiExiste,
+      onDelete: releerConversacion,
+    }),
+    [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion]
   );
+
+  useRealtimeMessages(groupId, callbacksTiempoReal);
+
+  /** Aviso del sistema que declara la acción (edición o borrado). */
+  const declararAccion = async (aviso: string) => {
+    if (!userId) return;
+    try {
+      // Los mensajes del sistema del grupo llevan el autor que declara: la
+      // política de la tabla exige `auth.uid() = sender_id`. La pantalla los
+      // pinta centrados, y nadie puede editarlos ni borrarlos.
+      const msg = await insertMessage(groupId, userId, aviso, 'SYSTEM');
+      setMessages((prev) => [...prev, msg]);
+    } catch (err) {
+      console.error('[GroupChat] no se pudo dejar el aviso del sistema:', err);
+      Alert.alert('No se pudo dejar el aviso del sistema', (err as Error)?.message || '');
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || !userId) return;
@@ -145,6 +230,119 @@ export function GroupChatScreen() {
     }
   };
 
+  // ------------------------------------------------- editar / eliminar mensajes
+  /** Menú de acciones de un mensaje PROPIO (migración 0019). */
+  const handleAccionesDeMensaje = (msg: ChatMessage) => {
+    if (!edicionDisponible) {
+      Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
+      return;
+    }
+    if (idSinGuardar(msg.id)) return;
+    abrirMenuDeMensaje({
+      created_at: msg.created_at,
+      alEditar: () => handleEmpezarEdicion(msg),
+      alEliminar: () => handleConfirmarEliminacion(msg),
+    });
+  };
+
+  const handleEmpezarEdicion = (msg: ChatMessage) => {
+    setMensajeEnEdicion(msg);
+    setInput(msg.content);
+  };
+
+  const handleCancelarEdicion = () => {
+    setMensajeEnEdicion(null);
+    setInput('');
+  };
+
+  /**
+   * Guarda el texto nuevo y DESPUÉS declara la edición: nunca se declara una
+   * edición que no llegó a guardarse. El texto anterior no se guarda en ningún
+   * sitio: solo queda la marca "editado".
+   */
+  const handleGuardarEdicion = async () => {
+    const msg = mensajeEnEdicion;
+    if (!msg || accionOcupada) return;
+    const texto = input.trim();
+    if (!texto) return;
+
+    if (!dentroDeLaVentanaDeEdicion(msg)) {
+      handleCancelarEdicion();
+      Alert.alert('No se puede editar', AVISO_VENTANA_VENCIDA);
+      return;
+    }
+    if (texto === msg.content) {
+      handleCancelarEdicion();
+      Alert.alert('Sin cambios', AVISO_SIN_CAMBIOS);
+      return;
+    }
+
+    setAccionOcupada(true);
+    try {
+      const guardado = await updateGroupMessage(msg.id, texto);
+      if (!guardado) {
+        cargarMensajes(true);
+        Alert.alert('No se pudo editar', AVISO_VENTANA_VENCIDA);
+        return;
+      }
+      const marca = new Date().toISOString();
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, content: texto, edited_at: marca } : m))
+      );
+      handleCancelarEdicion();
+      await declararAccion(avisoDeEdicion(miNombre));
+    } catch (err) {
+      if (esEdicionSinMigracion(err)) {
+        setEdicionDisponible(false);
+        Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
+      } else {
+        Alert.alert('No se pudo editar', 'Revisa tu conexión e intenta de nuevo.');
+      }
+    } finally {
+      setAccionOcupada(false);
+    }
+  };
+
+  const handleConfirmarEliminacion = (msg: ChatMessage) => {
+    Alert.alert('Eliminar mensaje', CONFIRMACION_ELIMINAR, [
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: () => handleEliminarMensaje(msg),
+      },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
+  /**
+   * Borra el mensaje y deja SOLO el aviso del sistema. Si la base no borró nada
+   * (no es mío, es del sistema o ya no estaba) no se declara nada.
+   */
+  const handleEliminarMensaje = async (msg: ChatMessage) => {
+    if (accionOcupada) return;
+    setAccionOcupada(true);
+    try {
+      const borrado = await deleteGroupMessage(msg.id);
+      if (!borrado) {
+        cargarMensajes(true);
+        Alert.alert('No se pudo eliminar', 'El mensaje ya no estaba en la conversación.');
+        return;
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+      if (mensajeEnEdicion?.id === msg.id) handleCancelarEdicion();
+      await declararAccion(avisoDeEliminacion(miNombre));
+    } catch (err) {
+      if (esEdicionSinMigracion(err)) {
+        setEdicionDisponible(false);
+        Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
+      } else {
+        Alert.alert('No se pudo eliminar', 'Revisa tu conexión e intenta de nuevo.');
+      }
+    } finally {
+      setAccionOcupada(false);
+    }
+  };
+
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     if (item.type === 'SYSTEM') {
       return (
@@ -156,20 +354,41 @@ export function GroupChatScreen() {
 
     const isMe = item.sender_id === userId;
     const senderLabel = memberNames[item.sender_id] || displayName([item.sender_name]);
-    return (
-      <View style={[styles.bubbleRow, isMe ? styles.rowRight : styles.rowLeft]}>
+    const hora = new Date(item.created_at).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    // El mensaje editado solo se declara como editado: el texto anterior no se
+    // guarda ni se muestra en ninguna parte.
+    const marca = item.edited_at ? `${hora} · editado` : hora;
+
+    const contenido = (
+      <>
         {!isMe && <Text style={styles.senderName}>{senderLabel}</Text>}
         <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
           <Text style={[styles.bubbleText, isMe && styles.bubbleTextMine]}>{item.content}</Text>
-          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMine]}>
-            {new Date(item.created_at).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </Text>
+          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMine]}>{marca}</Text>
         </View>
-      </View>
+      </>
     );
+
+    // Los mensajes propios se pueden editar o eliminar: pulsación larga y, en web
+    // (donde no hay costumbre de mantener pulsado), un clic.
+    if (isMe) {
+      return (
+        <TouchableOpacity
+          style={[styles.bubbleRow, styles.rowRight]}
+          onLongPress={() => handleAccionesDeMensaje(item)}
+          onPress={Platform.OS === 'web' ? () => handleAccionesDeMensaje(item) : undefined}
+          delayLongPress={400}
+          activeOpacity={0.85}
+        >
+          {contenido}
+        </TouchableOpacity>
+      );
+    }
+
+    return <View style={[styles.bubbleRow, styles.rowLeft]}>{contenido}</View>;
   };
 
   return (
@@ -205,12 +424,21 @@ export function GroupChatScreen() {
           />
         )}
 
+        {!edicionDisponible && (
+          <View style={styles.aviso}>
+            <Text style={styles.avisoTexto}>{AVISO_MIGRACION_0019}</Text>
+          </View>
+        )}
+
         <ChatInputBar
           value={input}
           onChangeText={setInput}
-          onSend={handleSend}
+          onSend={mensajeEnEdicion ? handleGuardarEdicion : handleSend}
           onSendVoice={handleSendVoice}
           onAttachment={handleAttachment}
+          editando={!!mensajeEnEdicion}
+          onCancelarEdicion={handleCancelarEdicion}
+          placeholder={mensajeEnEdicion ? PLACEHOLDER_EDICION : undefined}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -314,5 +542,15 @@ const styles = StyleSheet.create({
     color: '#888',
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  aviso: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  avisoTexto: {
+    color: '#E65100',
+    fontSize: 11,
+    lineHeight: 15,
   },
 });

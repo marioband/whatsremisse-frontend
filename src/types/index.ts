@@ -154,6 +154,11 @@ export interface Message {
   metadata: Record<string, unknown>;
   created_at: string;
   sender_name?: string;
+  /**
+   * Cuándo se editó (migración 0019). `null` = el mensaje nunca se editó. El
+   * texto anterior NO se guarda: la lista solo marca "editado".
+   */
+  edited_at?: string | null;
 }
 
 export interface Payment {

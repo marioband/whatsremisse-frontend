@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { AZUL, BORDE_SUAVE, FONDO_TARJETA, TEXTO, TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
+import { TITULO_EDITANDO } from '../lib/mensajes';
 
 export type AttachmentType = 'photo' | 'camera' | 'location' | 'contact';
 
@@ -30,6 +31,7 @@ const ICONS = {
   fotos: 'image-multiple',
   ubicacion: 'map-marker',
   contacto: 'account-circle-outline',
+  guardar: 'check',
 } as const;
 
 interface ChatInputBarProps {
@@ -39,6 +41,13 @@ interface ChatInputBarProps {
   onSendVoice: () => void;
   onAttachment: (type: AttachmentType) => void;
   placeholder?: string;
+  /**
+   * Modo edición: la barra está reescribiendo un mensaje ya enviado. Se anuncia
+   * arriba ("Editando mensaje") con la salida para cancelar, y el botón de
+   * adjuntos desaparece porque aquí solo se cambia el texto.
+   */
+  editando?: boolean;
+  onCancelarEdicion?: () => void;
 }
 
 const ATTACHMENT_OPTIONS: {
@@ -59,6 +68,8 @@ export function ChatInputBar({
   onSendVoice,
   onAttachment,
   placeholder = 'Escribe un mensaje...',
+  editando = false,
+  onCancelarEdicion,
 }: ChatInputBarProps) {
   const [trayOpen, setTrayOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -86,20 +97,38 @@ export function ChatInputBar({
 
   return (
     <View style={styles.wrapper}>
+      {/* Modo edición: se dice qué se está haciendo y cómo salir sin guardar. */}
+      {editando && (
+        <View style={styles.editBanner}>
+          <MaterialCommunityIcons name="pencil" size={16} color={AZUL} />
+          <Text style={styles.editBannerText}>{TITULO_EDITANDO}</Text>
+          <TouchableOpacity
+            onPress={onCancelarEdicion}
+            accessibilityLabel="Cancelar edición"
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="close" size={18} color={TEXTO_SUAVE} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.bar}>
-        {/* Adjuntar: es la única entrada a cámara/fotos/ubicación/contacto */}
-        <TouchableOpacity
-          style={styles.roundBtn}
-          onPress={toggleTray}
-          activeOpacity={0.7}
-          accessibilityLabel={trayOpen ? 'Cerrar adjuntos' : 'Adjuntar'}
-        >
-          <MaterialCommunityIcons
-            name={trayOpen ? ICONS.teclado : ICONS.adjuntar}
-            size={24}
-            color={TEXTO_SUAVE}
-          />
-        </TouchableOpacity>
+        {/* Adjuntar: es la única entrada a cámara/fotos/ubicación/contacto. Al
+            editar un mensaje no se adjunta nada, así que el botón no se pinta. */}
+        {!editando && (
+          <TouchableOpacity
+            style={styles.roundBtn}
+            onPress={toggleTray}
+            activeOpacity={0.7}
+            accessibilityLabel={trayOpen ? 'Cerrar adjuntos' : 'Adjuntar'}
+          >
+            <MaterialCommunityIcons
+              name={trayOpen ? ICONS.teclado : ICONS.adjuntar}
+              size={24}
+              color={TEXTO_SUAVE}
+            />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.inputPill}>
           <TextInput
@@ -116,13 +145,16 @@ export function ChatInputBar({
         </View>
 
         <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={hasText ? onSend : onSendVoice}
+          style={[styles.actionBtn, editando && !hasText && styles.actionBtnMuted]}
+          onPress={editando ? onSend : hasText ? onSend : onSendVoice}
+          disabled={editando && !hasText}
           activeOpacity={0.7}
-          accessibilityLabel={hasText ? 'Enviar mensaje' : 'Enviar audio'}
+          accessibilityLabel={
+            editando ? 'Guardar el mensaje editado' : hasText ? 'Enviar mensaje' : 'Enviar audio'
+          }
         >
           <MaterialCommunityIcons
-            name={hasText ? ICONS.enviar : ICONS.microfono}
+            name={editando ? ICONS.guardar : hasText ? ICONS.enviar : ICONS.microfono}
             size={24}
             color="#FFFFFF"
           />
@@ -154,6 +186,23 @@ export function ChatInputBar({
 const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
+  },
+  /** Franja del modo edición: qué se está haciendo y cómo salir. */
+  editBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF1FB',
+    borderTopWidth: 0.5,
+    borderTopColor: BORDE_SUAVE,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  editBannerText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    color: AZUL,
   },
   bar: {
     flexDirection: 'row',
@@ -200,6 +249,10 @@ const styles = StyleSheet.create({
     backgroundColor: AZUL,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  /** Al editar sin texto no hay nada que guardar: el botón se ve apagado. */
+  actionBtnMuted: {
+    opacity: 0.45,
   },
   tray: {
     flexDirection: 'row',

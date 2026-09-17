@@ -35,11 +35,14 @@ import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import {
   datosDePagoDelConductor,
   datosDePagoDelProveedor,
+  deleteServiceMessage,
+  esEdicionSinMigracion,
   esTablaAusente,
   fetchProfileById,
   fetchServiceMessages,
   insertServiceMessage,
   ServiceMessage,
+  updateServiceMessage,
 } from '../lib/database';
 import { describeError } from '../lib/errors';
 import { IniciosDelViaje, leerIniciosDelViaje, yaInicio } from '../lib/inicioDelViaje';
@@ -49,6 +52,19 @@ import {
   HuellasDePostulacion,
   leerHuellasDePostulacion,
 } from '../lib/marcaDePostulacion';
+import {
+  AVISO_MENSAJE_ENVIANDO,
+  AVISO_MIGRACION_0019,
+  AVISO_SIN_CAMBIOS,
+  AVISO_VENTANA_VENCIDA,
+  avisoDeEdicion,
+  avisoDeEliminacion,
+  CONFIRMACION_ELIMINAR,
+  dentroDeLaVentanaDeEdicion,
+  idSinGuardar,
+  PLACEHOLDER_EDICION,
+} from '../lib/mensajes';
+import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { AVISO_DE_RECHAZO, chatCerradoParaElConductor } from '../lib/miPostulacion';
 import { DireccionPago, montoEnTexto, resumenDePago } from '../lib/pagoServicio';
 import { DatosPublicos, datosDesdePerfilPublico, textoParaCopiar } from '../lib/perfilPublico';
@@ -113,6 +129,13 @@ export function ChatScreen() {
   const [buscarAbierto, setBuscarAbierto] = useState(false);
   const [consulta, setConsulta] = useState('');
   const [pagoOcupado, setPagoOcupado] = useState(false);
+  // Mensaje que se está reescribiendo (migración 0019) y bloqueo mientras se
+  // guarda la edición o el borrado, para no disparar dos veces la misma acción.
+  const [mensajeEnEdicion, setMensajeEnEdicion] = useState<ServiceMessage | null>(null);
+  const [accionOcupada, setAccionOcupada] = useState(false);
+  // false = falta la migración 0019 (editar y eliminar): se avisa en pantalla,
+  // igual que se hace cuando falta la 0010.
+  const [edicionDisponible, setEdicionDisponible] = useState(true);
   const [datosDelConductor, setDatosDelConductor] = useState<{
     yape?: string;
     bcpAccount?: string;
@@ -290,6 +313,16 @@ export function ChatScreen() {
   const rol: 'CONDUCTOR' | 'PROVEEDOR' = isDriver ? 'CONDUCTOR' : 'PROVEEDOR';
 
   /**
+   * Nombre con el que la app declara la acción ("Sistema: <nombre> editó un
+   * mensaje."). Sale del perfil; si el perfil todavía no llegó se declara el rol,
+   * nunca una cadena vacía.
+   */
+  const miNombre = useMemo(() => {
+    const nombre = [userProfile?.firstName, userProfile?.lastName].filter(Boolean).join(' ').trim();
+    return nombre || (isDriver ? 'El conductor' : 'El proveedor');
+  }, [userProfile?.firstName, userProfile?.lastName, isDriver]);
+
+  /**
    * Cierre automático al confirmarse el pago (0013): quien recibe el dinero lo
    * confirma y la conversación ya no tiene nada más que hacer. Se deja ver el cierre
    * y se sale a "Mis servicios", donde el servicio queda como "Pagado y cerrado" con
@@ -411,7 +444,29 @@ export function ChatScreen() {
     setMensajes((prev) => (prev.some((m) => m.id === nuevo.id) ? prev : [...prev, nuevo]));
   }, []);
 
-  useRealtimeServiceMessages(serviceId, agregarSiEsNuevo);
+  /** El otro lado editó su mensaje (0019): se reemplaza el texto y la marca. */
+  const reemplazarSiExiste = useCallback((actualizado: ServiceMessage) => {
+    setMensajes((prev) => prev.map((m) => (m.id === actualizado.id ? actualizado : m)));
+  }, []);
+
+  /**
+   * Alguien borró un mensaje: el evento DELETE no trae la fila completa, así que
+   * la conversación se relee (el sondeo de respaldo haría lo mismo en 6 s).
+   */
+  const releerConversacion = useCallback(() => {
+    cargarMensajes(true);
+  }, [cargarMensajes]);
+
+  const callbacksTiempoReal = useMemo(
+    () => ({
+      onMessage: agregarSiEsNuevo,
+      onUpdate: reemplazarSiExiste,
+      onDelete: releerConversacion,
+    }),
+    [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion]
+  );
+
+  useRealtimeServiceMessages(serviceId, callbacksTiempoReal);
 
   // Respaldo: si el tiempo real no está activado en el proyecto, los mensajes
   // del otro lado entran igual (cada SONDEO_MS) al reabrir la conversación.
@@ -442,7 +497,11 @@ export function ChatScreen() {
   }, [chatCerrado, navigation]);
 
   /** Guarda en la base y deja el mensaje local si la tabla aún no existe. */
-  const persistir = async (local: ServiceMessage, metadata: Record<string, unknown>) => {
+  const persistir = async (
+    local: ServiceMessage,
+    metadata: Record<string, unknown>,
+    avisoDelSistema = false
+  ) => {
     try {
       const guardado = await insertServiceMessage({
         serviceId,
@@ -458,7 +517,10 @@ export function ChatScreen() {
       if (esTablaAusente(err)) {
         setChatCompartido(false);
       } else {
-        Alert.alert('No se pudo enviar', describeError(err));
+        Alert.alert(
+          avisoDelSistema ? 'No se pudo dejar el aviso del sistema' : 'No se pudo enviar',
+          describeError(err)
+        );
       }
     }
   };
@@ -474,6 +536,7 @@ export function ChatScreen() {
       type: m.type === 'VOICE' ? 'VOICE' : m.type === 'SYSTEM' ? 'SYSTEM' : 'TEXT',
       metadata: m.metadata,
       created_at: m.created_at,
+      edited_at: m.edited_at ?? null,
     }));
 
     if (lista.length === 0) {
@@ -503,7 +566,7 @@ export function ChatScreen() {
     return messages.filter((m) => normalizar(m.content).includes(consultaNormalizada));
   }, [messages, consultaNormalizada]);
 
-  const addSystemMessage = (content: string) => {
+  const addSystemMessage = (content: string, avisoDeAccion = false) => {
     if (!service) return;
     const local: ServiceMessage = {
       id: `sys-${Date.now()}`,
@@ -514,10 +577,11 @@ export function ChatScreen() {
       type: 'SYSTEM',
       metadata: {},
       created_at: new Date().toISOString(),
+      edited_at: null,
     };
     setMensajes((prev) => [...prev, local]);
     if (chatCompartido) {
-      persistir(local, {});
+      persistir(local, {}, avisoDeAccion);
     }
   };
 
@@ -641,6 +705,7 @@ export function ChatScreen() {
       type,
       metadata,
       created_at: new Date().toISOString(),
+      edited_at: null,
     };
 
     setMensajes((prev) => [...prev, local]);
@@ -667,6 +732,136 @@ export function ChatScreen() {
       contact: '👤 Contacto',
     };
     handleSend(labels[type], 'TEXT');
+  };
+
+  // ------------------------------------------------- editar / eliminar mensajes
+  /**
+   * Menú de acciones de un mensaje PROPIO (migración 0019).
+   *
+   * Solo se llega aquí desde las burbujas propias: los mensajes del sistema, los
+   * del otro y los que todavía se están enviando no tienen acciones.
+   */
+  const handleAccionesDeMensaje = (mensaje: Message) => {
+    if (!edicionDisponible) {
+      Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
+      return;
+    }
+    const fila = mensajes.find((m) => m.id === mensaje.id);
+    if (!fila) return;
+    if (idSinGuardar(fila.id)) {
+      Alert.alert('Un momento', AVISO_MENSAJE_ENVIANDO);
+      return;
+    }
+    abrirMenuDeMensaje({
+      created_at: fila.created_at,
+      alEditar: () => handleEmpezarEdicion(fila),
+      alEliminar: () => handleConfirmarEliminacion(fila),
+    });
+  };
+
+  /** Pasa el mensaje a la barra de escritura (modo edición). */
+  const handleEmpezarEdicion = (mensaje: ServiceMessage) => {
+    setMensajeEnEdicion(mensaje);
+    setInput(mensaje.content);
+  };
+
+  const handleCancelarEdicion = () => {
+    setMensajeEnEdicion(null);
+    setInput('');
+  };
+
+  /**
+   * Guarda el texto nuevo y DESPUÉS declara la edición: nunca se declara una
+   * edición que no llegó a guardarse. Lo que decía el mensaje antes no se guarda
+   * ni se muestra: solo queda la marca "editado".
+   */
+  const handleGuardarEdicion = async () => {
+    const mensaje = mensajeEnEdicion;
+    if (!mensaje || accionOcupada) return;
+    const texto = input.trim();
+    if (!texto) return;
+
+    // La ventana se vuelve a comprobar aquí: pudo vencer mientras se escribía.
+    if (!dentroDeLaVentanaDeEdicion(mensaje)) {
+      handleCancelarEdicion();
+      Alert.alert('No se puede editar', AVISO_VENTANA_VENCIDA);
+      return;
+    }
+    // Sin cambios no hay edición que declarar.
+    if (texto === mensaje.content) {
+      handleCancelarEdicion();
+      Alert.alert('Sin cambios', AVISO_SIN_CAMBIOS);
+      return;
+    }
+
+    setAccionOcupada(true);
+    try {
+      const guardado = chatCompartido ? await updateServiceMessage(mensaje.id, texto) : null;
+      if (chatCompartido && !guardado) {
+        // La base no dejó tocar la fila: no es mía, es del sistema o venció la
+        // ventana. Se relee la conversación para quedar como está en la base.
+        cargarMensajes(true);
+        Alert.alert('No se pudo editar', AVISO_VENTANA_VENCIDA);
+        return;
+      }
+      const marca = guardado?.edited_at ?? new Date().toISOString();
+      setMensajes((prev) =>
+        prev.map((m) => (m.id === mensaje.id ? { ...m, content: texto, edited_at: marca } : m))
+      );
+      handleCancelarEdicion();
+      addSystemMessage(avisoDeEdicion(miNombre), true);
+    } catch (err) {
+      if (esEdicionSinMigracion(err)) {
+        setEdicionDisponible(false);
+        Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
+      } else {
+        Alert.alert('No se pudo editar', describeError(err));
+      }
+    } finally {
+      setAccionOcupada(false);
+    }
+  };
+
+  const handleConfirmarEliminacion = (mensaje: ServiceMessage) => {
+    Alert.alert('Eliminar mensaje', CONFIRMACION_ELIMINAR, [
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: () => handleEliminarMensaje(mensaje),
+      },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
+  /**
+   * Borra el mensaje de la base y deja SOLO el aviso del sistema. Si la base no
+   * borró nada (no es mío, es del sistema o ya no estaba) no se declara nada.
+   */
+  const handleEliminarMensaje = async (mensaje: ServiceMessage) => {
+    if (accionOcupada) return;
+    setAccionOcupada(true);
+    try {
+      if (chatCompartido) {
+        const borrado = await deleteServiceMessage(mensaje.id);
+        if (!borrado) {
+          cargarMensajes(true);
+          Alert.alert('No se pudo eliminar', 'El mensaje ya no estaba en la conversación.');
+          return;
+        }
+      }
+      setMensajes((prev) => prev.filter((m) => m.id !== mensaje.id));
+      if (mensajeEnEdicion?.id === mensaje.id) handleCancelarEdicion();
+      addSystemMessage(avisoDeEliminacion(miNombre), true);
+    } catch (err) {
+      if (esEdicionSinMigracion(err)) {
+        setEdicionDisponible(false);
+        Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
+      } else {
+        Alert.alert('No se pudo eliminar', describeError(err));
+      }
+    } finally {
+      setAccionOcupada(false);
+    }
   };
 
   const copyToClipboard = async (text: string) => {
@@ -816,6 +1011,7 @@ export function ChatScreen() {
             messages={messagesVisibles}
             mySenderId={mySenderId}
             listRef={flatListRef}
+            onActions={chatCerrado ? undefined : handleAccionesDeMensaje}
             ListHeaderComponent={
               consultaNormalizada ? (
                 <Text style={styles.avisoBusqueda}>
@@ -840,6 +1036,12 @@ export function ChatScreen() {
           </View>
         )}
 
+        {!edicionDisponible && (
+          <View style={styles.aviso}>
+            <Text style={styles.avisoTexto}>{AVISO_MIGRACION_0019}</Text>
+          </View>
+        )}
+
         {chatCerrado ? (
           <View style={styles.cerrado}>
             <Text style={styles.cerradoTexto}>
@@ -851,9 +1053,12 @@ export function ChatScreen() {
           <ChatInputBar
             value={input}
             onChangeText={setInput}
-            onSend={() => handleSend(input)}
+            onSend={mensajeEnEdicion ? handleGuardarEdicion : () => handleSend(input)}
             onSendVoice={handleSendVoice}
             onAttachment={handleAttachment}
+            editando={!!mensajeEnEdicion}
+            onCancelarEdicion={handleCancelarEdicion}
+            placeholder={mensajeEnEdicion ? PLACEHOLDER_EDICION : undefined}
           />
         )}
       </KeyboardAvoidingView>

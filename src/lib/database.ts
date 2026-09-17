@@ -21,6 +21,8 @@ export interface ChatMessage {
   content: string;
   type: 'TEXT' | 'SYSTEM' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT';
   created_at: string;
+  /** Cuándo se editó (migración 0019). `null` = nunca se editó. */
+  edited_at: string | null;
 }
 
 export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
@@ -763,6 +765,7 @@ export function mapMessageFromDb(row: DbMessage): ChatMessage {
     content: row.content,
     type: row.type as ChatMessage['type'],
     created_at: row.created_at,
+    edited_at: (row as { edited_at?: string | null }).edited_at ?? null,
   };
 }
 
@@ -1134,8 +1137,30 @@ export async function fetchMessagesForGroup(groupId: string): Promise<ChatMessag
       content: row.content,
       type: row.type as ChatMessage['type'],
       created_at: row.created_at,
+      edited_at: row.edited_at ?? null,
     };
   });
+}
+
+export async function updateGroupMessage(id: string, content: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  // El filtro por autor no se pone aquí: lo impone la política de la 0019. Si la
+  // base no deja tocar la fila (no es mía, es del sistema o venció la ventana de
+  // edición) la consulta devuelve cero filas y no se declara nada.
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ content })
+    .eq('id', id)
+    .select('id');
+  if (error) throw error;
+  return (data || []).length > 0;
+}
+
+export async function deleteGroupMessage(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data, error } = await supabase.from('messages').delete().eq('id', id).select('id');
+  if (error) throw error;
+  return (data || []).length > 0;
 }
 
 export async function insertMessage(
@@ -1164,6 +1189,8 @@ export interface ServiceMessage {
   type: ChatMessage['type'];
   metadata: Record<string, unknown>;
   created_at: string;
+  /** Cuándo se editó (migración 0019). `null` = nunca se editó. */
+  edited_at: string | null;
 }
 
 export function mapServiceMessageFromDb(row: DbServiceMessage | any): ServiceMessage {
@@ -1176,6 +1203,7 @@ export function mapServiceMessageFromDb(row: DbServiceMessage | any): ServiceMes
     type: row.type as ChatMessage['type'],
     metadata: (row.metadata || {}) as Record<string, unknown>,
     created_at: row.created_at,
+    edited_at: row.edited_at ?? null,
   };
 }
 
@@ -1241,6 +1269,63 @@ export async function insertServiceMessage(params: {
     .single();
   if (error) throw error;
   return mapServiceMessageFromDb(data);
+}
+
+/**
+ * ¿El error es "todavía no se puede editar/eliminar mensajes"? Entonces la
+ * migración 0019 no está aplicada (falta la columna `edited_at` o la política de
+ * UPDATE/DELETE) y hay que decirlo en pantalla en vez de dejar el menú mudo.
+ */
+export function esEdicionSinMigracion(err: unknown): boolean {
+  const e = err as { code?: string; message?: string; details?: string; hint?: string } | null;
+  if (!e) return false;
+  const codigo = e.code || '';
+  const texto = `${e.message || ''} ${e.details || ''} ${e.hint || ''}`.toLowerCase();
+  return (
+    codigo === '42501' || // sin privilegio: no existe la política de la 0019
+    codigo === '42703' || // no existe la columna edited_at
+    codigo === 'PGRST204' ||
+    codigo === 'PGRST202' ||
+    texto.includes('violates row-level security') ||
+    texto.includes('permission denied') ||
+    (texto.includes('column') && texto.includes('does not exist')) ||
+    texto.includes('could not find the') ||
+    texto.includes('schema cache')
+  );
+}
+
+/**
+ * Editar un mensaje propio del chat del servicio (migración 0019).
+ *
+ * Devuelve la fila guardada, o `null` si la base no dejó tocarla: no es mía, es
+ * del sistema o ya pasaron los 15 minutos. El texto anterior no se guarda en
+ * ningún sitio: la base solo pone la marca `edited_at`.
+ */
+export async function updateServiceMessage(
+  id: string,
+  content: string
+): Promise<ServiceMessage | null> {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase
+    .from('service_messages')
+    .update({ content })
+    .eq('id', id)
+    .select('*');
+  if (error) throw error;
+  const fila = (data || [])[0];
+  return fila ? mapServiceMessageFromDb(fila) : null;
+}
+
+/** Eliminar un mensaje propio del chat del servicio (borrado real, 0019). */
+export async function deleteServiceMessage(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data, error } = await supabase
+    .from('service_messages')
+    .delete()
+    .eq('id', id)
+    .select('id');
+  if (error) throw error;
+  return (data || []).length > 0;
 }
 
 export interface SearchableProfile {

@@ -87,6 +87,8 @@ export interface DbMessage {
   content: string;
   type: 'TEXT' | 'SYSTEM' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT';
   created_at: string;
+  /** Cuándo se editó (migración 0019). `NULL` = nunca se editó. */
+  edited_at: string | null;
 }
 
 /** Fila de `service_messages` (migración 0010): chat 1 a 1 del servicio. */
@@ -100,6 +102,8 @@ export interface DbServiceMessage {
   type: 'TEXT' | 'SYSTEM' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT';
   metadata: Record<string, unknown>;
   created_at: string;
+  /** Cuándo se editó (migración 0019). `NULL` = nunca se editó. */
+  edited_at: string | null;
 }
 
 export interface Database {
