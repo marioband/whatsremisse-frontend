@@ -217,8 +217,13 @@ export function ChatScreen() {
     };
   }, []);
 
-  /** Mi postulación en este servicio, para la franja (igual que en "Todos"). */
-  const miPostulacionEnLaTarjeta = (() => {
+  /**
+   * Mi postulación en este servicio, para la franja (igual que en "Todos").
+   *
+   * Memorizado: sin esto el objeto es nuevo en cada render y cualquier `useMemo` que
+   * dependa de él (la cabecera del chat) se recalcularía siempre.
+   */
+  const miPostulacionEnLaTarjeta = useMemo(() => {
     if (!service) return { estado: 'NINGUNA' as const, numero: null, iniciado: false };
     const fila = filaDeMiPostulacion(applications, service.id, effectiveDriverId);
     return {
@@ -230,7 +235,7 @@ export function ChatScreen() {
       numero: fila?.order ?? null,
       iniciado: yaInicio(marcasDelConductor.inicios, service.id, effectiveDriverId),
     };
-  })();
+  }, [service, applications, effectiveDriverId, marcasDelConductor]);
 
   /**
    * Datos del conductor para el botón "Copiar datos" (lo usa el proveedor).
@@ -940,44 +945,76 @@ export function ChatScreen() {
     await copyToClipboard(textoParaCopiar(datosParaCopiar));
   };
 
-  const renderHeader = () => (
-    <>
-      <Text style={styles.dateText}>
-        {new Date(service!.created_at).toLocaleDateString('es-PE', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        })}
-      </Text>
-      {/* La tarjeta del chat es la MISMA que la del inicio del conductor (estructura y
-          orden), con un pie debajo de la franja: el botón azul de navegación para el
-          conductor y, para el proveedor, los datos a copiar. */}
-      <ServiceCard
-        service={service!}
-        disableSwipe
-        vista={isProvider ? 'PROVEEDOR' : 'CONDUCTOR'}
-        miPostulacion={isDriver ? miPostulacionEnLaTarjeta : undefined}
-        pie={
-          <>
-            {isDriver && isAssigned && currentStep === 'IN_PROGRESS' && (
-              <BotonDeNavegacion service={service!} conductor={effectiveDriverId} />
-            )}
-            {isProvider && currentStep === 'IN_PROGRESS' && (
-              <View style={styles.copyDataRow}>
-                <TouchableOpacity
-                  style={styles.copyDataBtn}
-                  onPress={handleCopyData}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.copyDataBtnText}>Copiar datos</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </>
-        }
-      />
-    </>
-  );
+  /**
+   * Referencia viva al manejador de "Copiar datos".
+   *
+   * La cabecera va memorizada, así que no puede capturar el `handleCopyData` de este
+   * render (cambia en cada uno): se llama a través de esta referencia.
+   */
+  const copiarDatosRef = useRef(handleCopyData);
+  useEffect(() => {
+    copiarDatosRef.current = handleCopyData;
+  }, [handleCopyData]);
+
+  /**
+   * Cabecera del chat: la fecha y la MISMA tarjeta del inicio del conductor, con un pie
+   * debajo de la franja (el botón azul de navegación para el conductor y, para el
+   * proveedor, los datos a copiar).
+   *
+   * Va como ELEMENTO memorizado y no como función inline: al pasar
+   * `ListHeaderComponent={renderHeader}` la identidad del componente cambiaba en cada
+   * render del chat (sondeo cada 6 s, cada tecla del campo de texto, cada evento de
+   * tiempo real), así que React desmontaba y volvía a montar toda la tarjeta. Al
+   * remontar, la tarjeta perdía su estado interno y el nombre del proveedor aparecía
+   * como "Proveedor" un instante para volver al nombre real: eso era el parpadeo que
+   * reportó el usuario.
+   */
+  const cabeceraDelChat = useMemo(() => {
+    if (!service) return null;
+    return (
+      <View>
+        <Text style={styles.dateText}>
+          {new Date(service.created_at).toLocaleDateString('es-PE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+          })}
+        </Text>
+        <ServiceCard
+          service={service}
+          disableSwipe
+          vista={isProvider ? 'PROVEEDOR' : 'CONDUCTOR'}
+          miPostulacion={isDriver ? miPostulacionEnLaTarjeta : undefined}
+          pie={
+            <>
+              {isDriver && isAssigned && currentStep === 'IN_PROGRESS' && (
+                <BotonDeNavegacion service={service} conductor={effectiveDriverId} />
+              )}
+              {isProvider && currentStep === 'IN_PROGRESS' && (
+                <View style={styles.copyDataRow}>
+                  <TouchableOpacity
+                    style={styles.copyDataBtn}
+                    onPress={() => copiarDatosRef.current()}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.copyDataBtnText}>Copiar datos</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          }
+        />
+      </View>
+    );
+  }, [
+    service,
+    isProvider,
+    isDriver,
+    isAssigned,
+    currentStep,
+    miPostulacionEnLaTarjeta,
+    effectiveDriverId,
+  ]);
 
   if (!service) {
     return (
@@ -1087,7 +1124,7 @@ export function ChatScreen() {
                     : `${messagesVisibles.length} de ${messages.length} mensajes`}
                 </Text>
               ) : (
-                renderHeader
+                cabeceraDelChat
               )
             }
           />

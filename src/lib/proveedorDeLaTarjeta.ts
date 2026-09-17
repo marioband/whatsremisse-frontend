@@ -19,6 +19,19 @@ export function olvidarNombresDeProveedores(): void {
 }
 
 /**
+ * El nombre ya resuelto, SIN esperar a la red ('' si todavía no se sabe).
+ *
+ * Lo usa el hook de la tarjeta como valor inicial: si la tarjeta se vuelve a montar
+ * (por ejemplo al re-renderizarse la pantalla del chat), el nombre correcto se pinta
+ * en el primer fotograma en vez de aparecer el respaldo "Proveedor" y cambiarse un
+ * instante después. Ese cambio era el parpadeo que reportó el usuario.
+ */
+export function nombreDelProveedorEnCache(providerId?: string | null): string {
+  if (!providerId) return '';
+  return nombresResueltos.get(providerId) ?? '';
+}
+
+/**
  * Nombre del proveedor de un servicio, con caché de sesión. Devuelve '' si no se pudo
  * averiguar (sin permisos, sin datos o sin conexión): nunca inventa un nombre.
  */

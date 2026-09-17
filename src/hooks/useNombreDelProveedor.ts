@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { nombreParaMostrar } from '../lib/nombreDelProveedor';
-import { resolverNombreDelProveedor } from '../lib/proveedorDeLaTarjeta';
+import { nombreDelProveedorEnCache, resolverNombreDelProveedor } from '../lib/proveedorDeLaTarjeta';
 import { ServiceAlert } from '../types';
 
 /**
@@ -11,13 +11,17 @@ import { ServiceAlert } from '../types';
  * servicios recién creados en este dispositivo) se usa ese; si no —las filas que
  * vienen de la base, que no tienen columnas de nombre— se resuelve desde el perfil
  * del proveedor (`public_profile`, 0005) con la caché de `lib/proveedorDeLaTarjeta`.
+ *
+ * El estado arranca con lo que ya esté en la caché de la sesión: así, si la tarjeta se
+ * vuelve a montar (el chat se re-renderiza cada 6 s), el nombre correcto se pinta en el
+ * primer fotograma y la tarjeta no parpadea entre "Proveedor" y el nombre real.
  */
 export function useNombreDelProveedor(service?: Partial<ServiceAlert> | null): string {
   const providerId = service?.provider_id ?? '';
   const deLaFila = service?.company_name || service?.provider_name || '';
   const serviceId = service?.id ?? '';
 
-  const [nombreResuelto, setNombreResuelto] = useState('');
+  const [nombreResuelto, setNombreResuelto] = useState(() => nombreDelProveedorEnCache(providerId));
 
   useEffect(() => {
     if (deLaFila || !providerId) return;

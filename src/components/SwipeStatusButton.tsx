@@ -8,17 +8,27 @@ import {
   Animated,
   LayoutChangeEvent,
   PanResponderGestureState,
+  Platform,
 } from 'react-native';
 
-import { avanceDeLaBarra, fotogramaDeBarra, llegoAlUmbral, VUELO_MS } from '../lib/barraDeProceso';
+import {
+  desplazamientoMaximo,
+  fotogramaDeBarra,
+  fraccionDelRelleno,
+  llegoAlUmbral,
+  puntoDeAgarre,
+  VUELO_MS,
+} from '../lib/barraDeProceso';
 import { VERDE_ACCION, VERDE_DESLIZABLE } from '../lib/colors';
 
 const TRACK_HEIGHT = 54;
 const THUMB_SIZE = 44;
-/** Separación del pulgar con el borde izquierdo de la barra. */
+/** Separación del pulgar con los bordes de la barra (arriba, abajo, izquierda y derecha). */
 const MARGEN = 5;
 /** Cuadrado redondeado, no círculo (modelo del usuario). */
 const THUMB_RADIO = 8;
+/** Esquinas de la barra (el modelo las tiene redondeadas). */
+const TRACK_RADIO = 8;
 /** Tamaño del glifo de la flecha dentro del pulgar (proporción del modelo: el
  *  glifo ocupa ~2/3 del ancho del pulgar). */
 const ICONO_PX = 40;
@@ -33,14 +43,24 @@ interface Props {
 }
 
 /**
- * Barra de proceso del viaje (modelo del usuario, imagen
- * `dashboard_20260916_145538`): fondo verde oscuro con la flecha, pulgar cuadrado
- * redondeado y relleno en verde claro, texto centrado con el hito que se reporta.
+ * Barra de proceso del viaje (modelo del usuario, imágenes
+ * `dashboard_20260916_145538` y `dashboard_20260917_112743`): fondo verde oscuro con
+ * la flecha, pulgar cuadrado redondeado y relleno en verde claro, texto centrado con
+ * el hito que se reporta.
+ *
+ * Reglas de forma que fijó el usuario (imagen de referencia):
+ *   * el pulgar conserva su alto al deslizarse: el relleno lleva los MISMOS márgenes
+ *     que el pulgar (antes ocupaba todo el alto y el botón parecía perder sus
+ *     dimensiones arriba y abajo);
+ *   * el pulgar guarda el mismo margen al empezar y al terminar el recorrido;
+ *   * el deslizamiento es ÁGIL: el dedo no tiene zona muerta (se conserva el punto de
+ *     agarre) y el arrastre NO re-renderiza: el movimiento va por `Animated`, y solo
+ *     se cambia el texto cuando se cruza el umbral.
  *
  * El gesto se atiende en TODA la barra (no solo en el pulgar) y el pulgar sigue al
- * dedo usando la posición absoluta del toque contra el borde medido de la barra.
- * Al soltar pasado el umbral, el pulgar viaja al extremo (fotograma "completado":
- * barra llena y sin texto) y recién entonces se reporta el hito.
+ * dedo usando la posición absoluta del toque contra el borde medido de la barra. Al
+ * soltar pasado el umbral, el pulgar viaja al extremo (fotograma "completado": barra
+ * llena y sin texto) y recién entonces se reporta el hito.
  */
 export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
   const [dragging, setDragging] = useState(false);
@@ -55,15 +75,42 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
   /** Borde izquierdo de la barra en la pantalla, para convertir el toque. */
   const pageXRef = useRef(0);
   const anchoRef = useRef(0);
+  /** Desplazamiento actual del pulgar (para saber dónde cayó el dedo). */
+  const desplazamientoRef = useRef(0);
+  /** Punto de agarre del dedo dentro del pulgar. */
+  const agarreRef = useRef(THUMB_SIZE / 2);
+  /**
+   * Arranque del gesto, para seguir al dedo por DESPLAZAMIENTO (no por posición
+   * absoluta). Es lo que hace que el pulgar siga al dedo 1 a 1 aunque no se haya podido
+   * medir el borde de la barra: sin esto, `locationX` viene referido al elemento que hay
+   * debajo del dedo (el pulgar, el relleno o el rótulo) y cada tramo arrastraba un salto
+   * de 5 px: el "no es fluido, muestra retrasos" que reportó el usuario.
+   */
+  const gestoRef = useRef({ x0: 0, absolutaInicial: 0 });
+  /**
+   * Con qué referencias se está midiendo ESTE gesto. Se decide una sola vez, al
+   * empezar: mezclar en el mismo gesto la posición absoluta (que necesita el borde de la
+   * barra ya medido) con la relativa al toque metía un salto de 5 px en cuanto llegaba
+   * la medición (el pulgar se adelantaba). Con la decisión tomada de una vez, el pulgar
+   * sigue al dedo 1 a 1 de principio a fin.
+   */
+  const usarBordeRef = useRef(false);
+  /** Último valor de "listo" sin pasar por React: el arrastre no re-renderiza. */
+  const listoRef = useRef(false);
 
   const anchoDeBarra = () => anchoRef.current || trackWidth || 0;
-  const maxTranslateValue = () => Math.max(anchoDeBarra() - THUMB_SIZE - MARGEN, 1);
+  const recorridoMaximo = () => desplazamientoMaximo(anchoDeBarra(), THUMB_SIZE, MARGEN);
 
   const fotograma = fotogramaDeBarra({ progressIndex, arrastrando: dragging, listo, volando });
 
   const resetThumb = () => {
+    desplazamientoRef.current = 0;
     translateX.setValue(0);
-    relleno.setValue(0);
+    // En reposo el relleno queda exactamente debajo del pulgar (mismo alto y ancho).
+    // Sin ancho medido todavía no se pinta nada (un ancho inventado daría una barra
+    // llena de un tirón).
+    const ancho = anchoDeBarra();
+    relleno.setValue(ancho > 0 ? fraccionDelRelleno(0, THUMB_SIZE, ancho) : 0);
   };
 
   useEffect(() => {
@@ -89,23 +136,38 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
     });
   };
 
-  /** Posición del dedo dentro de la barra (0 = borde izquierdo). */
+  /**
+   * Posición del dedo dentro de la barra (0 = borde izquierdo).
+   *
+   * Con el borde de la barra medido se usa la posición absoluta. Sin medición (el
+   * `measureInWindow` de react-native-web puede no haber respondido todavía) se sigue al
+   * dedo por desplazamiento desde el punto donde empezó el gesto, que da el mismo
+   * seguimiento 1 a 1 sin depender de coordenadas de ventana.
+   */
   const posicionEnBarra = (gesture: PanResponderGestureState, locationX: number) => {
     const ancho = anchoDeBarra();
     if (!ancho) return 0;
-    const absoluta = gesture.moveX - pageXRef.current;
-    // Si la medición del borde no está disponible, se usa el relativo al toque.
-    const dentro = pageXRef.current > 0 ? absoluta : locationX;
-    return clamp(dentro, 0, ancho);
+    if (usarBordeRef.current) return clamp(gesture.moveX - pageXRef.current, 0, ancho);
+    const delta = gesture.moveX - gestoRef.current.x0;
+    return clamp(gestoRef.current.absolutaInicial + delta, 0, ancho);
   };
 
+  /**
+   * Mueve el pulgar y el relleno. No usa `setState` más que al cruzar el umbral: el
+   * movimiento va por `Animated` para que el pulgar siga al dedo sin retrasos.
+   */
   const pintarArrastre = (dentro: number) => {
     const ancho = anchoDeBarra() || 1;
-    const desplazamiento = clamp(dentro - THUMB_SIZE / 2, 0, maxTranslateValue());
+    const desplazamiento = clamp(dentro - agarreRef.current, 0, recorridoMaximo());
+    desplazamientoRef.current = desplazamiento;
     translateX.setValue(desplazamiento);
-    // El relleno llega hasta el borde derecho del pulgar (mismo color: se lee como uno).
-    relleno.setValue(avanceDeLaBarra(MARGEN + desplazamiento + THUMB_SIZE, ancho));
-    setListo(llegoAlUmbral(dentro, ancho));
+    // El relleno llega hasta el borde derecho del pulgar y conserva sus mismos márgenes.
+    relleno.setValue(fraccionDelRelleno(desplazamiento, THUMB_SIZE, ancho));
+    const alcanzado = llegoAlUmbral(dentro, ancho);
+    if (alcanzado !== listoRef.current) {
+      listoRef.current = alcanzado;
+      setListo(alcanzado);
+    }
   };
 
   const panResponder = useRef(
@@ -116,13 +178,38 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
       // El gesto no se cede a la lista ni al scroll mientras se arrastra.
       onPanResponderTerminationRequest: () => false,
       onShouldBlockNativeResponder: () => true,
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (evt, gesture: PanResponderGestureState) => {
+        // El borde de la barra se mide otra vez en cada gesto: si la pantalla cambió de
+        // tamaño, o la medición inicial no llegó, aquí se recupera.
+        medir();
+        // Se decide UNA sola vez con qué referencias se mide este gesto (ver
+        // `usarBordeRef`): mezclarlas metía un salto de 5 px a mitad de arrastre.
+        usarBordeRef.current = pageXRef.current > 0;
+        if (usarBordeRef.current) {
+          // Con el borde medido, el dedo y el pulgar comparten el sistema de la barra:
+          // se conserva el punto de agarre y el dedo que cae fuera del pulgar lo trae.
+          const dentro = clamp(gesture.x0 - pageXRef.current, 0, anchoDeBarra());
+          agarreRef.current = puntoDeAgarre(dentro, desplazamientoRef.current, THUMB_SIZE, MARGEN);
+        } else {
+          // Sin el borde medido no se puede saber en qué punto de la barra cayó el dedo
+          // (`locationX` de react-native-web viene referido al elemento que hay debajo):
+          // se sigue al dedo por DESPLAZAMIENTO desde donde estaba el pulgar, que da el
+          // mismo seguimiento 1 a 1 desde el primer píxel, sin saltos ni zona muerta.
+          agarreRef.current = THUMB_SIZE / 2;
+          gestoRef.current = {
+            x0: gesture.x0,
+            // El "dedo equivalente" arranca en el centro del pulgar: dentro y el
+            // desplazamiento quedan en el mismo sistema y el pulgar no salta al pulsar.
+            absolutaInicial: desplazamientoRef.current + THUMB_SIZE / 2,
+          };
+        }
+        listoRef.current = false;
         setDragging(true);
         setListo(false);
+        pintarArrastre(posicionEnBarra(gesture, evt.nativeEvent.locationX));
       },
       onPanResponderMove: (evt, gesture: PanResponderGestureState) => {
-        const dentro = posicionEnBarra(gesture, evt.nativeEvent.locationX);
-        pintarArrastre(dentro);
+        pintarArrastre(posicionEnBarra(gesture, evt.nativeEvent.locationX));
       },
       onPanResponderRelease: (evt, gesture: PanResponderGestureState) => {
         const ancho = anchoDeBarra() || 1;
@@ -130,30 +217,34 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
 
         setDragging(false);
         setListo(false);
+        listoRef.current = false;
 
         if (!llegoAlUmbral(dentro, ancho)) {
           // No llegó: el pulgar vuelve solo al inicio.
+          desplazamientoRef.current = 0;
           Animated.timing(translateX, {
             toValue: 0,
             duration: 160,
             useNativeDriver: false,
-          }).start(() => relleno.setValue(0));
+          }).start(() => relleno.setValue(fraccionDelRelleno(0, THUMB_SIZE, ancho)));
           return;
         }
 
         // Fotograma "completado" del modelo: barra llena, flecha al extremo y sin
         // texto. Cuando termina el viaje del pulgar recién se reporta el hito, así
         // el padre cambia el texto al hito siguiente (o entra la zona de pago).
+        const destino = recorridoMaximo();
         setVolando(true);
         setListo(false);
+        desplazamientoRef.current = destino;
         Animated.parallel([
           Animated.timing(translateX, {
-            toValue: maxTranslateValue(),
+            toValue: destino,
             duration: VUELO_MS,
             useNativeDriver: false,
           }),
           Animated.timing(relleno, {
-            toValue: 1,
+            toValue: fraccionDelRelleno(destino, THUMB_SIZE, ancho),
             duration: VUELO_MS,
             useNativeDriver: false,
           }),
@@ -164,6 +255,7 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
         });
       },
       onPanResponderTerminate: () => {
+        listoRef.current = false;
         setDragging(false);
         setListo(false);
         resetThumb();
@@ -179,6 +271,14 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
 
   const onLayout = (_event: LayoutChangeEvent) => {
     medir();
+    // El relleno se mide en fracción del ancho: si la barra cambia de tamaño hay que
+    // recalcularlo (nunca en medio de un arrastre, que lo gobierna el dedo).
+    if (!dragging && !volando) {
+      const ancho = anchoRef.current;
+      relleno.setValue(
+        ancho > 0 ? fraccionDelRelleno(desplazamientoRef.current, THUMB_SIZE, ancho) : 0
+      );
+    }
   };
 
   return (
@@ -211,14 +311,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     position: 'relative',
+    borderRadius: TRACK_RADIO,
     // Fondo de la barra (modelo: #2E9E5B).
     backgroundColor: VERDE_ACCION,
+    // Web: sin esto el navegador decide en cada touchmove si desplaza la página, y el
+    // pulgar va con retraso (el "no es fluido" que reportó el usuario). El gesto es
+    // nuestro: la barra vive fuera de la lista, así que no roba ningún scroll.
+    ...Platform.select({ web: { touchAction: 'none', userSelect: 'none' } as object }),
   },
   fill: {
     position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
+    // Los MISMOS márgenes que el pulgar: el relleno y el pulgar se leen como una sola
+    // pieza, así el botón no pierde su alto al deslizarse.
+    left: MARGEN,
+    top: MARGEN,
+    bottom: MARGEN,
+    borderRadius: THUMB_RADIO,
     // Relleno que sigue al pulgar (modelo: #00D647).
     backgroundColor: VERDE_DESLIZABLE,
   },

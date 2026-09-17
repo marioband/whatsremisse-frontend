@@ -76,3 +76,62 @@ export function avanceDeLaBarra(dentro: number, ancho: number): number {
 export function llegoAlUmbral(dentro: number, ancho: number): boolean {
   return avanceDeLaBarra(dentro, ancho) >= UMBRAL;
 }
+
+/**
+ * Recorrido máximo del pulgar, en píxeles.
+ *
+ * Deja el MISMO margen a la izquierda y a la derecha (el modelo del usuario tiene el
+ * pulgar separado del borde en las dos puntas). Antes solo se restaba un margen, así
+ * que al final del recorrido el pulgar quedaba pegado al borde derecho y perdía su
+ * esquina redondeada.
+ */
+export function desplazamientoMaximo(
+  ancho: number,
+  tamanoDelPulgar: number,
+  margen: number
+): number {
+  return Math.max(ancho - tamanoDelPulgar - 2 * margen, 0);
+}
+
+/**
+ * Fracción del ancho de la barra que ocupa el relleno claro cuando el pulgar está en
+ * `desplazamiento`.
+ *
+ * El relleno arranca en el margen izquierdo y termina en el borde derecho del pulgar,
+ * y se pinta con los MISMOS márgenes que el pulgar (arriba y abajo incluidos): así el
+ * pulgar y el relleno se leen como una sola pieza que conserva su alto mientras se
+ * desliza. Si el relleno ocupara todo el alto de la barra, al arrastrar el botón
+ * parecería perder sus dimensiones (lo reportó el usuario).
+ */
+export function fraccionDelRelleno(
+  desplazamiento: number,
+  tamanoDelPulgar: number,
+  ancho: number
+): number {
+  if (!ancho || ancho <= 0) return 0;
+  return Math.min(Math.max((desplazamiento + tamanoDelPulgar) / ancho, 0), 1);
+}
+
+/**
+ * Punto de agarre: en qué parte del pulgar cayó el dedo.
+ *
+ * Si el dedo cayó DENTRO del pulgar se conserva esa distancia (el pulgar sigue al dedo
+ * 1 a 1, sin saltos ni zona muerta); si cayó fuera, el pulgar salta a centrarse bajo el
+ * dedo, que es lo que se espera al tocar la barra en cualquier punto.
+ */
+export function puntoDeAgarre(
+  dentro: number,
+  desplazamientoActual: number,
+  tamanoDelPulgar: number,
+  margen: number
+): number {
+  const inicioDelPulgar = margen + desplazamientoActual;
+  const cayoDentro = dentro >= inicioDelPulgar && dentro <= inicioDelPulgar + tamanoDelPulgar;
+  // Ojo con el espacio de coordenadas: `dentro` y `desplazamientoActual` se miden desde
+  // el borde IZQUIERDO de la barra, así que el agarre también. Mezclar los dos espacios
+  // dejaba el pulgar 5 px adelantado desde el primer movimiento.
+  if (cayoDentro) {
+    return Math.min(Math.max(dentro - desplazamientoActual, margen), margen + tamanoDelPulgar);
+  }
+  return tamanoDelPulgar / 2;
+}
