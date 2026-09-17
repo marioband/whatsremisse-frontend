@@ -230,7 +230,8 @@ export function ChatScreen() {
       estado: estadoEfectivoDeMiPostulacion(
         service,
         fila,
-        huellaDeMiPostulacion(marcasDelConductor.huellas, service.id, effectiveDriverId)
+        huellaDeMiPostulacion(marcasDelConductor.huellas, service.id, effectiveDriverId),
+        effectiveDriverId
       ),
       numero: fila?.order ?? null,
       iniciado: yaInicio(marcasDelConductor.inicios, service.id, effectiveDriverId),

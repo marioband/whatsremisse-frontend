@@ -23,9 +23,9 @@ import {
   contarEnProceso,
   contarReservas,
   esAceptadoMio as esAceptadoMioDe,
-  esperaElToqueDeInicio,
   estadoEfectivoDeMiPostulacion,
   filaDeMiPostulacion,
+  planDelToqueDelConductor,
   listaBaseDelConductor,
   serviciosDelInicio,
 } from '../lib/listaDelConductor';
@@ -156,7 +156,12 @@ export function DriverHomeScreen() {
   const miPostulacionDe = (service: ServiceAlert): MiPostulacionEnLaTarjeta => {
     const fila = filaDeMiPostulacion(applications, service.id, currentDriverId);
     return {
-      estado: estadoEfectivoDeMiPostulacion(service, fila, huellaAlPostular(service.id)),
+      estado: estadoEfectivoDeMiPostulacion(
+        service,
+        fila,
+        huellaAlPostular(service.id),
+        currentDriverId
+      ),
       numero: fila?.order ?? null,
       iniciado: inicioCumplido(service.id),
     };
@@ -341,29 +346,36 @@ export function DriverHomeScreen() {
     const application = getApplication(service.id);
     const notificationCount = getDriverNotification(service.id);
 
-    // Postulado: toque habilitado solo si el proveedor envió mensaje
-    if (application) {
-      if (notificationCount > 0) {
-        navigation.navigate('Chat', {
-          serviceId: service.id,
-          driverId: currentDriverId,
-          driverName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim(),
-        });
-      }
-      return;
-    }
-
     const driverName =
       `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Conductor';
 
-    // Servicio aceptado: la franja dice "Servicio aceptado, toca para iniciar", así
-    // que ESTE toque cumple esa orden: la tarjeta pasa al apartado "En proceso"
-    // (regla del usuario). El toque NO reporta ningún hito —el conductor todavía no
-    // se ha dirigido al punto de origen, así que "Ubicado" no tiene sentido ahí—:
-    // eso se marca en el dispositivo (`lib/inicioDelViaje.ts`) y los hitos del viaje
-    // los reporta el deslizamiento dentro del chat (Ubicado → En proceso → Finalizado).
-    if (esAceptadoMio(service)) {
-      if (esperaElToqueDeInicio(service, currentDriverId, inicioCumplido(service.id))) {
+    // El ORDEN de las comprobaciones vive en `planDelToqueDelConductor` (regla probada):
+    // primero "el servicio ya es mío" —abrir el chat, y cumplir el toque de inicio si
+    // toca— y solo después "estoy postulado". Antes iba al revés y un conductor YA
+    // ACEPTADO con su fila vieja en PENDING se quedaba sin poder abrir el chat del
+    // servicio que estaba cubriendo.
+    const plan = planDelToqueDelConductor({
+      service,
+      userId: currentDriverId,
+      miEstado: estadoEfectivoDeMiPostulacion(
+        service,
+        application,
+        huellaAlPostular(service.id),
+        currentDriverId
+      ),
+      hayMensajeDelProveedor: notificationCount > 0,
+      yaIniciadoElViaje: inicioCumplido(service.id),
+    });
+
+    if (plan.accion === 'NADA') return;
+
+    if (plan.accion === 'ABRIR_CHAT') {
+      // "Servicio aceptado, toca para iniciar": ESTE toque cumple esa orden y la
+      // tarjeta pasa a "En proceso" (regla del usuario). El toque NO reporta ningún
+      // hito —el conductor todavía no se ha dirigido al origen—: eso se marca en el
+      // dispositivo (`lib/inicioDelViaje.ts`) y los hitos los reporta el deslizamiento
+      // dentro del chat (Ubicado → En proceso → Finalizado).
+      if (plan.cumpleElToqueDeInicio) {
         const actualizados = marcarInicio(inicios, service.id, currentDriverId);
         setInicios(actualizados);
         await guardarIniciosDelViaje(actualizados);
@@ -376,27 +388,7 @@ export function DriverHomeScreen() {
       return;
     }
 
-    // Servicio ya en proceso: solo abrir chat
-    if (service.status === 'STATUS_IN_PROGRESS') {
-      navigation.navigate('Chat', {
-        serviceId: service.id,
-        driverId: currentDriverId,
-        driverName,
-      });
-      return;
-    }
-
-    // Servicio completado: abrir chat para ver cuadre
-    if (service.status === 'STATUS_COMPLETED') {
-      navigation.navigate('Chat', {
-        serviceId: service.id,
-        driverId: currentDriverId,
-        driverName,
-      });
-      return;
-    }
-
-    // Alerta nueva disponible
+    // Alerta nueva disponible: postularme.
     if (isBlocked) {
       Alert.alert('Postulación bloqueada', 'Tu deuda supera el límite permitido.');
       return;

@@ -1064,6 +1064,23 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       // edita después: es la única forma de distinguir una edición (que descarta la
       // cola, migración 0016) de un rechazo. Ver `lib/marcaDePostulacion.ts`.
       const servicioAqui = state.services.find((s) => s.id === serviceId);
+
+      // Guarda: no se vuelve a postular a un servicio que ya es de alguien. Si el
+      // proveedor acaba de aceptar a este conductor y su teléfono todavía no lo sabe,
+      // volver a postularse devolvía su fila a PENDING: la tarjeta quedaba como
+      // "postulando" y el chat del viaje ya asignado no se podía abrir.
+      const miFilaAqui = state.applications.find(
+        (a) => a.serviceId === serviceId && a.driverId === driverId
+      );
+      if (servicioAqui?.assigned_driver_id === driverId || miFilaAqui?.status === 'APPROVED') {
+        await refrescar();
+        return;
+      }
+      if (servicioAqui && servicioAqui.status !== 'STATUS_OPEN') {
+        Alert.alert('Servicio no disponible', 'Este servicio ya no admite postulaciones.');
+        await refrescar();
+        return;
+      }
       if (servicioAqui) {
         await guardarHuellasDePostulacion(
           marcarPostulacion(await leerHuellasDePostulacion(), serviceId, driverId, servicioAqui)
@@ -1094,7 +1111,12 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         try {
           await approveApplicationInDb(serviceId, driverId);
         } catch (err) {
+          // Antes el fallo se quedaba solo en consola: el proveedor veía "aceptado" y
+          // el conductor no aparecía aceptado en ningún sitio. Como con el rechazo, se
+          // avisa y se dice qué falló.
           console.error('[MockStore] approveApplicationInDb error:', err);
+          Alert.alert('No se pudo aceptar al postulante', describeError(err));
+          return;
         }
       }
       dispatch({ type: 'APPROVE_APPLICATION', payload: { serviceId, driverId } });

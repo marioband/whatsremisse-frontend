@@ -154,12 +154,88 @@ export function rechazoVigente(
 export function estadoEfectivoDeMiPostulacion(
   service: ServiceAlert,
   filaDeMiPostulacion: Application | undefined,
-  huellaAlPostular?: string
+  huellaAlPostular?: string,
+  userId?: string
 ): EstadoDeMiPostulacion {
+  // La BASE manda: si el servicio está asignado a mí, estoy ACEPTADO aunque la fila de
+  // mi postulación diga otra cosa. Caso real (17-09-2026, conductor 999888777): el
+  // proveedor lo aceptó y su propio teléfono volvió a postularse después —todavía no
+  // sabía que lo habían aceptado—, así que la fila quedó en PENDING; la tarjeta decía
+  // "postulando", el toque no abría el chat y el viaje ya estaba asignado a él.
+  const mio = userId ?? filaDeMiPostulacion?.driverId;
+  if (mio && service.assigned_driver_id === mio) return 'ACEPTADA';
+
   if (!filaDeMiPostulacion) return 'NINGUNA';
   if (filaDeMiPostulacion.status === 'PENDING') return 'PENDIENTE';
   if (filaDeMiPostulacion.status === 'APPROVED') return 'ACEPTADA';
   return rechazoVigente(service, filaDeMiPostulacion, huellaAlPostular) ? 'RECHAZADA' : 'NINGUNA';
+}
+
+/**
+ * Qué debe hacer el toque en una tarjeta del inicio del conductor.
+ *
+ * Vive aquí, y no dentro de la pantalla, porque es el ORDEN de las comprobaciones la
+ * regla (y el punto donde se colaba el fallo del 17-09: la comprobación de "tengo una
+ * postulación" iba ANTES que la de "el servicio ya es mío", así que un conductor
+ * aceptado con la fila vieja en PENDING no podía abrir el chat del servicio que ya
+ * estaba cubriendo).
+ *
+ *  1. El servicio ya es mío (asignado a mí, o en proceso, o terminado) → abre el chat.
+ *     Si además espera el toque de inicio, ese toque se cumple aquí.
+ *  2. Estoy postulado (PENDING) → el chat solo se abre si el proveedor me escribió
+ *     (regla del usuario: no hay nada que hablar hasta que haya mensaje).
+ *  3. Cualquier otro caso → postularme.
+ */
+export type PlanDelToqueDelConductor =
+  | { accion: 'ABRIR_CHAT'; cumpleElToqueDeInicio: boolean }
+  | { accion: 'POSTULARSE' }
+  | { accion: 'NADA'; motivo: 'SIN_MENSAJE_DEL_PROVEEDOR' };
+
+/**
+ * ¿La tarjeta del conductor está BLOQUEADA (no deja tocar)?
+ *
+ * Solo mientras mi postulación sigue PENDIENTE y el proveedor todavía no escribió (regla
+ * del usuario: no hay nada que hablar). Si ya me aceptó, la tarjeta tiene que poder
+ * abrirse aunque el aviso de mensaje esté en cero: era una de las razones por las que el
+ * conductor aceptado no podía entrar al chat de su propio viaje.
+ */
+export function tarjetaBloqueadaDelConductor(datos: {
+  isApplied: boolean;
+  notificationCount: number;
+  miEstado?: EstadoDeMiPostulacion;
+}): boolean {
+  return datos.isApplied && datos.notificationCount === 0 && datos.miEstado === 'PENDIENTE';
+}
+
+export function planDelToqueDelConductor(datos: {
+  service: ServiceAlert;
+  userId: string;
+  miEstado: EstadoDeMiPostulacion;
+  /** El proveedor ya escribió en el chat de este servicio (aviso sin leer). */
+  hayMensajeDelProveedor: boolean;
+  /** El conductor ya cumplió en este dispositivo el "toca para iniciar". */
+  yaIniciadoElViaje: boolean;
+}): PlanDelToqueDelConductor {
+  const { service, userId, miEstado, hayMensajeDelProveedor, yaIniciadoElViaje } = datos;
+
+  const esMioOEstaEnCurso =
+    esAceptadoMio(service, userId) ||
+    service.status === 'STATUS_IN_PROGRESS' ||
+    service.status === 'STATUS_COMPLETED';
+
+  if (esMioOEstaEnCurso || miEstado === 'ACEPTADA') {
+    return {
+      accion: 'ABRIR_CHAT',
+      cumpleElToqueDeInicio: esperaElToqueDeInicio(service, userId, yaIniciadoElViaje),
+    };
+  }
+
+  if (miEstado === 'PENDIENTE') {
+    if (hayMensajeDelProveedor) return { accion: 'ABRIR_CHAT', cumpleElToqueDeInicio: false };
+    return { accion: 'NADA', motivo: 'SIN_MENSAJE_DEL_PROVEEDOR' };
+  }
+
+  return { accion: 'POSTULARSE' };
 }
 
 export interface OpcionesDelInicioDelConductor {

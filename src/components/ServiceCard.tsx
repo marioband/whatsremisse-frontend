@@ -7,6 +7,7 @@ import { COLORS, RADIUS } from '../constants/colors';
 import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
+import { tarjetaBloqueadaDelConductor } from '../lib/listaDelConductor';
 import { ServiceAlert } from '../types';
 
 interface Props {
@@ -90,7 +91,13 @@ export function ServiceCard({
     );
   };
 
-  const pressDisabled = isApplied && notificationCount === 0;
+  // Regla en `lib/listaDelConductor.ts` (probada con node): solo se bloquea mientras mi
+  // postulación sigue PENDIENTE y el proveedor no escribió.
+  const pressDisabled = tarjetaBloqueadaDelConductor({
+    isApplied,
+    notificationCount,
+    miEstado: miPostulacion?.estado,
+  });
 
   const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
   const isReservation =

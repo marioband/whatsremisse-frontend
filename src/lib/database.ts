@@ -363,6 +363,28 @@ export async function postularAServicio(
   driverId: string
 ): Promise<Application | null> {
   if (!isSupabaseConfigured) return null;
+
+  // Antes de escribir se mira el estado REAL en la base. Si el servicio ya tiene
+  // conductor —o mi fila ya está APPROVED— NO se postula: el upsert de abajo devolvía
+  // la fila a PENDING y dejaba al conductor aceptado con la tarjeta de "postulando" y
+  // sin poder abrir el chat del viaje que ya estaba cubriendo (bug del 17-09-2026,
+  // conductor 999888777). El teléfono puede no saber todavía que lo aceptaron: la
+  // fuente de verdad es la base.
+  const { data: servicio } = await supabase
+    .from('service_alerts')
+    .select('status, assigned_driver_id')
+    .eq('id', serviceId)
+    .maybeSingle();
+  const { data: mia } = await supabase
+    .from('applications')
+    .select('*')
+    .eq('service_id', serviceId)
+    .eq('driver_id', driverId)
+    .maybeSingle();
+  const yaEstoyAceptado = mia?.status === 'APPROVED' && servicio?.assigned_driver_id === driverId;
+  if (servicio?.assigned_driver_id || yaEstoyAceptado) {
+    return mia ? mapApplicationFromDb(mia as unknown as DbApplication) : null;
+  }
   const { data, error } = await supabase
     .from('applications')
     .upsert(
