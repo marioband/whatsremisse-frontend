@@ -146,6 +146,11 @@ export function MessageList({
       data={messages}
       keyExtractor={(item) => item.id}
       renderItem={renderItem}
+      // `flex: 1`: la lista se queda con el hueco que dejan la cabecera y la barra de
+      // escribir, y es ELLA la que se desplaza (sin esto podía crecer con su contenido
+      // y empujar la barra fuera de la pantalla). El que decide el alto de la pantalla
+      // es la card del navegador: ver `cardStyle` en RootNavigator.
+      style={styles.lista}
       contentContainerStyle={styles.list}
       onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
       ListHeaderComponent={ListHeaderComponent}
@@ -154,6 +159,8 @@ export function MessageList({
 }
 
 const styles = StyleSheet.create({
+  /** Ocupa el espacio que deja la cabecera y la barra de escribir (que van fijas). */
+  lista: { flex: 1 },
   list: { padding: 12 },
   /**
    * La fila es la que se pega a un lado y limita el ancho de la burbuja: antes el

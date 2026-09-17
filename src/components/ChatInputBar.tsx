@@ -241,6 +241,9 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 9,
     ...Platform.select({ android: { textAlignVertical: 'center' as const }, default: {} }),
+    // En web el campo es un textarea y el navegador le dibuja su propio recuadro de
+    // foco (outline) al pulsarlo: la app no lo quiere. En nativo no existe.
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
   },
   actionBtn: {
     width: 44,

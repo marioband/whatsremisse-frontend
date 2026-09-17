@@ -236,3 +236,24 @@ export function avisoDeCierre(service: ServiceAlert, ahora: Date = new Date()): 
 export function estaVencido(service: ServiceAlert): boolean {
   return cierreDeLaAlerta(service) <= Date.now();
 }
+
+/**
+ * La alerta caducó SIN que nadie la tomara: se cerró (20 minutos "al momento" / 10
+ * minutos después de la hora) y ningún conductor quedó asignado.
+ *
+ * Regla fijada con el usuario (17-09-2026): una alerta así **sale del inicio de
+ * inmediato y ya no se reprograma**; la fila se queda en la base y no la ve nadie
+ * (el conductor dejó de verla al cerrarse). Antes se quedaba 24 h "en gracia" para
+ * editarla y reenviarla, con la franja roja "Servicio vencido" y el texto "se
+ * elimina en 23h 40m": el usuario reportó ese estado como "el servicio vencido sigue
+ * activo" y eligió eliminarlo en vez de conservarlo.
+ *
+ * Las que SÍ se tomaron no se tocan aquí: siguen vivas —"En proceso" para el
+ * proveedor— hasta que cierre el pago.
+ */
+export function caducoNadieLaTomo(service: ServiceAlert): boolean {
+  if (service.assigned_driver_id) return false;
+  if (service.status === 'STATUS_COMPLETED' || service.status === 'STATUS_CANCELLED') return false;
+  if (estaPagadoYCerrado(service)) return false;
+  return estaVencido(service);
+}

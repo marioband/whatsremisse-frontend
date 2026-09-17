@@ -9,8 +9,11 @@ import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { destinoDeLaTarjetaDelProveedor } from '../lib/accionDeLaTarjeta';
-import { estaEnProcesoDelProveedor, ordenarEnProceso } from '../lib/apartadosDelInicio';
-import { cierreDeLaAlerta, estaPagadoYCerrado, estaVencido } from '../lib/estadoServicio';
+import {
+  estaEnProcesoDelProveedor,
+  listaDelProveedor,
+  ordenarEnProceso,
+} from '../lib/apartadosDelInicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -34,26 +37,15 @@ type StatusFilter = 'Publicados' | 'En proceso';
 
 const STATUS_FILTERS: StatusFilter[] = ['Publicados', 'En proceso'];
 
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-
 /**
- * Una alerta se cierra sola a los 20 minutos (al momento) o a los 10 (con hora
- * específica): de ahí en adelante el proveedor la ve como vencida y tiene 24 horas
- * para editarla y reenviarla antes de que desaparezca. La regla vive en
- * `estadoServicio` (`cierreDeLaAlerta`), aquí solo se consulta.
+ * Regla del usuario (17-09-2026): la alerta se cierra sola (20 minutos "al momento" /
+ * 10 minutos después de la hora) y, **si nadie la tomó, sale del inicio de inmediato**
+ * —ya no se reprograma: la fila se queda en la base—. Antes se quedaba 24 h "en gracia"
+ * con la franja roja "Servicio vencido" y una cuenta atrás, y el usuario lo reportó
+ * como "el servicio vencido sigue activo". La condición vive en
+ * `lib/apartadosDelInicio.listaDelProveedor` (con `caducoNadieLaTomo`), la MISMA que
+ * usan la lista y el contador. Lo que sí se tomó sigue vivo hasta cerrar el pago.
  */
-const isExpired = (service: ServiceAlert): boolean => estaVencido(service);
-
-const isGraceExpired = (service: ServiceAlert): boolean =>
-  Date.now() - cierreDeLaAlerta(service) > TWENTY_FOUR_HOURS_MS;
-
-const getGraceCountdown = (service: ServiceAlert): string => {
-  const remaining = TWENTY_FOUR_HOURS_MS - (Date.now() - cierreDeLaAlerta(service));
-  if (remaining <= 0) return 'Eliminando...';
-  const hours = Math.floor(remaining / (60 * 60 * 1000));
-  const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
-  return `${hours}h ${minutes}m`;
-};
 
 export function ProviderHomeScreen() {
   const navigation = useNavigation<HomeNav>();
@@ -70,47 +62,34 @@ export function ProviderHomeScreen() {
     [services, session?.user?.id]
   );
 
-  // Servicios activos (no archivados) deduplicados por ID, base para contadores y listas
-  const activeDedupedServices = useMemo(() => {
-    const seen = new Set<string>();
-    return myProviderServices.filter((s) => {
-      if (seen.has(s.id)) return false;
-      seen.add(s.id);
-      if (s.archived) return false;
-      // Pagado y cerrado: ya vive en "Mis servicios" con su historial de pago, así
-      // que no se lista en el inicio (ni en "Todos" ni en "Finalizados").
-      if (estaPagadoYCerrado(s)) return false;
-      return true;
-    });
-  }, [myProviderServices]);
+  // Servicios que veo en el inicio (o en "Archivados"): la regla vive en
+  // `lib/apartadosDelInicio.listaDelProveedor` — fuera archivados, lo ya cerrado y lo
+  // que caducó sin que nadie lo tomara (sin las 24 h de gracia).
+  const serviciosDelInicio = useMemo(
+    () => listaDelProveedor(myProviderServices, { mostrarArchivados: showArchived }),
+    [myProviderServices, showArchived]
+  );
 
-  // Contador de la píldora "En proceso": los servicios que ya tienen a un conductor
-  // trabajando (hizo el toque "toca para iniciar") y todavía no cerraron el pago. Los
-  // asignados que esperan ese toque siguen contando en "Publicados".
+  // Contador de la píldora "En proceso": sale de la MISMA función que la lista, así que
+  // no puede contar una tarjeta que ya no se ve. Los asignados que esperan el toque
+  // "toca para iniciar" siguen contando en "Publicados".
   const enProcesoCount = useMemo(
-    () => activeDedupedServices.filter((s) => estaEnProcesoDelProveedor(s)).length,
-    [activeDedupedServices]
+    () => listaDelProveedor(myProviderServices).filter((s) => estaEnProcesoDelProveedor(s)).length,
+    [myProviderServices]
   );
 
   const filteredServices = useMemo(() => {
-    let result = showArchived
-      ? myProviderServices.filter((s) => s.archived)
-      : activeDedupedServices;
-
-    // Servicios vencidos pasan a una gracia de 24h; transcurrida esa gracia se ocultan (eliminación lógica)
-    result = result.filter((s) => !isExpired(s) || !isGraceExpired(s));
-
     if (activeStatus === 'En proceso') {
       // El viaje en curso, las reservas en curso y lo terminado con el pago abierto,
       // ordenados por `ordenarEnProceso` (activos → reservas próximas → pagos
       // pendientes → reservas).
-      return ordenarEnProceso(result.filter((s) => estaEnProcesoDelProveedor(s)));
+      return ordenarEnProceso(serviciosDelInicio.filter((s) => estaEnProcesoDelProveedor(s)));
     }
 
     // "Publicados": todo lo demás, incluidos los servicios con conductor aceptado que
     // todavía no hicieron el toque "toca para iniciar" (regla del usuario).
-    return result.filter((s) => !estaEnProcesoDelProveedor(s));
-  }, [myProviderServices, activeDedupedServices, activeStatus, showArchived]);
+    return serviciosDelInicio.filter((s) => !estaEnProcesoDelProveedor(s));
+  }, [serviciosDelInicio, activeStatus]);
 
   const handleCardPress = (service: ServiceAlert) => {
     const postulantesPendientes = applications.filter(
@@ -124,7 +103,10 @@ export function ProviderHomeScreen() {
     const destino = destinoDeLaTarjetaDelProveedor({
       tieneConductor: !!service.assigned_driver_id,
       compartido: estaCompartido(service),
-      vencidaEnGracia: isExpired(service) && !isGraceExpired(service),
+      // La gracia de 24 h se eliminó (17-09-2026): una alerta caducada sin conductor ya
+      // no se lista en el inicio, así que este caso no se da desde aquí. Se deja en
+      // `false` para no abrir el editor por estar vencida.
+      vencidaEnGracia: false,
       postulantesPendientes,
     });
 
@@ -165,18 +147,10 @@ export function ProviderHomeScreen() {
       >
         <ProviderServiceCard service={item} onArchive={() => handleArchive(item.id)} />
 
-        {/* Franja de estado: una sola señal, la que devuelve estadoDeServicio */}
+        {/* Franja de estado: una sola señal, la que devuelve estadoDeServicio. Ya no
+            lleva la cuenta atrás de la gracia de 24 h: esa gracia se eliminó. */}
         <View style={styles.cardFooter}>
-          <EstadoServicioBar
-            service={item}
-            postulantes={applicantCount}
-            radius={16}
-            detalle={
-              isExpired(item) && !isGraceExpired(item)
-                ? `${applicantCount > 0 ? `${applicantCount} postulante${applicantCount === 1 ? '' : 's'} · ` : ''}se elimina en ${getGraceCountdown(item)}`
-                : undefined
-            }
-          />
+          <EstadoServicioBar service={item} postulantes={applicantCount} radius={16} />
         </View>
       </TouchableOpacity>
     );

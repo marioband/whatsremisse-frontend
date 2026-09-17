@@ -28,7 +28,7 @@
  */
 
 import { esProgramado } from './datetime';
-import { estaPagadoYCerrado } from './estadoServicio';
+import { caducoNadieLaTomo, estaPagadoYCerrado } from './estadoServicio';
 import { ServiceAlert } from '../types';
 
 /** Cuánto antes de su hora una reserva adelanta a los pagos pendientes. */
@@ -151,5 +151,32 @@ export function ordenarEnProceso(
       );
     }
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
+/**
+ * Servicios que el PROVEEDOR ve en su inicio (o en "Archivados").
+ *
+ * La lista y el contador salen de la MISMA función (regla del proyecto): una tarjeta
+ * que sale de aquí tampoco cuenta en la píldora "En proceso".
+ *
+ * Fuera de la lista: archivados (o solo archivados, en esa vista), lo que ya cerró el
+ * pago (vive en "Mis servicios") y —regla del usuario, 17-09-2026— **lo que caducó sin
+ * que nadie lo tomara**, que antes se quedaba 24 h "en gracia" para reprogramarlo.
+ */
+export function listaDelProveedor(
+  services: ServiceAlert[],
+  opciones: { mostrarArchivados?: boolean } = {}
+): ServiceAlert[] {
+  const mostrarArchivados = opciones.mostrarArchivados ?? false;
+  const vistos = new Set<string>();
+
+  return services.filter((s) => {
+    if (vistos.has(s.id)) return false;
+    vistos.add(s.id);
+    if (mostrarArchivados ? !s.archived : s.archived) return false;
+    if (estaPagadoYCerrado(s)) return false;
+    if (caducoNadieLaTomo(s)) return false;
+    return true;
   });
 }

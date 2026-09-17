@@ -85,7 +85,16 @@ export function RootNavigator() {
   return (
     <>
       <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {/* `cardStyle` es el estilo que @react-navigation/stack le pone a la "card" de
+            cada pantalla (`contentStyle`), y sin él la card se queda con `flex: 0 0 auto`:
+            su alto es el de su CONTENIDO, no el de la ventana. En el chat de una
+            conversación larga eso empujaba la barra de escribir fuera de la pantalla
+            (medido en el chat real: barra en y=1127 con la ventana de 718, y el documento
+            entero desplazándose 417 px de más). Con `flex: 1` la card mide el alto de la
+            ventana —igual que su propio estilo `card` cuando no "llena" la pantalla— y
+            lo que se desplaza es la lista de mensajes (medido: barra en 710, documento en
+            0, y la lista con 463 px de alto y 880 de contenido). */}
+        <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
           {!session ? (
             <>
               <Stack.Screen name="Splash" component={SplashScreen} />

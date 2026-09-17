@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 
 interface ChatHeaderProps {
   title: string;
@@ -106,6 +106,14 @@ const styles = StyleSheet.create({
     height: 36,
   },
   searchIcon: { color: '#fff', fontSize: 16, marginRight: 6 },
-  searchInput: { flex: 1, color: '#fff', fontSize: 14, paddingVertical: 0 },
+  searchInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    paddingVertical: 0,
+    // En web el navegador dibuja su recuadro de foco (outline) en los campos: la app no
+    // lo quiere (en nativo no existe).
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
+  },
   searchCount: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginLeft: 6 },
 });
