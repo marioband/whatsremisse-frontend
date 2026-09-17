@@ -86,6 +86,13 @@ export interface ServiceAlert {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  /**
+   * Cuándo el conductor aceptado hizo el toque "Servicio aceptado, toca para iniciar"
+   * (migración 0022). No es un hito: `driver_progress_step` sigue igual. Es la señal que
+   * mueve la tarjeta de "Disponibles"/"Publicados" a "En proceso" en los DOS teléfonos
+   * (antes el toque solo vivía en el dispositivo del conductor).
+   */
+  driver_started_at?: string | null;
   provider_name?: string;
   distance_meters?: number | null;
   archived?: boolean;

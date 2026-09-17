@@ -64,6 +64,7 @@ export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
     created_at: row.created_at,
     updated_at: row.updated_at,
     completed_at: null,
+    driver_started_at: row.driver_started_at ?? null,
   };
 }
 
@@ -531,6 +532,26 @@ export async function reportarProgresoDelConductor(
     const { data: fila, error } = await supabase.rpc('reportar_progreso_servicio', {
       p_service_id: serviceId,
       p_paso: paso,
+    });
+    if (error) throw error;
+    return fila;
+  });
+  return data ? mapServiceAlertFromDb(data as DbServiceAlert) : null;
+}
+
+/**
+ * El toque "Servicio aceptado, toca para iniciar" del conductor (migración 0022).
+ *
+ * El conductor no puede escribir `service_alerts` (RLS: solo el proveedor), así que el
+ * toque se guarda con esta función, que valida que él sea el conductor asignado y deja la
+ * marca una sola vez. NO toca `driver_progress_step` ni el estado: el toque no es un hito
+ * (el primer hito lo reporta el conductor al deslizar la barra dentro del chat).
+ */
+export async function marcarArranqueDelViaje(serviceId: string): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const data = await conReintentoDeEsquema(async () => {
+    const { data: fila, error } = await supabase.rpc('iniciar_viaje_del_servicio', {
+      p_service_id: serviceId,
     });
     if (error) throw error;
     return fila;

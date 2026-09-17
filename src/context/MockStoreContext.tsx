@@ -21,6 +21,7 @@ import {
   fetchGroupMembers,
   fetchGroupsForUser,
   deleteServiceAlert,
+  marcarArranqueDelViaje as marcarArranqueEnDb,
   reportarProgresoDelConductor,
   archivarServicio,
   esFuncionAusente,
@@ -581,6 +582,12 @@ interface MockContextValue extends MockState {
   rejectApplicationFrom: (serviceId: string, driverId: string) => void;
   cancelApplication: (serviceId: string, driverId: string) => void;
   updateServiceStatus: (serviceId: string, status: ServiceStatus) => void;
+  /**
+   * El toque "Servicio aceptado, toca para iniciar" del conductor (0022): deja la marca
+   * en la base para que el PROVEEDOR vea lo mismo. No es un hito (`driver_progress_step`
+   * no cambia) y no bloquea nada si falla: en el teléfono queda la marca local.
+   */
+  marcarArranqueDelViaje: (serviceId: string) => Promise<void>;
   archiveService: (serviceId: string) => void;
   unarchiveService: (serviceId: string) => void;
   addMessage: (serviceId: string, message: Message) => void;
@@ -1160,6 +1167,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         }
       }
       dispatch({ type: 'UPDATE_SERVICE_STATUS', payload: { serviceId, status } });
+    },
+    marcarArranqueDelViaje: async (serviceId) => {
+      if (!isSupabaseConfigured) return;
+      try {
+        const actualizado = await marcarArranqueEnDb(serviceId);
+        if (actualizado) dispatch({ type: 'UPDATE_SERVICE', payload: actualizado });
+      } catch (err) {
+        // Sin la 0022 aplicada la función no existe: el toque sigue valiendo en el
+        // teléfono del conductor (marca local) y el proveedor no lo verá hasta que
+        // aplique la migración. No se avisa al conductor: él no tiene que arreglar esto.
+        console.warn('[MockStore] no se pudo dejar el arranque en la base (¿falta la 0022?):', err);
+      }
     },
     archiveService: async (serviceId) => {
       await archivarSegunRol(serviceId, true);

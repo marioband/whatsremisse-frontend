@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useNombresDeProveedores } from '../hooks/useNombreDelProveedor';
 import { AZUL, OSCURO, VERDE_ACCION } from '../lib/colors';
-import { estadoDeServicio } from '../lib/estadoServicio';
+import { estaPagadoYCerrado, estadoDeServicio } from '../lib/estadoServicio';
 import { nombreParaMostrar } from '../lib/nombreDelProveedor';
 import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -38,15 +38,18 @@ export function MyServicesScreen() {
   const userId = session?.user?.id;
 
   /**
-   * Un mismo usuario puede ser proveedor y conductor, así que "Mis servicios"
-   * lista todos los servicios en los que participa y marca el rol en cada fila
-   * (igual que Estadísticas). Antes se filtraba por el modo abierto de la app y,
-   * con el tab Conductor, un proveedor veía la lista vacía: por eso no llegaba a
-   * la zona de pago de sus propios servicios.
+   * Un mismo usuario puede ser proveedor y conductor, así que "Mis servicios" marca el
+   * rol en cada fila (igual que Estadísticas) en vez de filtrar por el modo abierto.
+   *
+   * AQUÍ SOLO ENTRAN LOS SERVICIOS CON EL PROCESO DE PAGO YA CERRADO (regla del usuario,
+   * 17-09-2026): mientras el servicio está en "En proceso" (viaje en curso, reserva o
+   * terminado con el pago abierto) la tarjeta vive en el inicio, no aquí. Antes se
+   * listaban todos los servicios en los que participo y se adelantaba la tarjeta.
    */
   const misServicios = useMemo<Fila[]>(
     () =>
       services
+        .filter((service) => estaPagadoYCerrado(service))
         .map((service): Fila | null => {
           if (service.provider_id === userId) return { service, rol: 'PROVEEDOR' };
           if (service.assigned_driver_id === userId) return { service, rol: 'CONDUCTOR' };
@@ -197,7 +200,10 @@ export function MyServicesScreen() {
         renderItem={renderSection}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No tienes servicios registrados aún.</Text>
+          <Text style={styles.emptyText}>
+            Aquí aparecen los servicios con el pago ya cerrado. Los que están en curso siguen en el
+            inicio, en "En proceso".
+          </Text>
         }
       />
     </SafeAreaView>

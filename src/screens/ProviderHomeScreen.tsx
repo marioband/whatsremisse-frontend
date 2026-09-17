@@ -9,6 +9,7 @@ import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { destinoDeLaTarjetaDelProveedor } from '../lib/accionDeLaTarjeta';
+import { estaEnProcesoDelProveedor, ordenarEnProceso } from '../lib/apartadosDelInicio';
 import { cierreDeLaAlerta, estaPagadoYCerrado, estaVencido } from '../lib/estadoServicio';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
@@ -24,23 +25,16 @@ const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
 const LIGHT_BG = '#F0F2F5';
 
-type StatusFilter = 'Todos' | 'En proceso' | 'Reservas' | 'Finalizados';
+/**
+ * Apartados del inicio del PROVEEDOR (17-09-2026): "Todos" → "Publicados"; fuera
+ * "Reservas" y "Finalizados". Las reservas y lo terminado con el pago abierto viven
+ * dentro de "En proceso", ordenados por `lib/apartadosDelInicio.ts`.
+ */
+type StatusFilter = 'Publicados' | 'En proceso';
 
-const STATUS_FILTERS: StatusFilter[] = ['Todos', 'En proceso', 'Reservas', 'Finalizados'];
+const STATUS_FILTERS: StatusFilter[] = ['Publicados', 'En proceso'];
 
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-
-const getScheduledAt = (service: ServiceAlert): Date | null => {
-  if (service.scheduled_at) return new Date(service.scheduled_at);
-  return null;
-};
-
-const isReservation = (service: ServiceAlert): boolean => {
-  const scheduled = getScheduledAt(service);
-  if (!scheduled) return false;
-  return scheduled.getTime() > Date.now() + TWO_HOURS_MS;
-};
 
 /**
  * Una alerta se cierra sola a los 20 minutos (al momento) o a los 10 (con hora
@@ -66,7 +60,7 @@ export function ProviderHomeScreen() {
   const { session } = useAuth();
   const { services, applications, archiveService } = useMockStore();
 
-  const [activeStatus, setActiveStatus] = useState<StatusFilter>('Todos');
+  const [activeStatus, setActiveStatus] = useState<StatusFilter>('Publicados');
   const [showArchived, setShowArchived] = useState(false);
 
   // En este modo solo se ven los servicios que yo publiqué como proveedor; los
@@ -90,18 +84,13 @@ export function ProviderHomeScreen() {
     });
   }, [myProviderServices]);
 
-  const { enProcesoCount, finalizadosCount } = useMemo(() => {
-    const enProceso = activeDedupedServices.filter(
-      (s) =>
-        s.status === 'STATUS_EN_ROUTE_ORIGIN' ||
-        s.status === 'STATUS_AT_ORIGIN' ||
-        s.status === 'STATUS_IN_PROGRESS'
-    ).length;
-    const finalizados = activeDedupedServices.filter(
-      (s) => s.status === 'STATUS_COMPLETED' && !isExpired(s)
-    ).length;
-    return { enProcesoCount: enProceso, finalizadosCount: finalizados };
-  }, [activeDedupedServices]);
+  // Contador de la píldora "En proceso": los servicios que ya tienen a un conductor
+  // trabajando (hizo el toque "toca para iniciar") y todavía no cerraron el pago. Los
+  // asignados que esperan ese toque siguen contando en "Publicados".
+  const enProcesoCount = useMemo(
+    () => activeDedupedServices.filter((s) => estaEnProcesoDelProveedor(s)).length,
+    [activeDedupedServices]
+  );
 
   const filteredServices = useMemo(() => {
     let result = showArchived
@@ -112,19 +101,15 @@ export function ProviderHomeScreen() {
     result = result.filter((s) => !isExpired(s) || !isGraceExpired(s));
 
     if (activeStatus === 'En proceso') {
-      result = result.filter(
-        (s) =>
-          s.status === 'STATUS_EN_ROUTE_ORIGIN' ||
-          s.status === 'STATUS_AT_ORIGIN' ||
-          s.status === 'STATUS_IN_PROGRESS'
-      );
-    } else if (activeStatus === 'Reservas') {
-      result = result.filter((s) => s.status === 'STATUS_OPEN' && isReservation(s));
-    } else if (activeStatus === 'Finalizados') {
-      result = result.filter((s) => s.status === 'STATUS_COMPLETED' && !isExpired(s));
+      // El viaje en curso, las reservas en curso y lo terminado con el pago abierto,
+      // ordenados por `ordenarEnProceso` (activos → reservas próximas → pagos
+      // pendientes → reservas).
+      return ordenarEnProceso(result.filter((s) => estaEnProcesoDelProveedor(s)));
     }
 
-    return result;
+    // "Publicados": todo lo demás, incluidos los servicios con conductor aceptado que
+    // todavía no hicieron el toque "toca para iniciar" (regla del usuario).
+    return result.filter((s) => !estaEnProcesoDelProveedor(s));
   }, [myProviderServices, activeDedupedServices, activeStatus, showArchived]);
 
   const handleCardPress = (service: ServiceAlert) => {
@@ -203,12 +188,7 @@ export function ProviderHomeScreen() {
       <View style={styles.filterBar}>
         <View style={styles.statusPills}>
           {STATUS_FILTERS.map((status) => {
-            const count =
-              status === 'En proceso'
-                ? enProcesoCount
-                : status === 'Finalizados'
-                  ? finalizadosCount
-                  : 0;
+            const count = status === 'En proceso' ? enProcesoCount : 0;
             return (
               <TouchableOpacity
                 key={status}
@@ -223,7 +203,7 @@ export function ProviderHomeScreen() {
                 >
                   {status}
                 </Text>
-                {(status === 'En proceso' || status === 'Finalizados') && count > 0 && (
+                {status === 'En proceso' && count > 0 && (
                   <View style={styles.tabBadge}>
                     <Text style={styles.tabBadgeText}>{count > 99 ? '99+' : count}</Text>
                   </View>

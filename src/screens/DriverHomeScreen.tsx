@@ -10,7 +10,9 @@ import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
+import { ordenarEnProceso } from '../lib/apartadosDelInicio';
 import { AZUL } from '../lib/colors';
+import { esProgramado } from '../lib/datetime';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import {
   guardarIniciosDelViaje,
@@ -21,7 +23,6 @@ import {
 } from '../lib/inicioDelViaje';
 import {
   contarEnProceso,
-  contarReservas,
   esAceptadoMio as esAceptadoMioDe,
   estadoEfectivoDeMiPostulacion,
   filaDeMiPostulacion,
@@ -47,9 +48,13 @@ const BADGE_RED = '#C2333F';
 /** Cuánto se queda a la vista la tarjeta del rechazo recién llegado (3 segundos). */
 const VISTA_DE_RECHAZO_MS = 3000;
 
-type StatusFilter = 'Todos' | 'En proceso' | 'Reservas';
+/**
+ * Apartados del inicio (17-09-2026): "Todos" → "Disponibles" y fuera "Reservas"
+ * (las reservas viven dentro de "En proceso", ordenadas por `lib/apartadosDelInicio`).
+ */
+type StatusFilter = 'Disponibles' | 'En proceso';
 
-const STATUS_FILTERS: StatusFilter[] = ['Todos', 'En proceso', 'Reservas'];
+const STATUS_FILTERS: StatusFilter[] = ['Disponibles', 'En proceso'];
 
 export function DriverHomeScreen() {
   const navigation = useNavigation<HomeNav>();
@@ -67,9 +72,10 @@ export function DriverHomeScreen() {
     driverDebt,
     debtThreshold,
     emitChatNotification,
+    marcarArranqueDelViaje,
   } = useMockStore();
 
-  const [activeStatus, setActiveStatus] = useState<StatusFilter>('Todos');
+  const [activeStatus, setActiveStatus] = useState<StatusFilter>('Disponibles');
   const [showArchived, setShowArchived] = useState(false);
 
   const currentDriverId = session?.user?.id ?? '';
@@ -307,19 +313,22 @@ export function DriverHomeScreen() {
     [services, applications, opcionesDelInicio]
   );
 
-  // "Todos": alertas nuevas, postuladas y el rechazo recién llegado (3 segundos).
-  // Lo ya aceptado se fue a "En proceso" y un rechazo en pie ya no se ve.
-  // Ordenamiento estricto: Aceptados > Postulados > Nuevos.
+  // "Disponibles": alertas nuevas, postuladas, el rechazo recién llegado (3 segundos) y
+  // la tarjeta ACEPTADA que todavía no arrancó (se queda aquí hasta el toque "toca para
+  // iniciar"). Un rechazo en pie ya no se ve.
+  // Ordenamiento estricto: Aceptados (esperando el toque) > Postulados > Nuevos.
   const sortedServices = useMemo(() => {
     const accepted: ServiceAlert[] = [];
     const applied: ServiceAlert[] = [];
     const news: ServiceAlert[] = [];
 
-    serviciosDelInicio(myActiveServices, applications, 'Todos', opcionesDelInicio).forEach((s) => {
-      if (esAceptadoMio(s)) accepted.push(s);
-      else if (getApplication(s.id)) applied.push(s);
-      else news.push(s);
-    });
+    serviciosDelInicio(myActiveServices, applications, 'Disponibles', opcionesDelInicio).forEach(
+      (s) => {
+        if (esAceptadoMio(s)) accepted.push(s);
+        else if (getApplication(s.id)) applied.push(s);
+        else news.push(s);
+      }
+    );
 
     const sortByDateDesc = (a: ServiceAlert, b: ServiceAlert) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -334,11 +343,6 @@ export function DriverHomeScreen() {
   // Contadores para badges (misma condición que las listas de cada apartado)
   const enProcesoCount = useMemo(
     () => contarEnProceso(myActiveServices, opcionesDelInicio),
-    [myActiveServices, opcionesDelInicio]
-  );
-
-  const reservasCount = useMemo(
-    () => contarReservas(myActiveServices, opcionesDelInicio),
     [myActiveServices, opcionesDelInicio]
   );
 
@@ -376,9 +380,14 @@ export function DriverHomeScreen() {
       // dispositivo (`lib/inicioDelViaje.ts`) y los hitos los reporta el deslizamiento
       // dentro del chat (Ubicado → En proceso → Finalizado).
       if (plan.cumpleElToqueDeInicio) {
+        // Marca local (la que vale sin conexión) + marca en la base (0022), que es la
+        // que deja al PROVEEDOR mover su tarjeta de "Publicados" a "En proceso".
         const actualizados = marcarInicio(inicios, service.id, currentDriverId);
         setInicios(actualizados);
         await guardarIniciosDelViaje(actualizados);
+        // No se espera: el toque ya está marcado en el teléfono y la pantalla no debe
+        // quedarse esperando a la red (el store avisa por consola si la 0022 falta).
+        marcarArranqueDelViaje(service.id);
       }
       navigation.navigate('Chat', {
         serviceId: service.id,
@@ -426,19 +435,11 @@ export function DriverHomeScreen() {
     }
 
     if (activeStatus === 'En proceso') {
-      // La tarjeta entra aquí en cuanto el PROVEEDOR acepta al conductor (el
-      // servicio queda asignado, STATUS_AT_ORIGIN), no cuando el conductor la toca,
-      // y también si la alerta tenía hora específica (antes se iba a "Reservas").
-      return serviciosDelInicio(
-        myActiveServices,
-        applications,
-        'En proceso',
-        opcionesDelInicio
-      ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    }
-    if (activeStatus === 'Reservas') {
-      return serviciosDelInicio(myActiveServices, applications, 'Reservas', opcionesDelInicio).sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      // Todo lo mío que ya arrancó (el toque "toca para iniciar" o el primer hito), hasta
+      // que el proceso de pago cierre. El orden lo fija `ordenarEnProceso`:
+      // activos → reservas próximas (30 min antes de su hora) → pagos pendientes → reservas.
+      return ordenarEnProceso(
+        serviciosDelInicio(myActiveServices, applications, 'En proceso', opcionesDelInicio)
       );
     }
     return sortedServices;
@@ -477,8 +478,7 @@ export function DriverHomeScreen() {
       <View style={styles.filterBar}>
         <View style={styles.statusPills}>
           {STATUS_FILTERS.map((status) => {
-            const count =
-              status === 'En proceso' ? enProcesoCount : status === 'Reservas' ? reservasCount : 0;
+            const count = status === 'En proceso' ? enProcesoCount : 0;
             return (
               <TouchableOpacity
                 key={status}
@@ -535,7 +535,9 @@ export function DriverHomeScreen() {
           const application = getApplication(item.id);
           const accepted = esAceptadoMio(item);
           const inEnProceso = activeStatus === 'En proceso';
-          const inReservas = activeStatus === 'Reservas';
+          // En "En proceso" la tarjeta de una reserva se marca como tal (el resto son
+          // viajes en curso o terminados con el pago abierto).
+          const esReserva = inEnProceso && esProgramado(item);
           const notificationCount = getDriverNotification(item.id);
           const displayGroupName = getDisplayGroupName(item.id);
 
@@ -551,8 +553,8 @@ export function DriverHomeScreen() {
               onUnarchive={() => handleUnarchive(item.id)}
               onCancelApplication={application ? () => handleCancelApplication(item.id) : undefined}
               showArchived={showArchived}
-              disableSwipe={inEnProceso || inReservas || accepted}
-              showReservaIndicator={inReservas}
+              disableSwipe={inEnProceso || accepted}
+              showReservaIndicator={esReserva}
               isApplied={!!application}
               miPostulacion={miPostulacionDe(item)}
               notificationCount={notificationCount}

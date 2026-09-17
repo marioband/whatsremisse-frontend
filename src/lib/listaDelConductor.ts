@@ -1,5 +1,5 @@
 import { Application, ServiceAlert } from '../types';
-import { esProgramado } from './datetime';
+import { estaEnProcesoDelConductor } from './apartadosDelInicio';
 import { estaPagadoYCerrado } from './estadoServicio';
 import { huellaDeLaAlerta } from './marcaDePostulacion';
 import { EstadoDeMiPostulacion } from './miPostulacion';
@@ -16,7 +16,12 @@ import { isVisibleAsDriver } from './visibility';
  * comprueba lo mismo que ejecuta la pantalla.
  */
 
-export type FiltroDelInicio = 'Todos' | 'En proceso' | 'Reservas';
+/**
+ * Apartados del inicio del CONDUCTOR (17-09-2026): "Todos" pasó a llamarse
+ * "Disponibles" y "Reservas" desapareció como apartado (las reservas viven dentro de
+ * "En proceso", ordenadas por la regla de `lib/apartadosDelInicio.ts`).
+ */
+export type FiltroDelInicio = 'Disponibles' | 'En proceso';
 
 /** La fila de `applications` que la base guarda para este conductor y servicio. */
 export function filaDeMiPostulacion(
@@ -76,26 +81,8 @@ export function esperaElToqueDeInicio(
   return esAceptadoMio(service, userId) && pasoDelViaje(service) < 1 && !yaIniciadoElViaje;
 }
 
-/**
- * Apartado "En proceso": el viaje **ya se inició** (el conductor cumplió el toque de
- * inicio o ya reportó algún hito), sin importar si el servicio tiene hora específica o
- * es "al momento".
- */
-export function esEnProcesoDelConductor(
-  service: ServiceAlert,
-  userId: string,
-  yaIniciadoElViaje = false
-): boolean {
-  return (
-    (esAceptadoMio(service, userId) && (pasoDelViaje(service) >= 1 || yaIniciadoElViaje)) ||
-    service.status === 'STATUS_IN_PROGRESS'
-  );
-}
-
-/** Apartado "Reservas": ya aceptado y con hora específica (no "al momento"). */
-export function esReservaDelConductor(service: ServiceAlert, userId: string): boolean {
-  return esAceptadoMio(service, userId) && esProgramado(service);
-}
+// Los apartados "En proceso" de los dos modos (y su orden) viven en
+// `lib/apartadosDelInicio.ts`: aquí solo queda el reparto de la lista del conductor.
 
 /** Alerta abierta y sin postulación mía viva: la tarjeta que puedo tomar. */
 export function estaDisponibleParaPostular(
@@ -318,21 +305,24 @@ export function serviciosDelInicio(
   const inicioCumplido = opciones.inicioCumplido ?? nuncaIniciado;
 
   if (filtro === 'En proceso') {
-    return base.filter(
-      (s) =>
-        esEnProcesoDelConductor(s, opciones.userId, inicioCumplido(s.id)) &&
-        s.status !== 'STATUS_COMPLETED'
-    );
+    // Todo lo mío que YA ARRANCÓ (el toque "toca para iniciar" o el primer hito),
+    // incluidos el viaje en proceso, las reservas en curso y lo terminado con el pago
+    // abierto: la tarjeta sale de aquí cuando el proceso de pago cierra (Mis servicios).
+    return base.filter((s) => estaEnProcesoDelConductor(s, opciones.userId, inicioCumplido(s.id)));
   }
-  if (filtro === 'Reservas') {
-    return base.filter((s) => esReservaDelConductor(s, opciones.userId));
-  }
+
+  // "Disponibles": lo que puedo tomar, lo que postulé, el rechazo recién llegado y la
+  // tarjeta ACEPTADA QUE TODAVÍA NO ARRANCÓ (esa se queda aquí hasta que el conductor
+  // toque "Servicio aceptado, toca para iniciar"). Los dos apartados son complementarios:
+  // lo que ya está en "En proceso" no se repite aquí (por ejemplo si la marca del toque
+  // vino de la base y este teléfono no la tiene).
   return base.filter(
     (s) =>
-      estaDisponibleParaPostular(s, applications, opciones.userId) ||
-      tengoPostulacionViva(applications, s.id, opciones.userId) ||
-      esperaElToqueDeInicio(s, opciones.userId, inicioCumplido(s.id)) ||
-      reciente(s.id)
+      !estaEnProcesoDelConductor(s, opciones.userId, inicioCumplido(s.id)) &&
+      (estaDisponibleParaPostular(s, applications, opciones.userId) ||
+        tengoPostulacionViva(applications, s.id, opciones.userId) ||
+        esperaElToqueDeInicio(s, opciones.userId, inicioCumplido(s.id)) ||
+        reciente(s.id))
   );
 }
 
@@ -342,17 +332,6 @@ export function contarEnProceso(
   opciones: OpcionesDelInicioDelConductor
 ): number {
   const inicioCumplido = opciones.inicioCumplido ?? nuncaIniciado;
-  return base.filter(
-    (s) =>
-      esEnProcesoDelConductor(s, opciones.userId, inicioCumplido(s.id)) &&
-      s.status !== 'STATUS_COMPLETED'
-  ).length;
-}
-
-/** Contador de la píldora "Reservas" (la MISMA condición que la lista). */
-export function contarReservas(
-  base: ServiceAlert[],
-  opciones: OpcionesDelInicioDelConductor
-): number {
-  return base.filter((s) => esReservaDelConductor(s, opciones.userId)).length;
+  return base.filter((s) => estaEnProcesoDelConductor(s, opciones.userId, inicioCumplido(s.id)))
+    .length;
 }

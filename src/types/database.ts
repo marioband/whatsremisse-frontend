@@ -31,6 +31,7 @@ export interface DbServiceAlert {
   status: string;
   assigned_driver_id: string | null;
   driver_progress_step: number;
+  driver_started_at?: string | null;
   commission_paid: boolean;
   driver_payment_received: boolean;
   settlement_enabled: boolean;
