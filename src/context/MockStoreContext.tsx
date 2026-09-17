@@ -46,6 +46,7 @@ import {
   updateServiceAlert,
   ProfilePatch,
 } from '../lib/database';
+import { Candado, claveDeEnvio, crearCandado } from '../lib/envioUnico';
 import { describeError } from '../lib/errors';
 import { conGrupos } from '../lib/gruposDeServicio';
 import {
@@ -698,6 +699,13 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(mockReducer, initialState);
   const { session, profile } = useAuth();
   const loadedRef = useRef(false);
+  /**
+   * Candado de los envíos a la base: la misma publicación o el mismo compartir SOLO
+   * se ejecuta una vez mientras está en vuelo; quien insista recibe la misma promesa.
+   * Es la red que no depende de la pantalla (varias pantallas publican y un toque
+   * repetido no debe crear dos alertas del mismo servicio).
+   */
+  const candadoDeEnvio = useRef<Candado>(crearCandado());
 
   /**
    * Relee de Supabase grupos, servicios (de las dos identidades) y postulaciones.
@@ -1012,16 +1020,19 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     ...state,
     setRole: (role) => dispatch({ type: 'SET_ROLE', payload: role }),
     addService: async (service, groupIds) => {
-      if (isSupabaseConfigured) {
+      // Un solo envío por borrador: si el usuario pulsa varias veces antes de que
+      // termine la carga, todos los toques reciben ESTA misma promesa y se crea una
+      // sola alerta (antes se publicaba una por toque).
+      const clave = claveDeEnvio(null, service);
+      return candadoDeEnvio.current.unaSolaVez(clave, async () => {
+        if (!isSupabaseConfigured) {
+          dispatch({ type: 'ADD_SERVICE', payload: service });
+          return service.id;
+        }
+
+        let insertado: ServiceAlert;
         try {
-          const insertado = await insertServiceAlert(service);
-          // Compartida a varios grupos = UNA sola tarjeta (0018).
-          const fila =
-            groupIds && groupIds.length > 0
-              ? await compartirYLeer(insertado.id, groupIds)
-              : insertado;
-          dispatch({ type: 'ADD_SERVICE', payload: fila });
-          return fila.id;
+          insertado = await insertServiceAlert(service);
         } catch (err) {
           console.error('[MockStore] insertServiceAlert error:', err);
           Alert.alert(
@@ -1030,27 +1041,55 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
           );
           return null;
         }
-      }
-      dispatch({ type: 'ADD_SERVICE', payload: service });
-      return service.id;
+
+        // Compartida a varios grupos = UNA sola tarjeta (0018).
+        if (!groupIds || groupIds.length === 0) {
+          dispatch({ type: 'ADD_SERVICE', payload: insertado });
+          return insertado.id;
+        }
+
+        try {
+          const fila = await compartirYLeer(insertado.id, groupIds);
+          dispatch({ type: 'ADD_SERVICE', payload: fila });
+          return fila.id;
+        } catch (err) {
+          // La tarjeta YA se publicó (la fila existe): se devuelve su id para no dejarla
+          // perdida. Antes se devolvía null y el usuario, al reintentar desde la
+          // pantalla, publicaba una SEGUNDA alerta del mismo servicio.
+          console.error('[MockStore] compartirYLeer error:', err);
+          dispatch({ type: 'ADD_SERVICE', payload: insertado });
+          Alert.alert(
+            'Servicio publicado sin grupos',
+            detalleDe(
+              err,
+              'La tarjeta se publicó, pero no se pudo compartir con los grupos elegidos. Entra a la tarjeta y elige grupos.',
+              '0018_servicio_a_varios_grupos.sql'
+            )
+          );
+          return insertado.id;
+        }
+      });
     },
     compartirServicio: async (serviceId, groupIds) => {
       if (!isSupabaseConfigured) {
         console.warn('[MockStore] sin backend no hay grupos a los que compartir');
         return false;
       }
-      try {
-        const fila = await compartirYLeer(serviceId, groupIds);
-        dispatch({ type: 'UPDATE_SERVICE', payload: fila });
-        return true;
-      } catch (err) {
-        console.error('[MockStore] compartirServicio error:', err);
-        Alert.alert(
-          'No se pudo compartir el servicio',
-          detalleDe(err, 'El backend rechazó el compartir', '0018_servicio_a_varios_grupos.sql')
-        );
-        return false;
-      }
+      // Mismo candado: dos "Enviar" seguidos comparten una sola vez.
+      return candadoDeEnvio.current.unaSolaVez(claveDeEnvio(serviceId), async () => {
+        try {
+          const fila = await compartirYLeer(serviceId, groupIds);
+          dispatch({ type: 'UPDATE_SERVICE', payload: fila });
+          return true;
+        } catch (err) {
+          console.error('[MockStore] compartirServicio error:', err);
+          Alert.alert(
+            'No se pudo compartir el servicio',
+            detalleDe(err, 'El backend rechazó el compartir', '0018_servicio_a_varios_grupos.sql')
+          );
+          return false;
+        }
+      });
     },
     updateService: async (service) => {
       await persistService(service.id, service);

@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -69,6 +69,9 @@ export function CreateServiceScreen() {
   const { session, profile } = useAuth();
   const editingService = route.params?.service;
   const isEditing = !!editingService;
+
+  /** Un solo "Guardar" efectivo por visita a esta pantalla (ver `handleGuardar`). */
+  const guardandoRef = useRef(false);
 
   const getInitialDateTime = () => {
     if (editingService?.scheduled_at) {
@@ -306,8 +309,14 @@ export function CreateServiceScreen() {
 
   /** Guardar: la tarjeta queda en la lista; sin grupos, "no compartida". */
   const handleGuardar = () => {
+    // Guarda SÍNCRONA: "Guardar" también crea una tarjeta, y el borrador se arma con la
+    // hora del toque (`service-<Date.now()>`), así que dos toques seguidos eran dos
+    // borradores distintos = dos tarjetas. Aquí el segundo toque no hace nada.
+    if (guardandoRef.current) return;
+
     const servicio = construirServicio();
     if (!servicio) return;
+    guardandoRef.current = true;
 
     if (editingService) {
       updateService(servicio);

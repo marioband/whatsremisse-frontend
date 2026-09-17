@@ -1,10 +1,11 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import { EstadoDeEnvio, estadoDelBotonDeEnvio, opacidadDelBotonDeEnvio } from '../lib/envioUnico';
 import { gruposDeServicio } from '../lib/gruposDeServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -36,6 +37,14 @@ export function SelectGroupsForServiceScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(gruposDeServicio(draftService))
   );
+
+  // El envío se hace UNA sola vez. `guardandoRef` es la guarda efectiva (síncrona: dos
+  // toques en el mismo hueco la ven puesta los dos) y `estado` es la parte visible
+  // (botón apagado con "Enviando…"). Con solo `estado` no alcanza: actualizar el estado
+  // de React es asíncrono y los dos toques leían "listo".
+  const [estado, setEstado] = useState<EstadoDeEnvio>('listo');
+  const guardandoRef = useRef(false);
+  const boton = estadoDelBotonDeEnvio(estado);
 
   const activeRoleTab: RoleTab =
     role === 'DRIVER'
@@ -69,41 +78,64 @@ export function SelectGroupsForServiceScreen() {
   };
 
   const handleSend = async () => {
+    // Guarda SÍNCRONA: mientras esta publicación está en vuelo, cualquier otro toque
+    // vuelve aquí y sale. Antes cada toque publicaba una alerta nueva del mismo
+    // servicio (el usuario lo reportó: "se envían varias alertas del mismo servicio").
+    if (guardandoRef.current) return;
+
     if (selectedIds.size === 0) {
       Alert.alert('Selecciona grupos', 'Elige al menos un grupo para publicar el servicio.');
       return;
     }
 
+    guardandoRef.current = true;
+    setEstado('enviando');
+
     // El orden en que se eligieron importa: el primero es el grupo principal.
     const seleccionados = Array.from(selectedIds);
+    let publicado = false;
 
-    if (serviceId) {
-      // Tarjeta que YA existe (venía de "nuevo servicio"): se comparte con TODOS los
-      // grupos elegidos en el MISMO servicio (0018). Antes se creaba una tarjeta por
-      // grupo, así que el conductor que estaba en varios grupos recibía la misma
-      // alerta varias veces.
-      updateService({ ...draftService, id: serviceId });
-      const compartido = await compartirServicio(serviceId, seleccionados);
-      if (!compartido) return;
-      emitNotification(serviceId, draftService.title);
-      Alert.alert(
-        'Servicio compartido',
-        seleccionados.length === 1
-          ? 'La tarjeta ya está publicada en el grupo elegido.'
-          : `La tarjeta está publicada en ${seleccionados.length} grupos. Es un solo servicio: los conductores que estén en varios grupos lo ven una sola vez.`
-      );
+    try {
+      if (serviceId) {
+        // Tarjeta que YA existe (venía de "nuevo servicio"): se comparte con TODOS los
+        // grupos elegidos en el MISMO servicio (0018). Antes se creaba una tarjeta por
+        // grupo, así que el conductor que estaba en varios grupos recibía la misma
+        // alerta varias veces.
+        updateService({ ...draftService, id: serviceId });
+        const compartido = await compartirServicio(serviceId, seleccionados);
+        if (!compartido) return;
+        emitNotification(serviceId, draftService.title);
+        publicado = true;
+        setEstado('publicado');
+        Alert.alert(
+          'Servicio compartido',
+          seleccionados.length === 1
+            ? 'La tarjeta ya está publicada en el grupo elegido.'
+            : `La tarjeta está publicada en ${seleccionados.length} grupos. Es un solo servicio: los conductores que estén en varios grupos lo ven una sola vez.`
+        );
+        navigation.navigate('Main');
+        return;
+      }
+
+      // Tarjeta nueva: se publica UNA vez y se comparte con todos los grupos elegidos.
+      const id = await addService({ ...draftService, group_id: '' }, seleccionados);
+      if (!id) return;
+
+      // Se notifica una sola vez por servicio, aunque se comparta a varios grupos.
+      emitNotification(id, draftService.title);
+      publicado = true;
+      setEstado('publicado');
+
       navigation.navigate('Main');
-      return;
+    } finally {
+      // Si NO se publicó, se suelta el candado para poder reintentar (un fallo de red no
+      // debe dejar el botón muerto). Si SÍ se publicó, se queda cerrado: volver a esta
+      // pantalla no puede publicar una segunda alerta.
+      if (!publicado) {
+        guardandoRef.current = false;
+        setEstado('listo');
+      }
     }
-
-    // Tarjeta nueva: se publica UNA vez y se comparte con todos los grupos elegidos.
-    const id = await addService({ ...draftService, group_id: '' }, seleccionados);
-    if (!id) return;
-
-    // Se notifica una sola vez por servicio, aunque se comparta a varios grupos.
-    emitNotification(id, draftService.title);
-
-    navigation.navigate('Main');
   };
 
   const renderGroup = ({
@@ -174,10 +206,16 @@ export function SelectGroupsForServiceScreen() {
         ListEmptyComponent={<Text style={styles.emptyText}>No hay grupos disponibles</Text>}
       />
 
-      {/* Send button */}
+      {/* Send button: deshabilitado mientras publica (una sola vez por envío) */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-          <Text style={styles.sendText}>Enviar</Text>
+        <TouchableOpacity
+          style={[styles.sendBtn, { opacity: opacidadDelBotonDeEnvio(estado) }]}
+          onPress={handleSend}
+          disabled={boton.deshabilitado}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: boton.deshabilitado }}
+        >
+          <Text style={styles.sendText}>{boton.texto}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
