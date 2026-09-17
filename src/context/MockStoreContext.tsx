@@ -56,6 +56,7 @@ import {
 import {
   fusionarLista,
   fusionarServicio,
+  hitoAdelantado,
   pasoDelSiguienteHito,
 } from '../lib/serviciosSincronizados';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -1391,12 +1392,27 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADVANCE_DRIVER_PROGRESS', payload: { serviceId } });
         return paso;
       }
+      // ADELANTO LOCAL (optimista): el hito que el conductor acaba de reportar se pinta
+      // en el acto —la etiqueta del deslizamiento, la franja del proveedor y las
+      // tarjetas del inicio— y no cuando responde la base. Antes se esperaba la
+      // respuesta y, mientras tanto, la barra volvía al inicio con el texto VIEJO
+      // ("desliza ubicado, el botón regresa y recién unos segundos después aparece en
+      // proceso", reportado por el usuario). La fila que devuelve la base manda: si
+      // confirma, se aplica tal cual; si falla, se vuelve al valor anterior.
+      const adelanto = hitoAdelantado(service, paso);
+      if (adelanto) dispatch({ type: 'UPDATE_SERVICE', payload: adelanto });
       // La fila que devuelve la base es la ÚNICA fuente del paso. Aquí NO se suma
       // otra vez en local: ese +1 dejaba el paso un hito por delante de la base, el
       // cuadre de pagos aparecía antes de "Finalizado" y volvía a desaparecer en la
       // siguiente lectura (era el cuadre que "hacía una pequeña aparición" al
       // deslizar y el que reseteaba el formulario del monto).
       const ok = await reportarAvance(serviceId, paso);
+      if (!ok && service) {
+        // No se pudo escribir: se deshace el adelanto (la franja no puede quedarse
+        // mostrando un hito que la base no confirmó).
+        dispatch({ type: 'UPDATE_SERVICE', payload: service });
+        return null;
+      }
       return ok ? paso : null;
     },
   };

@@ -6,15 +6,16 @@ import {
   StyleSheet,
   PanResponder,
   Animated,
+  Easing,
   LayoutChangeEvent,
   PanResponderGestureState,
   Platform,
 } from 'react-native';
 
 import {
+  desplazamientoDelRelleno,
   desplazamientoMaximo,
   fotogramaDeBarra,
-  fraccionDelRelleno,
   llegoAlUmbral,
   puntoDeAgarre,
   VUELO_MS,
@@ -67,9 +68,17 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
   const [listo, setListo] = useState(false);
   const [volando, setVolando] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
+  /**
+   * El relleno se pinta SOLO cuando ya se pudo colocar con el ancho real de la barra.
+   * Sin esto, el primer render (ancho sin medir → desplazamiento 0) pintaba la barra
+   * LLENA de un tirón hasta que llegaba la medición. Con el ancho por fracción el relleno
+   * quedaba invisible en ese hueco, así que el fallo apareció al pasar el movimiento a
+   * `transform` (lo cazó la verificación en la app real, no las pruebas).
+   */
+  const [rellenoListo, setRellenoListo] = useState(false);
 
   const translateX = useRef(new Animated.Value(0)).current;
-  /** Fracción del ancho ya recorrida (0-1): el ancho del relleno claro. */
+  /** `translateX` (px) del relleno claro: su ancho es fijo (de margen a margen). */
   const relleno = useRef(new Animated.Value(0)).current;
   const trackRef = useRef<View>(null);
   /** Borde izquierdo de la barra en la pantalla, para convertir el toque. */
@@ -103,20 +112,23 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
 
   const fotograma = fotogramaDeBarra({ progressIndex, arrastrando: dragging, listo, volando });
 
-  const resetThumb = () => {
+  /** Deja el pulgar y el relleno en reposo. Devuelve si el relleno quedó bien colocado. */
+  const resetThumb = (): boolean => {
     desplazamientoRef.current = 0;
     translateX.setValue(0);
     // En reposo el relleno queda exactamente debajo del pulgar (mismo alto y ancho).
-    // Sin ancho medido todavía no se pinta nada (un ancho inventado daría una barra
-    // llena de un tirón).
     const ancho = anchoDeBarra();
-    relleno.setValue(ancho > 0 ? fraccionDelRelleno(0, THUMB_SIZE, ancho) : 0);
+    if (ancho <= 0) return false;
+    relleno.setValue(desplazamientoDelRelleno(0, THUMB_SIZE, ancho, MARGEN));
+    return true;
   };
 
   useEffect(() => {
-    resetThumb();
+    // Se vuelve a colocar también cuando cambia el ancho medido: en el primer render el
+    // ancho todavía es 0 y el relleno no puede colocarse.
+    setRellenoListo(resetThumb());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progressIndex]);
+  }, [progressIndex, trackWidth]);
 
   // Refs para que el PanResponder (creado una sola vez) no capture valores viejos
   const propsRef = useRef({ onAdvance, progressIndex });
@@ -162,7 +174,7 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
     desplazamientoRef.current = desplazamiento;
     translateX.setValue(desplazamiento);
     // El relleno llega hasta el borde derecho del pulgar y conserva sus mismos márgenes.
-    relleno.setValue(fraccionDelRelleno(desplazamiento, THUMB_SIZE, ancho));
+    relleno.setValue(desplazamientoDelRelleno(desplazamiento, THUMB_SIZE, ancho, MARGEN));
     const alcanzado = llegoAlUmbral(dentro, ancho);
     if (alcanzado !== listoRef.current) {
       listoRef.current = alcanzado;
@@ -224,9 +236,10 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
           desplazamientoRef.current = 0;
           Animated.timing(translateX, {
             toValue: 0,
-            duration: 160,
+            duration: 150,
+            easing: Easing.out(Easing.quad),
             useNativeDriver: false,
-          }).start(() => relleno.setValue(fraccionDelRelleno(0, THUMB_SIZE, ancho)));
+          }).start(() => relleno.setValue(desplazamientoDelRelleno(0, THUMB_SIZE, ancho, MARGEN)));
           return;
         }
 
@@ -241,17 +254,19 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
           Animated.timing(translateX, {
             toValue: destino,
             duration: VUELO_MS,
+            easing: Easing.out(Easing.quad),
             useNativeDriver: false,
           }),
           Animated.timing(relleno, {
-            toValue: fraccionDelRelleno(destino, THUMB_SIZE, ancho),
+            toValue: desplazamientoDelRelleno(destino, THUMB_SIZE, ancho, MARGEN),
             duration: VUELO_MS,
+            easing: Easing.out(Easing.quad),
             useNativeDriver: false,
           }),
         ]).start(() => {
           setVolando(false);
           propsRef.current.onAdvance();
-          resetThumb();
+          setRellenoListo(resetThumb());
         });
       },
       onPanResponderTerminate: () => {
@@ -263,12 +278,6 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
     })
   ).current;
 
-  const anchoRelleno = relleno.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-    extrapolate: 'clamp',
-  });
-
   const onLayout = (_event: LayoutChangeEvent) => {
     medir();
     // El relleno se mide en fracción del ancho: si la barra cambia de tamaño hay que
@@ -276,7 +285,9 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
     if (!dragging && !volando) {
       const ancho = anchoRef.current;
       relleno.setValue(
-        ancho > 0 ? fraccionDelRelleno(desplazamientoRef.current, THUMB_SIZE, ancho) : 0
+        ancho > 0
+          ? desplazamientoDelRelleno(desplazamientoRef.current, THUMB_SIZE, ancho, MARGEN)
+          : 0
       );
     }
   };
@@ -284,7 +295,11 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
   return (
     <View style={styles.container}>
       <View ref={trackRef} style={styles.track} onLayout={onLayout} {...panResponder.panHandlers}>
-        <Animated.View style={[styles.fill, { width: anchoRelleno }]} />
+        {/* Ancho fijo de margen a margen y movimiento por `transform`: sin recalcular
+            la maquetación en cada fotograma. Solo cuando la barra ya está medida. */}
+        {rellenoListo && (
+          <Animated.View style={[styles.fill, { transform: [{ translateX: relleno }] }]} />
+        )}
 
         {!!fotograma.etiqueta && (
           <Text style={styles.label} numberOfLines={1} adjustsFontSizeToFit>
@@ -324,6 +339,9 @@ const styles = StyleSheet.create({
     // Los MISMOS márgenes que el pulgar: el relleno y el pulgar se leen como una sola
     // pieza, así el botón no pierde su alto al deslizarse.
     left: MARGEN,
+    // Ancho fijo (de margen a margen): el movimiento va por `transform`, no cambiando
+    // el ancho.
+    right: MARGEN,
     top: MARGEN,
     bottom: MARGEN,
     borderRadius: THUMB_RADIO,

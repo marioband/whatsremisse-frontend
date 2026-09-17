@@ -18,13 +18,7 @@ import { BotonDeNavegacion } from '../components/BotonDeNavegacion';
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
 import { ServiceCard } from '../components/ServiceCard';
 import { SwipeStatusButton } from '../components/SwipeStatusButton';
-import {
-  ChatHeader,
-  EvaluationBar,
-  MessageList,
-  PagoDelServicio,
-  ProviderStatusBar,
-} from '../components/chat';
+import { ChatHeader, MessageList, PagoDelServicio, ProviderStatusBar } from '../components/chat';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
@@ -110,8 +104,6 @@ export function ChatScreen() {
     role,
     services,
     applications,
-    approveApplication,
-    rejectApplicationFrom,
     startProviderChat,
     markDriverSeenChat,
     advanceDriverProgress,
@@ -650,27 +642,9 @@ export function ChatScreen() {
     }
   };
 
-  const handleAccept = () => {
-    if (!service) return;
-    approveApplication(service.id, effectiveDriverId);
-    addSystemMessage('Conductor aceptado. Servicio asignado.');
-    emitChatNotification(
-      '¡Postulación aceptada!',
-      `Fuiste seleccionado para el servicio: ${service.title}. El chat ya está disponible.`,
-      { serviceId, driverId: effectiveDriverId, type: 'APPLICATION_ACCEPTED' }
-    );
-    Alert.alert('Conductor aceptado', 'El servicio ha sido asignado.');
-  };
-
-  const handleReject = () => {
-    if (!service) return;
-    // Solo a este conductor: `rejectApplication` (sin conductor) descarta todas
-    // las postulaciones del servicio, que no es lo que el proveedor quiere aquí.
-    rejectApplicationFrom(service.id, effectiveDriverId);
-    addSystemMessage('Postulación rechazada.');
-    Alert.alert('Postulación rechazada', 'El conductor ha sido descartado.');
-    navigation.goBack();
-  };
+  // En esta pantalla NO se acepta ni se rechaza a un postulante: esa decisión se toma
+  // desde la tarjeta del servicio. La franja verde con el hito del viaje
+  // (`ProviderStatusBar`) es lo único que va arriba del chat del proveedor.
 
   const handleStepAdvance = async () => {
     if (!service || isAdvancingRef.current) return;
@@ -1068,8 +1042,6 @@ export function ChatScreen() {
           }}
           resultCount={messagesVisibles.length}
         />
-
-        {isEvaluationMode && <EvaluationBar onAccept={handleAccept} onReject={handleReject} />}
 
         {showSlider ? (
           <SwipeStatusButton progressIndex={progressIndex} onAdvance={handleStepAdvance} />

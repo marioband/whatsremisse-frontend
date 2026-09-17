@@ -111,3 +111,26 @@ export function fusionarLista(actuales: ServiceAlert[], entrantes: ServiceAlert[
 export function pasoDelSiguienteHito(servicio: ServiceAlert | undefined): number {
   return Math.min((servicio?.driver_progress_step ?? 0) + 1, 3);
 }
+
+/**
+ * La fila que hay que pintar EN EL ACTO cuando el conductor acaba de reportar el hito
+ * `paso`, sin esperar a que la base confirme (adelanto local u "optimista").
+ *
+ * Devuelve null cuando no hay nada que adelantar (la fila ya está en ese paso o más
+ * adelante): en ese caso la base tampoco cambiaría nada, así que no se toca el estado.
+ *
+ * Lo que se pinta así es solo el paso: la etiqueta del deslizamiento, la franja verde
+ * del proveedor y las tarjetas del inicio. La fila que devuelve la base llega después y
+ * MANDA (si confirma el paso, se aplica tal cual; si falla la escritura, se vuelve a la
+ * fila anterior). Antes el estado esperaba la respuesta de la base y, mientras tanto, la
+ * barra volvía al inicio con el texto VIEJO: "deslizo ubicado, el botón regresa a su
+ * punto y recién unos segundos después aparece en proceso" (reportado por el usuario).
+ */
+export function hitoAdelantado(
+  servicio: ServiceAlert | undefined,
+  paso: number
+): ServiceAlert | null {
+  if (!servicio) return null;
+  if (paso <= (servicio.driver_progress_step ?? 0)) return null;
+  return { ...servicio, driver_progress_step: paso };
+}

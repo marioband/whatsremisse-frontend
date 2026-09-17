@@ -94,7 +94,7 @@ export function desplazamientoMaximo(
 }
 
 /**
- * Fracción del ancho de la barra que ocupa el relleno claro cuando el pulgar está en
+ * Desplazamiento del relleno claro (`translateX`, en píxeles) cuando el pulgar está en
  * `desplazamiento`.
  *
  * El relleno arranca en el margen izquierdo y termina en el borde derecho del pulgar,
@@ -102,14 +102,28 @@ export function desplazamientoMaximo(
  * pulgar y el relleno se leen como una sola pieza que conserva su alto mientras se
  * desliza. Si el relleno ocupara todo el alto de la barra, al arrastrar el botón
  * parecería perder sus dimensiones (lo reportó el usuario).
+ *
+ * Se calcula como DESPLAZAMIENTO y no como fracción de ancho a propósito: el relleno
+ * tiene ancho fijo (de margen a margen) y se mueve con `transform`, así el navegador no
+ * vuelve a calcular la maquetación en cada fotograma y el deslizamiento va fluido (el
+ * "aún debe ser más fluido" del usuario). Su borde derecho cae siempre sobre el borde
+ * derecho del pulgar.
+ *
+ * Necesita el ancho YA medido de la barra (0 = sin medir: el componente no pinta el
+ * relleno en ese caso).
  */
-export function fraccionDelRelleno(
+export function desplazamientoDelRelleno(
   desplazamiento: number,
   tamanoDelPulgar: number,
-  ancho: number
+  ancho: number,
+  margen: number
 ): number {
-  if (!ancho || ancho <= 0) return 0;
-  return Math.min(Math.max((desplazamiento + tamanoDelPulgar) / ancho, 0), 1);
+  const anchoDelRelleno = Math.max(ancho - 2 * margen, 0);
+  // Se limita al recorrido del pulgar: así el relleno no puede pasarse del margen
+  // derecho ni siquiera si le llega un desplazamiento de más.
+  const maximo = Math.max(anchoDelRelleno - tamanoDelPulgar, 0);
+  const recorrido = Math.min(Math.max(desplazamiento, 0), maximo);
+  return recorrido + tamanoDelPulgar - anchoDelRelleno;
 }
 
 /**
