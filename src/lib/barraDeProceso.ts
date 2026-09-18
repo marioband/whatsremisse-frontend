@@ -103,6 +103,12 @@ export function desplazamientoMaximo(
  * desliza. Si el relleno ocupara todo el alto de la barra, al arrastrar el botón
  * parecería perder sus dimensiones (lo reportó el usuario).
  *
+ * IMPORTANTE (18-09-2026): en reposo el valor devuelto es NEGATIVO (el ancho del relleno
+ * menos el pulgar), así que el componente tiene que pintarlo dentro de un recorte con
+ * los márgenes del pulgar. Sin ese recorte, la parte visible del relleno arranca pegada
+ * al borde izquierdo de la barra y el recuadro brillante parece empezar FUERA, sin el
+ * hueco que tiene arriba y abajo (lo reportó el usuario).
+ *
  * Se calcula como DESPLAZAMIENTO y no como fracción de ancho a propósito: el relleno
  * tiene ancho fijo (de margen a margen) y se mueve con `transform`, así el navegador no
  * vuelve a calcular la maquetación en cada fotograma y el deslizamiento va fluido (el

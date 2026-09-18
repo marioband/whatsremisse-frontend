@@ -25,10 +25,10 @@ const TRACK_HEIGHT = 54;
 const THUMB_SIZE = 44;
 /** Separación del pulgar con los bordes de la barra (arriba, abajo, izquierda y derecha). */
 const MARGEN = 5;
-/** Cuadrado redondeado, no círculo (modelo del usuario). */
-const THUMB_RADIO = 8;
-/** Esquinas de la barra (el modelo las tiene redondeadas). */
-const TRACK_RADIO = 8;
+/** Cuadrado redondeado, no círculo (modelo del usuario): ~11 % del lado. */
+const THUMB_RADIO = 5;
+/** Esquinas de la barra (el modelo las tiene redondeadas): ~9 % del alto. */
+const TRACK_RADIO = 5;
 /**
  * La flecha y la palomita del pulgar se DIBUJAN CON FORMAS (no con la fuente de iconos).
  *
@@ -40,13 +40,17 @@ const TRACK_RADIO = 8;
  * la barra verde, que es del mismo color). Con formas, el dibujo ES la caja: queda
  * centrado exacto y se ve igual en cualquier teléfono, cargue o no la fuente.
  *
- * Medidas: la flecha ocupa ~2/3 del pulgar (30x16 en un pulgar de 44), como el modelo.
+ * Medidas tomadas de la imagen de referencia que pasó el usuario el 18-09 (recuadro de
+ * 103x113 px dentro de una barra de 134 px de alto, flecha de 69x57): la flecha ocupa
+ * 0,67 del ANCHO y 0,50 del ALTO del recuadro; el brazo, 0,46 del ancho con 0,58 del
+ * alto de la flecha; y la punta, 0,54 del ancho. Con el pulgar de la app (44) eso da
+ * una flecha de 30x22 — antes medía 30x16 y salía aplastada respecto al modelo.
  */
-const FLECHA_ANCHO = 30;
-const FLECHA_ALTO = 16;
-const FLECHA_BRAZO = 20;
-const FLECHA_GROSOR = 8;
-const FLECHA_PUNTA = FLECHA_ANCHO - FLECHA_BRAZO + 2;
+const FLECHA_ANCHO = 30; // 0,68 del pulgar (modelo: 0,67)
+const FLECHA_ALTO = 22; // 0,50 del pulgar (modelo: 0,50)
+const FLECHA_BRAZO = 14; // 0,47 del ancho de la flecha (modelo: 0,46)
+const FLECHA_GROSOR = 13; // 0,59 del alto de la flecha (modelo: 0,58)
+const FLECHA_PUNTA = FLECHA_ANCHO - FLECHA_BRAZO; // 16 → 0,53 del ancho (modelo: 0,54)
 
 const clamp = (valor: number, minimo: number, maximo: number) =>
   Math.max(minimo, Math.min(valor, maximo));
@@ -330,9 +334,15 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
     <View style={styles.container}>
       <View ref={trackRef} style={styles.track} onLayout={onLayout} {...panResponder.panHandlers}>
         {/* Ancho fijo de margen a margen y movimiento por `transform`: sin recalcular
-            la maquetación en cada fotograma. Solo cuando la barra ya está medida. */}
+            la maquetación en cada fotograma. Solo cuando la barra ya está medida.
+            El recorte lo deja DENTRO de los márgenes: el relleno se desplaza a mano
+            izquierda para que su borde derecho caiga sobre el del pulgar, y sin
+            recortarlo su parte visible arrancaba pegada al borde de la barra (el
+            recuadro parecía empezar fuera, sin el hueco de arriba y abajo). */}
         {rellenoListo && (
-          <Animated.View style={[styles.fill, { transform: [{ translateX: relleno }] }]} />
+          <View style={styles.recorteDelRelleno}>
+            <Animated.View style={[styles.fill, { transform: [{ translateX: relleno }] }]} />
+          </View>
         )}
 
         {!!fotograma.etiqueta && (
@@ -368,16 +378,28 @@ const styles = StyleSheet.create({
     // nuestro: la barra vive fuera de la lista, así que no roba ningún scroll.
     ...Platform.select({ web: { touchAction: 'none', userSelect: 'none' } as object }),
   },
-  fill: {
+  /**
+   * Recorte del relleno: ocupa exactamente los márgenes del pulgar y recorta lo que se
+   * salga. Es lo que hace que el recuadro brillante EMPIECE dentro de la barra, con el
+   * mismo hueco que tiene arriba y abajo (regla del modelo: el relleno y el pulgar se
+   * leen como una sola pieza separada del borde en las cuatro caras).
+   */
+  recorteDelRelleno: {
     position: 'absolute',
-    // Los MISMOS márgenes que el pulgar: el relleno y el pulgar se leen como una sola
-    // pieza, así el botón no pierde su alto al deslizarse.
     left: MARGEN,
-    // Ancho fijo (de margen a margen): el movimiento va por `transform`, no cambiando
-    // el ancho.
     right: MARGEN,
     top: MARGEN,
     bottom: MARGEN,
+    borderRadius: THUMB_RADIO,
+    overflow: 'hidden',
+  },
+  fill: {
+    position: 'absolute',
+    // Dentro del recorte: de margen a margen (el recorte ya trae los márgenes).
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     borderRadius: THUMB_RADIO,
     // Relleno que sigue al pulgar (modelo: #00D647).
     backgroundColor: VERDE_DESLIZABLE,
