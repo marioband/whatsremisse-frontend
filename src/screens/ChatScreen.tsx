@@ -37,12 +37,6 @@ import { marcarAvisoPropio } from '../lib/avisos';
 import { AZUL } from '../lib/colors';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import {
-  copiarDatosDelServicio,
-  descargarImagen,
-  nombreDeArchivoDeDatos,
-  textoDelAviso,
-} from '../lib/copiadoDeDatos';
-import {
   datosDePagoDelConductor,
   datosDePagoDelProveedor,
   deleteServiceMessage,
@@ -83,7 +77,7 @@ import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { AVISO_DE_RECHAZO, chatCerradoParaElConductor } from '../lib/miPostulacion';
 import { DireccionPago, montoEnTexto, resumenDePago } from '../lib/pagoServicio';
 import { AVISO_MIGRACION_0020, LecturaDeChat } from '../lib/palomas';
-import { DatosPublicos, datosDesdePerfilPublico } from '../lib/perfilPublico';
+import { textoParaCopiar, DatosPublicos, datosDesdePerfilPublico } from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
 
@@ -1020,42 +1014,18 @@ export function ChatScreen() {
   };
 
   /**
-   * "Copiar datos": el texto de siempre y, cuando el navegador lo permite, TAMBIÉN la
-   * imagen del perfil compuesta con esos datos debajo (al pegarla en WhatsApp sale la
-   * foto arriba y el texto debajo). Vive en `lib/copiadoDeDatos`, que decide la vía
-   * según el entorno y nunca se queda sin copiar al menos el texto.
+   * "Copiar datos": SOLO el texto ordenado, sin la imagen compuesta.
+   *
+   * La imagen se desactivó por pedido del usuario (18-09-2026: "por el momento desactiva
+   * esa opción y activa la opción que teníamos antes, solo texto ordenado, idéntico al
+   * que teníamos antes"), así que esto vuelve a ser exactamente lo de antes: el texto de
+   * `textoParaCopiar` al portapapeles y el aviso "Copiado" con ese mismo texto.
+   *
+   * La vía de vuelta está en `lib/copiadoDeDatos` (interruptor `COPIAR_DATOS_CON_IMAGEN`)
+   * junto con `copiarDatosDelServicio`, que es quien decide y ofrece la descarga.
    */
   const handleCopyData = async () => {
-    try {
-      const resultado = await copiarDatosDelServicio(datosParaCopiar, {
-        titulo: 'Datos del conductor',
-        copiarTexto: (texto) => Clipboard.setStringAsync(texto),
-      });
-      if (resultado.cancelado) return;
-
-      // Con el portapapeles sin imágenes (hoy: el 19006 va por HTTP) se ofrece
-      // descargarla: es la otra forma de adjuntarla en WhatsApp.
-      const descargable = resultado.via === 'SOLO_TEXTO' && !!resultado.imagen;
-      Alert.alert(
-        'Datos copiados',
-        `${textoDelAviso(resultado.via, !!resultado.imagen)}\n\n${resultado.texto}`,
-        descargable
-          ? [
-              {
-                text: 'Descargar la imagen',
-                onPress: () =>
-                  descargarImagen(
-                    resultado.imagen as Blob,
-                    nombreDeArchivoDeDatos(datosParaCopiar)
-                  ),
-              },
-              { text: 'Ya está', style: 'cancel' },
-            ]
-          : undefined
-      );
-    } catch {
-      Alert.alert('Error', 'No se pudo copiar al portapapeles');
-    }
+    await copyToClipboard(textoParaCopiar(datosParaCopiar));
   };
 
   /**

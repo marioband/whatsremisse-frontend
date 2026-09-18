@@ -1,6 +1,11 @@
 /**
- * "Copiar datos" del chat del servicio: el TEXTO y, cuando el navegador lo permite,
- * también la IMAGEN del perfil compuesta con esos datos debajo.
+ * "Copiar datos" del chat del servicio: el TEXTO ordenado y, cuando el navegador lo
+ * permite, también la IMAGEN del perfil compuesta con esos datos debajo.
+ *
+ * **La imagen está DESACTIVADA por pedido del usuario (18-09-2026)** — ver el
+ * interruptor `COPIAR_DATOS_CON_IMAGEN` más abajo. Con el interruptor en `false`, lo que
+ * se copia es el texto ordenado de siempre; la composición, el compartir y la descarga
+ * quedan en el archivo, listos para volver a activarse.
  *
  * Por qué la imagen compuesta y no "foto + texto" en el portapapeles: el portapapeles
  * moderno admite los dos formatos a la vez (`ClipboardItem` con `image/png` y
@@ -25,6 +30,24 @@
 import { DatosPublicos, conGuion, inicialDe, textoParaCopiar } from './perfilPublico';
 
 export type ViaDeCopiado = 'IMAGEN_Y_TEXTO' | 'COMPARTIR' | 'SOLO_TEXTO';
+
+/**
+ * Interruptor de la imagen compuesta.
+ *
+ * El usuario la pidió el 17-09-2026 ("¿se puede copiar también la imagen de su perfil
+ * para que al pegar en WhatsApp salga la imagen y debajo el texto?") y el 18-09-2026
+ * pidió **desactivarla por el momento**: "desactiva esa opción y activa la opción que
+ * teníamos antes, solo texto ordenado, idéntico al que teníamos antes".
+ *
+ * Con `false`, copiar los datos es el texto de siempre: ni se compone la tarjeta ni se
+ * ofrece la descarga. El texto NO cambia (lo arma `textoParaCopiar`, en `perfilPublico`).
+ *
+ * Para volver a activarla: poner esto en `true` y devolver a la pantalla del chat la
+ * llamada a `copiarDatosDelServicio` (hoy llama directo a `textoParaCopiar`), que es
+ * quien sabe decidir la vía y ofrecer la descarga cuando el portapapeles no admite
+ * imágenes.
+ */
+export const COPIAR_DATOS_CON_IMAGEN = false;
 
 export interface EntornoDePortapapeles {
   /** Origen seguro (HTTPS o localhost): sin esto no hay portapapeles moderno. */
@@ -340,8 +363,12 @@ export interface OpcionesDeCopiado {
 /**
  * Copia los datos del servicio por la mejor vía disponible y dice cuál se usó.
  *
- * Nunca falla por no poder copiar la imagen: en el peor caso copia el texto, que es lo
- * que hacía antes, y devuelve la imagen para que la pantalla ofrezca descargarla.
+ * Con el interruptor `COPIAR_DATOS_CON_IMAGEN` en `false` (hoy) copia SOLO el texto
+ * ordenado y no compone nada: es la opción que la app tenía antes de la imagen.
+ *
+ * Con la imagen activada nunca falla por no poder copiarla: en el peor caso copia el
+ * texto, que es lo que hacía antes, y devuelve la imagen para que la pantalla ofrezca
+ * descargarla.
  */
 export async function copiarDatosDelServicio(
   datos: DatosPublicos,
@@ -349,6 +376,12 @@ export async function copiarDatosDelServicio(
 ): Promise<ResultadoDeCopiado> {
   const titulo = opciones.titulo ?? 'Datos del conductor';
   const texto = textoParaCopiar(datos, titulo);
+
+  // Camino de texto (el de siempre): no se toca el canvas ni se ofrece descarga.
+  if (!COPIAR_DATOS_CON_IMAGEN) {
+    await opciones.copiarTexto(texto);
+    return { via: 'SOLO_TEXTO', texto, imagen: null };
+  }
 
   let imagen: Blob | null = null;
   try {
