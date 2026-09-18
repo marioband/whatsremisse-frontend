@@ -33,3 +33,19 @@ export const BORDE_SUAVE = '#E2E2E2';
 export const TEXTO = '#111111';
 export const TEXTO_SUAVE = '#444444';
 export const TEXTO_TENUE = '#888888';
+
+/**
+ * Colores de las tarjetas de **Mis grupos**, por categoría (pedido del usuario,
+ * 18-09-2026): primero los que soy propietario, después los que administro, luego mis
+ * favoritos y al final los que solo integro.
+ */
+export const GRUPO_PROPIETARIO = '#8B8FE8';
+export const GRUPO_ADMIN = '#7FD8C9';
+export const GRUPO_FAVORITO = '#F5E17A';
+export const GRUPO_INTEGRANTE = '#EAEAEA';
+
+/**
+ * El corazón de las tarjetas de grupo: el MISMO color con el borde (♡) y relleno (♥),
+ * como pidió el usuario. Antes era rosa y solo cambiaba de glifo.
+ */
+export const CORAZON_DE_GRUPO = '#333333';

@@ -15,6 +15,17 @@ export type MainTab = 'Conductor' | 'Proveedor' | 'Mis Grupos';
 
 const TABS: MainTab[] = ['Conductor', 'Proveedor', 'Mis Grupos'];
 
+/**
+ * Cómo se llama cada pestaña EN PANTALLA. El id interno no se toca (la navegación y las
+ * pantallas comparan con 'Mis Grupos'); lo que cambió es el rótulo, que el usuario pidió
+ * en minúscula: "Mis grupos" (18-09-2026).
+ */
+const ETIQUETA_DEL_TAB: Record<MainTab, string> = {
+  Conductor: 'Conductor',
+  Proveedor: 'Proveedor',
+  'Mis Grupos': 'Mis grupos',
+};
+
 interface MainHeaderProps {
   activeTab: MainTab;
   onTabChange: (tab: MainTab) => void;
@@ -48,7 +59,7 @@ export function MainHeader({ activeTab, onTabChange }: MainHeaderProps) {
             onPress={() => onTabChange(tab)}
           >
             <Text style={[styles.roleTabText, activeTab === tab && styles.roleTabTextActive]}>
-              {tab}
+              {ETIQUETA_DEL_TAB[tab]}
             </Text>
           </TouchableOpacity>
         ))}

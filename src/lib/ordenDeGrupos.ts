@@ -1,0 +1,86 @@
+/**
+ * Orden y color de las tarjetas de **Mis grupos** (pedido del usuario, 18-09-2026).
+ *
+ * El orden es una prioridad, no cuatro listas: primero los grupos de los que soy
+ * **propietario**, después los que **administro**, luego los que marqué como
+ * **favorito** y al final los que solo **integro**. Un grupo cae en la PRIMERA
+ * categoría que le toca (un grupo que administro y además marqué como favorito sale
+ * con el color de administrador, que es la información más fuerte), y dentro de cada
+ * categoría se ordena por nombre, como en la lista de integrantes.
+ *
+ * Vive aquí, sin React, porque es la regla del reparto y hay que poder ejecutarla con
+ * node: la pantalla no decide colores ni orden por su cuenta.
+ */
+import { GRUPO_ADMIN, GRUPO_FAVORITO, GRUPO_INTEGRANTE, GRUPO_PROPIETARIO } from './colors';
+
+/** Lo mínimo que necesita un grupo para ordenarse y pintarse. */
+export interface GrupoParaLaLista {
+  id: string;
+  name: string;
+  role: 'owner' | 'admin' | 'member';
+  favorite?: boolean;
+}
+
+export type CategoriaDeGrupo = 'PROPIETARIO' | 'ADMIN' | 'FAVORITO' | 'INTEGRANTE';
+
+/** De arriba abajo en la pantalla. */
+export const ORDEN_DE_LAS_CATEGORIAS: readonly CategoriaDeGrupo[] = [
+  'PROPIETARIO',
+  'ADMIN',
+  'FAVORITO',
+  'INTEGRANTE',
+];
+
+/** El color de la tarjeta de cada categoría. */
+export const COLOR_DE_LA_CATEGORIA: Record<CategoriaDeGrupo, string> = {
+  PROPIETARIO: GRUPO_PROPIETARIO,
+  ADMIN: GRUPO_ADMIN,
+  FAVORITO: GRUPO_FAVORITO,
+  INTEGRANTE: GRUPO_INTEGRANTE,
+};
+
+/** En qué categoría cae un grupo (la primera que le corresponda). */
+export function categoriaDelGrupo(grupo: GrupoParaLaLista): CategoriaDeGrupo {
+  if (grupo.role === 'owner') return 'PROPIETARIO';
+  if (grupo.role === 'admin') return 'ADMIN';
+  if (grupo.favorite) return 'FAVORITO';
+  return 'INTEGRANTE';
+}
+
+/** El color de fondo de la tarjeta de ese grupo. */
+export function colorDeLaTarjeta(grupo: GrupoParaLaLista): string {
+  return COLOR_DE_LA_CATEGORIA[categoriaDelGrupo(grupo)];
+}
+
+/** El peso de cada categoría (para ordenar sin depender del orden del array). */
+function pesoDeLaCategoria(categoria: CategoriaDeGrupo): number {
+  return ORDEN_DE_LAS_CATEGORIAS.indexOf(categoria);
+}
+
+/**
+ * La lista que se pinta: por categoría y, dentro de cada una, por nombre.
+ *
+ * No modifica el array que recibe (el del store): devuelve una copia ordenada.
+ */
+export function ordenarGrupos<T extends GrupoParaLaLista>(grupos: readonly T[]): T[] {
+  return [...grupos].sort((a, b) => {
+    const pesoA = pesoDeLaCategoria(categoriaDelGrupo(a));
+    const pesoB = pesoDeLaCategoria(categoriaDelGrupo(b));
+    if (pesoA !== pesoB) return pesoA - pesoB;
+    return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+  });
+}
+
+/**
+ * Cuántos grupos hay de cada categoría (en el orden de la pantalla).
+ * Lo usa la prueba para comprobar el reparto sin mirar la pantalla.
+ */
+export function resumenDeGrupos(
+  grupos: readonly GrupoParaLaLista[]
+): { categoria: CategoriaDeGrupo; cantidad: number; color: string }[] {
+  return ORDEN_DE_LAS_CATEGORIAS.map((categoria) => ({
+    categoria,
+    cantidad: grupos.filter((g) => categoriaDelGrupo(g) === categoria).length,
+    color: COLOR_DE_LA_CATEGORIA[categoria],
+  }));
+}

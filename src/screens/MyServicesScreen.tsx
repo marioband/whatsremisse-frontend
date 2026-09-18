@@ -189,9 +189,9 @@ export function MyServicesScreen() {
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Mis Servicios</Text>
-        <TouchableOpacity style={styles.logoBtn}>
-          <Text style={styles.logoIcon}>🚗</Text>
-        </TouchableOpacity>
+        {/* Sin el icono del auto (el usuario pidió quitarlo, 18-09-2026): el espaciador
+            deja el título centrado, igual que en Cuenta. */}
+        <View style={styles.headerSpacer} />
       </View>
 
       <FlatList
@@ -238,11 +238,9 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  logoBtn: {
-    padding: 4,
-  },
-  logoIcon: {
-    fontSize: 22,
+  headerSpacer: {
+    /* Ocupa el sitio del botón que se quitó, para que el título siga centrado. */
+    width: 24,
   },
   list: {
     padding: 16,

@@ -5,10 +5,11 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from
 
 import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { Fab } from '../components/Fab';
-import { Icono, ICONO_AJUSTES } from '../components/Icono';
+import { Icono, ICONO_GRUPOS } from '../components/Icono';
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
-import { TEXTO_SUAVE } from '../lib/colors';
+import { CORAZON_DE_GRUPO, TEXTO_SUAVE } from '../lib/colors';
+import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type GroupsNav = StackNavigationProp<
@@ -18,13 +19,6 @@ type GroupsNav = StackNavigationProp<
 
 const DARK_BG = '#2D2D2D';
 const LIGHT_BG = '#F0F2F5';
-
-const ROLE_COLORS = {
-  owner: '#C0C7E8',
-  admin: '#B2E3BF',
-  member: '#F2F2F2',
-  favorite: '#FFF59E',
-};
 
 export function MyGroupsScreen() {
   const navigation = useNavigation<GroupsNav>();
@@ -38,19 +32,18 @@ export function MyGroupsScreen() {
   const [buscarAbierto, setBuscarAbierto] = useState(false);
   const [consulta, setConsulta] = useState('');
 
+  /**
+   * El orden y el color de las tarjetas salen de `lib/ordenDeGrupos` (propietario →
+   * administrador → favorito → integrante), y la lupa filtra esa misma lista.
+   */
   const gruposVisibles = useMemo(
-    () => filtrarPorBusqueda(groups, consulta, camposDeBusquedaDeGrupo),
+    () => filtrarPorBusqueda(ordenarGrupos(groups), consulta, camposDeBusquedaDeGrupo),
     [groups, consulta]
   );
 
-  const getCardColor = (group: GroupItem) => {
-    if (group.favorite) return ROLE_COLORS.favorite;
-    return ROLE_COLORS[group.role];
-  };
-
   const renderGroupCard = ({ item }: { item: GroupItem }) => (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: getCardColor(item) }]}
+      style={[styles.card, { backgroundColor: colorDeLaTarjeta(item) }]}
       activeOpacity={0.9}
       onPress={() => navigation.navigate('GroupChat', { groupId: item.id, groupName: item.name })}
     >
@@ -66,7 +59,13 @@ export function MyGroupsScreen() {
 
       {/* Acciones */}
       <View style={styles.actions}>
-        <TouchableOpacity onPress={() => toggleFavoriteGroup(item.id)} style={styles.actionBtn}>
+        <TouchableOpacity
+          onPress={() => toggleFavoriteGroup(item.id)}
+          style={styles.actionBtn}
+          accessibilityLabel={item.favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
+        >
+          {/* El corazón es el mismo color con el borde (♡) y relleno (♥): lo que cambia
+              al tocarlo es el glifo, no el color (pedido del usuario, 18-09-2026). */}
           <Text style={styles.heart}>{item.favorite ? '\u2665' : '\u2661'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -74,8 +73,10 @@ export function MyGroupsScreen() {
           onPress={() =>
             navigation.navigate('GroupMembers', { groupId: item.id, groupName: item.name })
           }
+          accessibilityLabel="Integrantes del grupo"
         >
-          <Icono fuente={ICONO_AJUSTES} tamano={20} color="#555" />
+          {/* El engranaje de grupos, en negro institucional (no el avatar de Cuenta). */}
+          <Icono fuente={ICONO_GRUPOS} tamano={20} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
   },
   heart: {
     fontSize: 20,
-    color: '#E91E63',
+    color: CORAZON_DE_GRUPO,
   },
   emptyText: {
     textAlign: 'center',

@@ -26,10 +26,20 @@ import { Image, ImageSourcePropType, StyleProp, ImageStyle } from 'react-native'
 import iconoAjustes from '../iconos/icono-ajustes.png';
 import iconoBuscar from '../iconos/icono-buscar.png';
 import iconoCopiar from '../iconos/icono-copiar.png';
+import iconoGrupos from '../iconos/icono-grupos.png';
 
 export const ICONO_BUSCAR: ImageSourcePropType = iconoBuscar;
 export const ICONO_AJUSTES: ImageSourcePropType = iconoAjustes;
 export const ICONO_COPIAR: ImageSourcePropType = iconoCopiar;
+/**
+ * El engranaje de **Mis grupos** (18-09-2026, el SVG que dio el usuario).
+ *
+ * NO es el mismo que el avatar de Cuenta: el usuario pidió que solo en esa pantalla se
+ * use este. Viene ya pintado en el **negro institucional** (`#2D2D2D`, el `OSCURO` de
+ * `lib/colors`), así que se pinta SIN `color`; sobre las tarjetas claras de los grupos
+ * se lee bien.
+ */
+export const ICONO_GRUPOS: ImageSourcePropType = iconoGrupos;
 
 interface IconoProps {
   fuente: ImageSourcePropType;

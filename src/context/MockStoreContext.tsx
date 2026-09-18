@@ -1324,8 +1324,15 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       try {
         await updateGroupMember(groupId, session.user.id, { favorite: nextFavorite });
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('[MockStore] toggleFavoriteGroup error:', err);
         dispatch({ type: 'TOGGLE_FAVORITE_GROUP', payload: { groupId } });
+        // Si falta la 0023 el toque del corazón no se puede guardar (la política UPDATE
+        // de group_members exige ser administrador): se revierte y se dice qué aplicar.
+        Alert.alert(
+          'No se pudo marcar el favorito',
+          detalleDe(err, 'El backend rechazó el cambio', '0023_favorito_de_grupo.sql')
+        );
       }
     },
     addGroup: async (group) => {

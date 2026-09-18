@@ -1052,6 +1052,30 @@ export async function updateGroupMember(
     }
   }
 
+  // Cambio del FAVORITO por RPC (migración 0023): es un dato personal y la política
+  // UPDATE de `group_members` (0006) exige ser administrador, así que un integrante
+  // normal no podía escribir ni su propia fila: el toque del corazón no hacía nada
+  // (el UPDATE no tocaba filas, el cliente lo detectaba y revertía el cambio optimista).
+  if (updates.favorite !== undefined && !updates.role) {
+    try {
+      const { data, error } = await supabase.rpc('marcar_grupo_favorito', {
+        p_group_id: groupId,
+        p_favorito: updates.favorite,
+      });
+      if (error) throw error;
+      if (Number(data ?? 0) > 0) return;
+      // La función corrió y no tocó ninguna fila: no soy integrante de ese grupo.
+      throw new Error('No eres integrante de ese grupo.');
+    } catch (err) {
+      if (!esFuncionAusente(err)) throw err;
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[database] RPC marcar_grupo_favorito no instalada (0023), uso UPDATE directo:',
+        err
+      );
+    }
+  }
+
   // Respaldo: UPDATE directo (queda expuesto al RLS de la tabla).
   const { data: grupo, error: grupoError } = await supabase
     .from('groups')
