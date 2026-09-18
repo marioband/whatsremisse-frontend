@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
+import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { Palomas } from '../components/chat/Palomas';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
@@ -524,8 +525,11 @@ export function GroupChatScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>
             {groupName}
           </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.headerIcon}>⚙</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityLabel="Ajustes"
+          >
+            <Icono fuente={ICONO_AJUSTES} tamano={20} />
           </TouchableOpacity>
         </View>
 
@@ -602,10 +606,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     marginHorizontal: 12,
-  },
-  headerIcon: {
-    color: '#fff',
-    fontSize: 18,
   },
   messagesList: {
     padding: 16,

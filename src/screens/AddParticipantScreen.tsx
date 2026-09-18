@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import { Icono, ICONO_BUSCAR } from '../components/Icono';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { countVisibleProfiles, searchProfiles } from '../lib/database';
@@ -276,7 +277,7 @@ export function AddParticipantScreen() {
       {/* Search bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchPill}>
-          <Text style={styles.searchIcon}>⌕</Text>
+          <Icono fuente={ICONO_BUSCAR} tamano={20} color="#666" estilo={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Buscar por nombre o teléfono"
@@ -406,8 +407,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   searchIcon: {
-    fontSize: 18,
-    color: '#666',
     marginRight: 10,
   },
   searchInput: {

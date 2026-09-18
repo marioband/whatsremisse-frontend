@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { Fab } from '../components/Fab';
+import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -58,7 +59,7 @@ export function MyGroupsScreen() {
             navigation.navigate('GroupMembers', { groupId: item.id, groupName: item.name })
           }
         >
-          <Text style={styles.gear}>⚙</Text>
+          <Icono fuente={ICONO_AJUSTES} tamano={20} color="#555" />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -129,10 +130,6 @@ const styles = StyleSheet.create({
   heart: {
     fontSize: 20,
     color: '#E91E63',
-  },
-  gear: {
-    fontSize: 20,
-    color: '#555',
   },
   emptyText: {
     textAlign: 'center',

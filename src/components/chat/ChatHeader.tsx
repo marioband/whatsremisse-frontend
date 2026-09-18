@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 
+import { Icono, ICONO_AJUSTES, ICONO_BUSCAR } from '../Icono';
+
 interface ChatHeaderProps {
   title: string;
   subtitle?: string;
@@ -38,7 +40,7 @@ export function ChatHeader({
 
       {searchOpen ? (
         <View style={styles.searchPill}>
-          <Text style={styles.searchIcon}>⌕</Text>
+          <Icono fuente={ICONO_BUSCAR} tamano={16} estilo={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             value={query}
@@ -63,10 +65,15 @@ export function ChatHeader({
 
       <View style={styles.headerIcons}>
         <TouchableOpacity onPress={onToggleSearch} accessibilityLabel="Buscar en el chat">
-          <Text style={styles.headerIcon}>{searchOpen ? '✕' : '🔍'}</Text>
+          {/* Abierta la búsqueda, el botón cierra: ahí sigue el signo ✕. */}
+          {searchOpen ? (
+            <Text style={styles.headerIcon}>✕</Text>
+          ) : (
+            <Icono fuente={ICONO_BUSCAR} tamano={20} estilo={styles.iconoHeader} />
+          )}
         </TouchableOpacity>
-        <TouchableOpacity onPress={onSettings}>
-          <Text style={styles.headerIcon}>⚙️</Text>
+        <TouchableOpacity onPress={onSettings} accessibilityLabel="Ajustes">
+          <Icono fuente={ICONO_AJUSTES} tamano={20} estilo={styles.iconoHeader} />
         </TouchableOpacity>
       </View>
     </View>
@@ -95,7 +102,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerIcons: { flexDirection: 'row', width: 68, justifyContent: 'flex-end' },
+  /* Solo para el ✕ que cierra la búsqueda. */
   headerIcon: { color: '#fff', fontSize: 18, marginLeft: 16 },
+  /* Los iconos (búsqueda y ajustes) son imágenes: solo llevan la separación. */
+  iconoHeader: { marginLeft: 16 },
   searchPill: {
     flex: 1,
     flexDirection: 'row',
@@ -105,7 +115,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     height: 36,
   },
-  searchIcon: { color: '#fff', fontSize: 16, marginRight: 6 },
+  searchIcon: { marginRight: 6 },
   searchInput: {
     flex: 1,
     color: '#fff',

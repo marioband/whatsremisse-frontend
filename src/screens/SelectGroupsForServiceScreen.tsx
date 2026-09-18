@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { EstadoDeEnvio, estadoDelBotonDeEnvio, opacidadDelBotonDeEnvio } from '../lib/envioUnico';
@@ -176,8 +177,12 @@ export function SelectGroupsForServiceScreen() {
           <TouchableOpacity style={styles.iconBtn}>
             <Text style={styles.icon}>👤</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.icon}>⚙</Text>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityLabel="Ajustes"
+          >
+            <Icono fuente={ICONO_AJUSTES} tamano={22} />
           </TouchableOpacity>
         </View>
       </View>

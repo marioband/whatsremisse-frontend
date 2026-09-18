@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 
+import { Icono, ICONO_AJUSTES } from './Icono';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type HeaderNav = StackNavigationProp<RootStackParamList, 'Main'>;
@@ -28,8 +29,12 @@ export function MainHeader({ activeTab, onTabChange }: MainHeaderProps) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>WhatsRemisse</Text>
         <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.icon}>⚙️</Text>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityLabel="Ajustes"
+          >
+            <Icono fuente={ICONO_AJUSTES} tamano={22} />
           </TouchableOpacity>
         </View>
       </View>

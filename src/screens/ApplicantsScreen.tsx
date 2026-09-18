@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { ApplicantCard } from '../components/ApplicantCard';
+import { Icono, ICONO_AJUSTES, ICONO_BUSCAR } from '../components/Icono';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDePostulantes } from '../hooks/useEstimacionesDePostulantes';
@@ -252,10 +253,19 @@ export function ApplicantsScreen() {
             }}
             accessibilityLabel="Buscar postulante"
           >
-            <Text style={styles.icon}>{buscarAbierto ? '✕' : '⌕'}</Text>
+            {/* Abierta la búsqueda, el botón cierra: ahí sigue el signo ✕. */}
+            {buscarAbierto ? (
+              <Text style={styles.icon}>✕</Text>
+            ) : (
+              <Icono fuente={ICONO_BUSCAR} tamano={22} />
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.icon}>⚙</Text>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityLabel="Ajustes"
+          >
+            <Icono fuente={ICONO_AJUSTES} tamano={22} />
           </TouchableOpacity>
         </View>
       </View>
@@ -263,7 +273,12 @@ export function ApplicantsScreen() {
       {buscarAbierto && (
         <View style={styles.searchBar}>
           <View style={styles.searchPill}>
-            <Text style={styles.searchIcon}>⌕</Text>
+            <Icono
+              fuente={ICONO_BUSCAR}
+              tamano={20}
+              color={TEXTO_SUAVE}
+              estilo={styles.searchIcon}
+            />
             <TextInput
               style={styles.searchInput}
               value={consulta}
@@ -351,8 +366,6 @@ const styles = StyleSheet.create({
     height: 40,
   },
   searchIcon: {
-    color: TEXTO_SUAVE,
-    fontSize: 18,
     marginRight: 8,
   },
   searchInput: {

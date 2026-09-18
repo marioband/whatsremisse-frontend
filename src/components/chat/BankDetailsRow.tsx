@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
+import { Icono, ICONO_COPIAR } from '../Icono';
+
 interface BankDetailsRowProps {
   label: string;
   value: string;
@@ -16,8 +18,12 @@ export function BankDetailsRow({ label, value, onCopy }: BankDetailsRowProps) {
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.value}>{value}</Text>
       </View>
-      <TouchableOpacity style={styles.copyButton} onPress={() => onCopy(value)}>
-        <Text style={styles.copyButtonText}>📋</Text>
+      <TouchableOpacity
+        style={styles.copyButton}
+        onPress={() => onCopy(value)}
+        accessibilityLabel={`Copiar ${label}`}
+      >
+        <Icono fuente={ICONO_COPIAR} tamano={16} />
       </TouchableOpacity>
     </View>
   );
@@ -43,5 +49,4 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginLeft: 8,
   },
-  copyButtonText: { color: '#fff', fontSize: 14 },
 });
