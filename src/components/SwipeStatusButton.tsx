@@ -328,14 +328,44 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
           </View>
         )}
 
-        {!!fotograma.etiqueta && (
-          <Text style={styles.label} numberOfLines={1} adjustsFontSizeToFit>
-            {fotograma.etiqueta}
-          </Text>
-        )}
+        {/*
+          La etiqueta también queda montada siempre (se oculta con `opacity`): así ningún
+          nodo que pueda estar debajo del dedo desaparece en medio de un arrastre.
+        */}
+        <Text
+          style={[styles.label, fotograma.etiqueta ? styles.visible : styles.oculto]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {fotograma.etiqueta}
+        </Text>
 
+        {/*
+          Los DOS dibujos van SIEMPRE montados y se enseña uno con `opacity`.
+          Por qué (18-09-2026, medido con toques reales en el banco): cambiar el dibujo
+          desmontaba el nodo que había DEBAJO DEL DEDO justo al cruzar el umbral, y el
+          navegador dejaba de mandar los `touchmove` de ese toque: el pulgar se quedaba
+          clavado a la mitad (a 180 px de una barra de 361, justo el 50 %) y **soltar no
+          ejecutaba nada** — el mismo "se traba a la mitad y no ejecuta acción" que reportó
+          el usuario. Con los dos montados, el dedo nunca pierde su nodo.
+        */}
         <Animated.View style={[styles.thumb, { transform: [{ translateX }] }]}>
-          {fotograma.icono === 'check-bold' ? <PalomitaDentro /> : <FlechaDentro />}
+          <View
+            style={[
+              styles.dibujo,
+              fotograma.icono === 'check-bold' ? styles.visible : styles.oculto,
+            ]}
+          >
+            <PalomitaDentro />
+          </View>
+          <View
+            style={[
+              styles.dibujo,
+              fotograma.icono === 'check-bold' ? styles.oculto : styles.visible,
+            ]}
+          >
+            <FlechaDentro />
+          </View>
         </Animated.View>
       </View>
     </View>
@@ -395,6 +425,21 @@ const styles = StyleSheet.create({
     // Debajo del pulgar: el modelo deja que el pulgar pase por encima del texto.
     zIndex: 1,
   },
+  /**
+   * Capa que cubre el pulgar y centra dentro el dibujo (la flecha o la palomita). Las dos
+   * capas están siempre montadas y solo cambia su `opacity` (ver el porqué en el render).
+   */
+  dibujo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  visible: { opacity: 1 },
+  oculto: { opacity: 0 },
   /* La flecha: se centra sola dentro del pulgar (la caja ES el dibujo). */
   flecha: {
     width: FLECHA_ANCHO,

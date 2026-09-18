@@ -81,19 +81,17 @@ export function BotonDeNavegacion({
       // `location.assign`, iOS entrega el enlace al Waze instalado y la página de la app se
       // queda donde estaba.
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const antes = window.location.href;
+        // MEDIDO en el banco (18-09-2026): al pulsar, la pestaña de la app Navega a la URL
+        // del mapa en la MISMA pestaña (cero pestañas nuevas: lo confirma la lista de
+        // objetivos del navegador). Si el Waze instalado la toma, la página se queda como
+        // estaba. Si NO está instalado, el navegador se queda en la web del mapa.
+        //
+        // Aquí NO se puede dejar un temporizador que "vuelva solo": el navegador cancela
+        // todo el JavaScript de la página al navegar, así que el temporizador muere con
+        // ella (se probó y no volvía). La vuelta la atiende la app al regresar —el botón
+        // atrás de Safari dispara `pageshow`/`visibilitychange` y el hook de la vuelta
+        // relee los datos y vuelve a levantar los canales—, que es lo que sí sobrevive.
         window.location.assign(url);
-        // Si Waze no está instalado, el navegador se queda en la web de Waze: se vuelve a
-        // la app para no dejar al conductor fuera de ella.
-        setTimeout(() => {
-          if (typeof document === 'undefined' || document.hidden) return;
-          if (
-            window.location.href !== antes &&
-            /waze\.com|google\.com\/maps/.test(window.location.href)
-          ) {
-            window.history.back();
-          }
-        }, 2500);
         return;
       }
       await Linking.openURL(url);
