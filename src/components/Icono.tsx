@@ -57,15 +57,21 @@ interface IconoProps {
   tamano?: number;
   /** Color con el que se pinta la máscara. Sin él queda el blanco original. */
   color?: string;
+  /**
+   * Estira el dibujo a la caja en vez de encajarlo sin deformar (18-09-2026, el avatar de
+   * la cabecera: el usuario lo quería "un poco más ancho"). Con `contain` una caja más
+   * ancha solo añade aire a los lados; con `stretch` el dibujo ocupa el ancho pedido.
+   */
+  estirar?: boolean;
   estilo?: StyleProp<ImageStyle>;
 }
 
-export function Icono({ fuente, tamano = 20, color, estilo }: IconoProps) {
+export function Icono({ fuente, tamano = 20, color, estirar, estilo }: IconoProps) {
   return (
     <Image
       source={fuente}
       style={[{ width: tamano, height: tamano }, color ? { tintColor: color } : null, estilo]}
-      resizeMode="contain"
+      resizeMode={estirar ? 'stretch' : 'contain'}
     />
   );
 }

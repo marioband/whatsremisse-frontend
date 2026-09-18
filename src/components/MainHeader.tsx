@@ -45,7 +45,20 @@ export function MainHeader({ activeTab, onTabChange }: MainHeaderProps) {
             onPress={() => navigation.navigate('Settings')}
             accessibilityLabel="Ajustes"
           >
-            <Icono fuente={ICONO_AJUSTES} tamano={22} />
+            {/* El avatar (18-09-2026): el usuario lo quería "a la altura del logo de
+                WhatsRemisse y un poco más ancho". Medido en la app: el logo tiene 15 px
+                de tinta de alto y el avatar tenía 22 (más alto que el logo). Ahora mide
+                15 de alto —clavado al logo— y se estira a 15 de ancho, o sea un 30 % más
+                ancho que su proporción natural (11,5), que era lo que se veía estrecho. */}
+            {/* El `translateY` de -1,6 px alinea las dos tintas: el texto se asienta
+                dejando el hueco del descendente debajo, así que su tinta queda 1,6 px por
+                encima del centro de su caja y el avatar quedaba algo bajo (medido). */}
+            <Icono
+              fuente={ICONO_AJUSTES}
+              tamano={15}
+              estirar
+              estilo={{ transform: [{ translateY: -1.6 }] }}
+            />
           </TouchableOpacity>
         </View>
       </View>

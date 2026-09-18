@@ -39,16 +39,17 @@ export const TEXTO_TENUE = '#888888';
  * primero los que soy propietario, después los que administro, luego mis favoritos y al
  * final los que solo integro.
  *
- * Colores fijados por el usuario el 18-09-2026 (2ª corrección del día): **favorito y
- * integrante comparten `#EAEAEA`**, el administrador `#B8B8B8` y el propietario `#B8BED8`.
+ * Colores fijados por el usuario el 18-09-2026 (3ª corrección del día): **favorito y
+ * integrante comparten `#F2F2F2`** (el mismo tono que las tarjetas de servicio), el
+ * administrador `#B8B8B8` y el propietario `#B8BED8`.
  *
  * Códigos cambiados el 18-09-2026 (2ª vuelta del día): propietario de #8B8FE8 a
  * #B8BED8, administrador de #7FD8C9 a #B8B8B8 y favorito de #F5E17A a #F2F2F2.
  */
 export const GRUPO_PROPIETARIO = '#B8BED8';
 export const GRUPO_ADMIN = '#B8B8B8';
-export const GRUPO_FAVORITO = '#EAEAEA';
-export const GRUPO_INTEGRANTE = '#B8B8B8';
+export const GRUPO_FAVORITO = '#F2F2F2';
+export const GRUPO_INTEGRANTE = '#F2F2F2';
 
 /**
  * El corazón de las tarjetas de grupo: el MISMO color con el borde (♡) y relleno (♥),
