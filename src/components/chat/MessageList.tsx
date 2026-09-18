@@ -3,6 +3,7 @@ import { View, Text, FlatList, Platform, StyleSheet, TouchableOpacity } from 're
 
 import { Palomas } from './Palomas';
 import { AZUL, TEXTO } from '../../lib/colors';
+import { textoDelSistema } from '../../lib/mensajes';
 import { ContextoDePalomas, LecturaDeChat, estadoDePalomas } from '../../lib/palomas';
 import { Message } from '../../types';
 
@@ -63,7 +64,10 @@ export function MessageList({
     if (isSystem) {
       return (
         <View style={styles.systemBubble}>
-          <Text style={styles.systemText}>{item.content}</Text>
+          {/* Los tres avisos del hito del viaje llevan la hora al final
+              ("Sistema: Viaje iniciado. 9:30pm"); sale de la fecha del mensaje, que es
+              la que guarda la base. Ver `lib/mensajes.ts`. */}
+          <Text style={styles.systemText}>{textoDelSistema(item)}</Text>
         </View>
       );
     }

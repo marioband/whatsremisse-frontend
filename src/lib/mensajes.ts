@@ -9,13 +9,15 @@
  *   * Al editar, lo único que se declara es que el mensaje fue editado: lo que
  *     decía antes no se ve en ninguna parte.
  *
- * Módulo PURO a propósito (sin imports, sin React): así las reglas se pueden
- * ejecutar con node sobre casos reales. Quien abre el menú es
- * `lib/menuDeMensaje.ts`.
+ * Módulo PURO a propósito (sin React y sin acceso a la red; solo importa
+ * `datetime`, que también lo es): así las reglas se pueden ejecutar con node sobre
+ * casos reales. Quien abre el menú es `lib/menuDeMensaje.ts`.
  *
  * La misma ventana de 15 minutos está en la base (migración 0019): si cambia la
  * regla, hay que cambiarla en los dos sitios.
  */
+import { horaPegada } from './datetime';
+
 export const MINUTOS_PARA_EDITAR = 15;
 export const MS_PARA_EDITAR = MINUTOS_PARA_EDITAR * 60 * 1000;
 
@@ -46,6 +48,44 @@ export function avisoDeEdicion(nombre: string): string {
 /** Aviso del sistema que declara la eliminación. */
 export function avisoDeEliminacion(nombre: string): string {
   return `Sistema: ${nombre} eliminó un mensaje.`;
+}
+
+/**
+ * Los tres avisos del HITO del viaje, en orden (1 ubicado, 2 iniciado, 3 finalizado).
+ * Son la ÚNICA fuente del texto: los usa el chat al reportar el hito y también el que
+ * decide cuáles llevan la hora.
+ */
+export const AVISOS_DEL_HITO = [
+  'Sistema: Conductor en el punto de origen (Ubicado).',
+  'Sistema: Viaje iniciado.',
+  'Sistema: Viaje finalizado.',
+];
+
+/** El aviso del hito `paso`. Fuera de 1..3 devuelve el extremo más cercano. */
+export function avisoDelHito(paso: number): string {
+  const indice = Math.min(Math.max(paso, 1), AVISOS_DEL_HITO.length) - 1;
+  return AVISOS_DEL_HITO[indice];
+}
+
+/** ¿Este texto es uno de los tres avisos del hito del viaje? */
+export function esAvisoDelHito(content: string): boolean {
+  return AVISOS_DEL_HITO.includes((content || '').trim());
+}
+
+/**
+ * Lo que se PINTA de un aviso del sistema en el chat.
+ *
+ * Los tres hitos del viaje llevan la hora pegada al final —"Sistema: Viaje iniciado.
+ * 9:30pm"—, pedido por el usuario el 18-09-2026. La hora sale de `created_at` (la que
+ * guarda la BASE, no el reloj del dispositivo) por dos motivos: es la hora real del
+ * servidor y así también aparece en los avisos que ya estaban guardados. Los demás
+ * avisos del sistema (pagos, ediciones, eliminaciones) se pintan tal cual.
+ */
+export function textoDelSistema(mensaje: { content: string; created_at?: string | null }): string {
+  if (!esAvisoDelHito(mensaje.content)) return mensaje.content;
+  const cuando = new Date(mensaje.created_at || '');
+  if (Number.isNaN(cuando.getTime())) return mensaje.content;
+  return `${mensaje.content} ${horaPegada(cuando)}`;
 }
 
 export const PLACEHOLDER_EDICION = 'Edita tu mensaje...';

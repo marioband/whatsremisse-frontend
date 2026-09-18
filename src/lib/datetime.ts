@@ -69,6 +69,16 @@ export function formatearHora(fecha: Date): string {
   return `${hora12}:${String(minutos).padStart(2, '0')} ${meridiano}`;
 }
 
+/**
+ * "9:30pm" — la hora pegada al final de un aviso del sistema (sin espacio y en
+ * minúsculas, tal como la pidió el usuario el 18-09-2026). Ejemplos: 21:30 → "9:30pm",
+ * 09:05 → "9:05am", 00:10 → "12:10am", 12:00 → "12:00pm".
+ */
+export function horaPegada(fecha: Date): string {
+  const { hora12, minutos, meridiano } = parteDeHora(fecha);
+  return `${hora12}:${String(minutos).padStart(2, '0')}${meridiano === 'a.m.' ? 'am' : 'pm'}`;
+}
+
 /** "11:00" (24 h), el formato que ya se usaba en la app. */
 export function formatearHora24(fecha: Date): string {
   return `${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`;

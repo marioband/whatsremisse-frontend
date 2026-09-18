@@ -62,6 +62,7 @@ import {
   AVISO_VENTANA_VENCIDA,
   avisoDeEdicion,
   avisoDeEliminacion,
+  avisoDelHito,
   CONFIRMACION_ELIMINAR,
   dentroDeLaVentanaDeEdicion,
   idSinGuardar,
@@ -78,12 +79,6 @@ import { Message } from '../types';
 
 type ChatNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
 type ChatRoute = RouteProp<RootStackParamList, 'Chat'>;
-
-const EXECUTION_MESSAGES = [
-  'Sistema: Conductor en el punto de origen (Ubicado).',
-  'Sistema: Viaje iniciado.',
-  'Sistema: Viaje finalizado.',
-];
 
 /** Sondeo de respaldo por si el tiempo real del proyecto no está activado. */
 const SONDEO_MS = 6000;
@@ -716,7 +711,9 @@ export function ChatScreen() {
     const paso = await advanceDriverProgress(service.id);
     if (paso === null) return;
 
-    const mensaje = EXECUTION_MESSAGES[Math.min(paso - 1, EXECUTION_MESSAGES.length - 1)];
+    // El texto de los tres avisos vive en `lib/mensajes.ts` (la misma fuente que decide
+    // cuáles llevan la hora al pintarse).
+    const mensaje = avisoDelHito(paso);
     addSystemMessage(mensaje);
     emitChatNotification('Hito del viaje', mensaje.replace('Sistema: ', ''));
   };
