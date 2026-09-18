@@ -27,7 +27,11 @@ interface Props {
    * no la del conductor.
    */
   vista?: 'CONDUCTOR' | 'PROVEEDOR';
-  /** Pie de la tarjeta (debajo de la franja): datos a copiar, botón de navegación… */
+  /**
+   * Pie de la tarjeta (debajo de los datos y **encima de la franja**: la franja es la
+   * que cierra la tarjeta por abajo): el botón de navegación del conductor y el botón
+   * "Copiar datos" del proveedor, en el chat.
+   */
   pie?: React.ReactNode;
   /**
    * Mi postulación en este servicio: con ella la franja inferior dice el puesto
@@ -177,23 +181,25 @@ export function ServiceCard({
         )}
       </View>
 
+      {/* Pie de la tarjeta: en el chat, el botón de navegación del conductor y el botón
+          "Copiar datos" del proveedor. Va DENTRO de la tarjeta (hereda su redondeo),
+          debajo de los datos del servicio y POR ENCIMA de la franja de estado: la franja
+          es la que cierra la tarjeta, así que los botones no pueden quedar colgando
+          debajo de la banda (el usuario los veía "fuera de la tarjeta"). */}
+      {pie}
+
       {/* Franja inferior: la MISMA que usan las tarjetas del proveedor, ahora para el
           estado del conductor — azul con su puesto de postulante, verde si lo
           aceptaron y rojo si quedó fuera (rechazado o cubierto por otro)—. Antes el
           estado se pintaba como una capa sobre toda la tarjeta; el usuario lo cambió
-          justamente por esto. Va dentro de la tarjeta para heredar su redondeo. */}
+          justamente por esto. Va dentro de la tarjeta para heredar su redondeo y es la
+          ÚLTIMA pieza, para cerrar la tarjeta por abajo. */}
       <EstadoServicioBar
         service={service}
         vista={vista}
         miPostulacion={miPostulacion}
         radius={RADIUS.xl}
       />
-
-      {/* Pie de la tarjeta: en el chat, el botón de navegación del conductor (y los
-          datos a copiar del proveedor). Va dentro de la tarjeta para heredar su
-          redondeo, y después de la franja para que la estructura de arriba sea
-          idéntica a la de la pantalla "Todos" del conductor. */}
-      {pie}
     </TouchableOpacity>
   );
 
