@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 
 import { OSCURO } from '../lib/colors';
 
@@ -33,7 +33,14 @@ export function Fab({ onPress, color = OSCURO, etiqueta }: Props) {
       accessibilityLabel={etiqueta}
       activeOpacity={0.85}
     >
-      <Text style={styles.icono}>+</Text>
+      {/* El "+" se dibuja con DOS BARRAS en vez del glifo `+`: el glifo no queda
+          centrado en su caja (medido: su cruce caía 2 px arriba y 1,5 px a la izquierda
+          del centro del círculo, y el usuario lo notó). Con las barras el cruce cae
+          exacto en el centro del círculo y no depende de la tipografía. */}
+      <View style={styles.cruz}>
+        <View style={styles.barraHorizontal} />
+        <View style={styles.barraVertical} />
+      </View>
     </TouchableOpacity>
   );
 }
@@ -56,10 +63,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
   },
-  icono: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: 'bold',
-    lineHeight: 30,
+  /* La cruz: un cuadrado centrado con las dos barras absolutas dentro. */
+  cruz: {
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  barraHorizontal: {
+    position: 'absolute',
+    width: 18,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  barraVertical: {
+    position: 'absolute',
+    width: 3,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
   },
 });
