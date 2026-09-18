@@ -811,6 +811,30 @@ export async function deleteServiceAlert(serviceId: string): Promise<void> {
   }
 }
 
+/**
+ * Borra MI postulación (el conductor desiste de postularse) y dice si borró algo.
+ *
+ * Se BORRA la fila a propósito, no se marca `REJECTED`: `REJECTED` es «el proveedor no me
+ * eligió» (la tarjeta queda con la franja de rechazado, el chat se cierra y el servicio
+ * desaparece de mis disponibles). Desistir es distinto: es como no haberse postulado nunca,
+ * así que la tarjeta sigue en «Disponibles» y puedo volver a postularme. La RLS de 0001
+ * («Drivers manage own applications») deja al conductor borrar su propia fila.
+ *
+ * Como en el resto del proyecto, se comprueban las filas borradas: PostgREST responde 204
+ * sin error aunque la política no deje borrar nada.
+ */
+export async function borrarMiPostulacion(serviceId: string, driverId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data, error } = await supabase
+    .from('applications')
+    .delete()
+    .eq('service_id', serviceId)
+    .eq('driver_id', driverId)
+    .select('id');
+  if (error) throw error;
+  return (data || []).length > 0;
+}
+
 export async function updateApplication(
   serviceId: string,
   driverId: string,

@@ -6,6 +6,7 @@ import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
 import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
+import { planDelDeslizamiento } from '../lib/deslizamientoDeLaTarjeta';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { tarjetaBloqueadaDelConductor } from '../lib/listaDelConductor';
 import { ServiceAlert } from '../types';
@@ -16,6 +17,8 @@ interface Props {
   onPress?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
+  /** Deslizar con una postulación viva CANCELA la postulación (no archiva). */
+  onCancelarPostulacion?: () => void;
   showArchived?: boolean;
   disableSwipe?: boolean;
   showReservaIndicator?: boolean;
@@ -47,6 +50,7 @@ export function ServiceCard({
   onPress,
   onArchive,
   onUnarchive,
+  onCancelarPostulacion,
   showArchived = false,
   disableSwipe = false,
   showReservaIndicator = false,
@@ -64,19 +68,34 @@ export function ServiceCard({
 
   const cardBackground = COLORS.cardNew;
 
-  const getAction = () => {
-    if (showArchived) {
-      return { label: 'Desarchivar', handler: onUnarchive || onArchive, color: COLORS.primary };
-    }
-    // El deslizamiento del CONDUCTOR archiva: la tarjeta se va a "Archivados" para él y
-    // el servicio sigue disponible (no anula su postulación). Antes, si ya estaba
-    // postulado, el deslizamiento decía "Anular" y borraba la postulación: el usuario lo
-    // reportó el 18-09-2026 ("la acción es archivar, no anular; el texto debe ser
-    // Archivar"). El texto y la acción tienen que decir lo mismo.
-    return { label: 'Archivar', handler: onArchive, color: COLORS.grayAction };
-  };
+  /**
+   * Qué dice y qué hace el deslizamiento: lo decide `lib/deslizamientoDeLaTarjeta.ts`, que es
+   * el único sitio donde vive la regla. Regla del usuario (18-09-2026): con una postulación
+   * VIVA el deslizamiento cancela la postulación (el servicio sigue en «Disponibles», no se
+   * archiva); sin postulación, archiva. El texto y la acción dicen siempre lo mismo.
+   */
+  const plan = planDelDeslizamiento({
+    archivada: showArchived,
+    postulacionViva: miPostulacion?.estado === 'PENDIENTE',
+  });
 
-  const action = getAction();
+  const colorDelPlan =
+    plan.tono === 'AZUL'
+      ? COLORS.primary
+      : plan.tono === 'ROJO'
+        ? COLORS.danger
+        : COLORS.grayAction;
+
+  const action = {
+    label: plan.etiqueta,
+    color: colorDelPlan,
+    handler:
+      plan.accion === 'ARCHIVAR'
+        ? onArchive
+        : plan.accion === 'DESARCHIVAR'
+          ? onUnarchive || onArchive
+          : onCancelarPostulacion,
+  };
 
   const handleAction = () => {
     swipeableRef.current?.close();
@@ -383,6 +402,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 13,
+    // «Cancelar postulación» ocupa dos líneas en el botón de 80 px: centrado y con aire.
+    textAlign: 'center',
+    paddingHorizontal: 4,
   },
   reservaBadge: {
     position: 'absolute',

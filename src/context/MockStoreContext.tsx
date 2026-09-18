@@ -16,6 +16,7 @@ import { Alert } from '../lib/alert';
 import { avisarDePostulacion, avisarDeServicioNuevo } from '../lib/avisos';
 import {
   approveApplicationInDb,
+  borrarMiPostulacion,
   fetchApplicationsForDriver,
   fetchApplicationsForProvider,
   fetchGroupMembers,
@@ -574,7 +575,8 @@ interface MockContextValue extends MockState {
   approveApplication: (serviceId: string, driverId: string) => void;
   rejectApplication: (serviceId: string) => void;
   rejectApplicationFrom: (serviceId: string, driverId: string) => void;
-  cancelApplication: (serviceId: string, driverId: string) => void;
+  /** Devuelve false si la base no confirmó el borrado (la postulación sigue en pie). */
+  cancelApplication: (serviceId: string, driverId: string) => Promise<boolean>;
   updateServiceStatus: (serviceId: string, status: ServiceStatus) => void;
   /**
    * El toque "Servicio aceptado, toca para iniciar" del conductor (0022): deja la marca
@@ -1233,8 +1235,25 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'REJECT_APPLICATION_FROM', payload: { serviceId, driverId } });
     },
     cancelApplication: async (serviceId, driverId) => {
-      await persistApplication(serviceId, driverId, { status: 'REJECTED' });
+      // Desistir de la postulación BORRA la fila (no la marca rechazada): el conductor queda
+      // como si no se hubiera postulado —puede volver a postularse— y la tarjeta sigue en
+      // «Disponibles». El rechazo del proveedor sí es `REJECTED`, y lo escribe la base.
+      if (isSupabaseConfigured) {
+        try {
+          const borrada = await borrarMiPostulacion(serviceId, driverId);
+          if (!borrada) {
+            console.warn(
+              '[MockStore] no se borró ninguna postulación (¿sesión vencida o política RLS de DELETE?)'
+            );
+            return false;
+          }
+        } catch (err) {
+          console.error('[MockStore] cancelApplication error:', err);
+          return false;
+        }
+      }
       dispatch({ type: 'CANCEL_APPLICATION', payload: { serviceId, driverId } });
+      return true;
     },
     updateServiceStatus: async (serviceId, status) => {
       if (esServicioPropio(serviceId)) {

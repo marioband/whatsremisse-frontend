@@ -15,6 +15,10 @@ import { ordenarEnProceso } from '../lib/apartadosDelInicio';
 import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
 import { AZUL, TEXTO_SUAVE } from '../lib/colors';
 import { esProgramado } from '../lib/datetime';
+import {
+  AVISO_CANCELACION_FALLIDA,
+  AVISO_POSTULACION_CANCELADA,
+} from '../lib/deslizamientoDeLaTarjeta';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import {
   guardarIniciosDelViaje,
@@ -70,6 +74,7 @@ export function DriverHomeScreen() {
     userProfile,
     archiveService,
     unarchiveService,
+    cancelApplication,
     applyToService,
     driverDebt,
     debtThreshold,
@@ -461,8 +466,22 @@ export function DriverHomeScreen() {
     unarchiveService(serviceId);
   };
 
-  // El deslizamiento del conductor archiva, no anula: la acción de anular la
-  // postulación se quitó el 18-09-2026 (el usuario: "la acción es archivar, no anular").
+  /**
+   * Deslizar la tarjeta con una postulación viva: el conductor DESISTE de postularse.
+   *
+   * Cancela SOLO su postulación (borra su fila de `applications`, no la marca rechazada) y
+   * NO archiva el servicio: la tarjeta se queda en «Disponibles» y puede volver a postularse.
+   * Regla del usuario, 18-09-2026.
+   */
+  const handleCancelarPostulacion = async (serviceId: string) => {
+    const cancelada = await cancelApplication(serviceId, currentDriverId);
+    // La tarjeta se repinta con la postulación ya fuera (franja y bloqueo del toque).
+    await releerMarcas();
+    Alert.alert(
+      cancelada ? AVISO_POSTULACION_CANCELADA.titulo : AVISO_CANCELACION_FALLIDA.titulo,
+      cancelada ? AVISO_POSTULACION_CANCELADA.cuerpo : AVISO_CANCELACION_FALLIDA.cuerpo
+    );
+  };
 
   const isDriver = role === 'DRIVER';
   const isBlocked = driverDebt > debtThreshold;
@@ -629,6 +648,7 @@ export function DriverHomeScreen() {
               onPress={() => handleCardPress(item)}
               onArchive={() => handleArchive(item.id)}
               onUnarchive={() => handleUnarchive(item.id)}
+              onCancelarPostulacion={() => handleCancelarPostulacion(item.id)}
               showArchived={showArchived}
               disableSwipe={inEnProceso || accepted}
               showReservaIndicator={esReserva}
