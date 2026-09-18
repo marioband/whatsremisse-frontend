@@ -627,39 +627,31 @@ export function ChatScreen() {
     }
   };
 
-  const messages: Message[] = useMemo(() => {
-    const lista: Message[] = mensajes.map((m) => ({
-      id: m.id,
-      service_alert_id: m.service_id,
-      sender_id: m.sender_id,
-      content: m.content,
-      // La lista de mensajes solo distingue texto, nota de voz y sistema; las
-      // demás clases (foto, ubicación, contacto) se pintan como texto.
-      type: m.type === 'VOICE' ? 'VOICE' : m.type === 'SYSTEM' ? 'SYSTEM' : 'TEXT',
-      metadata: m.metadata,
-      created_at: m.created_at,
-      edited_at: m.edited_at ?? null,
-    }));
-
-    if (lista.length === 0) {
-      if (cargando) return [];
-      return [
-        {
-          id: 'welcome',
-          service_alert_id: serviceId,
-          sender_id: otherSenderId,
-          content: isDriver
-            ? 'Hola, tengo algunas consultas sobre mi postulación.'
-            : `Hola, me interesa el servicio. Soy ${driverName || 'el conductor'}.`,
-          type: 'TEXT' as const,
-          metadata: {},
-          created_at: new Date().toISOString(),
-          sender_name: isDriver ? 'Proveedor' : driverName,
-        },
-      ];
-    }
-    return lista;
-  }, [mensajes, cargando, serviceId, otherSenderId, driverName, isDriver]);
+  /**
+   * Los mensajes que se pintan: la conversación TAL COMO está en la base.
+   *
+   * Antes, con la conversación vacía, la app se inventaba un saludo —"Hola, tengo
+   * algunas consultas sobre mi postulación." o "Hola, me interesa el servicio. Soy …"—
+   * que aparecía como si lo hubiera escrito una de las partes, en los DOS roles. El
+   * usuario lo quitó el 18-09-2026: "cuando se abren los chats, a ambos roles les llega
+   * un mensaje predeterminado, eso no va".
+   */
+  const messages: Message[] = useMemo(
+    () =>
+      mensajes.map((m) => ({
+        id: m.id,
+        service_alert_id: m.service_id,
+        sender_id: m.sender_id,
+        content: m.content,
+        // La lista de mensajes solo distingue texto, nota de voz y sistema; las
+        // demás clases (foto, ubicación, contacto) se pintan como texto.
+        type: m.type === 'VOICE' ? 'VOICE' : m.type === 'SYSTEM' ? 'SYSTEM' : 'TEXT',
+        metadata: m.metadata,
+        created_at: m.created_at,
+        edited_at: m.edited_at ?? null,
+      })),
+    [mensajes]
+  );
 
   // Búsqueda dentro de la conversación (lupa de la cabecera).
   const consultaNormalizada = normalizar(consulta.trim());
