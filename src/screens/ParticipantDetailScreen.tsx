@@ -131,7 +131,7 @@ export function ParticipantDetailScreen() {
 
   const handleDelete = () => {
     if (esElPropietario) {
-      Alert.alert('No permitido', 'No puedes eliminar al propietario del grupo.');
+      Alert.alert('No permitido', 'No puedes eliminar al propietario.');
       return;
     }
     Alert.alert('Eliminar integrante', `¿Seguro que deseas eliminar a ${shownName}?`, [

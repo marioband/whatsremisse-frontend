@@ -1496,7 +1496,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     },
     removeMember: async (groupId, memberId) => {
       if (esPropietarioDelGrupo(state.groups, state.members, groupId, memberId)) {
-        Alert.alert('No permitido', 'No puedes eliminar al propietario del grupo.');
+        Alert.alert('No permitido', 'No puedes eliminar al propietario.');
         return false;
       }
       try {

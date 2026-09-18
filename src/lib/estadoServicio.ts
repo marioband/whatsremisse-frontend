@@ -16,7 +16,7 @@ export interface EstadoServicio {
   compartido: boolean;
   /** La alerta está en sus últimos minutos: la franja avisa con cuenta atrás. */
   porCerrar?: boolean;
-  /** Segunda línea de la franja (p. ej. la cuenta atrás cuando manda "N Postulantes"). */
+  /** Segunda línea de la franja (p. ej. la cuenta atrás cuando mandan los postulantes). */
   aviso?: string;
 }
 
@@ -162,8 +162,9 @@ export function estadoDeServicio(
 
   if (!soyConductor && postulantesPendientes > 0) {
     return {
-      etiqueta:
-        postulantesPendientes === 1 ? '1 Postulante' : `${postulantesPendientes} Postulantes`,
+      // Misma redacción que en la tarjeta del conductor («Postulante N»): el usuario
+      // pidió que las dos vistas cuenten el puesto igual (18-09-2026).
+      etiqueta: `Postulante ${postulantesPendientes}`,
       // Verde institucional: el usuario pidió que la barra de postulantes de sus
       // servicios publicados sea verde (#2E9E5B), no oscura.
       color: VERDE_ACCION,

@@ -90,7 +90,7 @@ export function GroupMembersScreen() {
       ]);
     } else if (viewerGroupRole === 'admin') {
       if (memberRole === 'owner') {
-        Alert.alert('No permitido', 'No puedes eliminar al Propietario.');
+        Alert.alert('No permitido', 'No puedes eliminar al propietario.');
         return;
       }
       Alert.alert(memberName, 'Selecciona una acción', [

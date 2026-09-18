@@ -1028,7 +1028,7 @@ export function ChatScreen() {
   const handleCopyData = async () => {
     try {
       const resultado = await copiarDatosDelServicio(datosParaCopiar, {
-        titulo: 'Datos del Conductor',
+        titulo: 'Datos del conductor',
         copiarTexto: (texto) => Clipboard.setStringAsync(texto),
       });
       if (resultado.cancelado) return;

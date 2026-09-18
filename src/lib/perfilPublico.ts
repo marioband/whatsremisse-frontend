@@ -103,7 +103,7 @@ export function conGuion(valor: string): string {
  * el dato no se leía de ningún perfil. Ahora sale del perfil real y lo que de verdad
  * falta se marca con "—" (nunca se inventa un dato).
  */
-export function textoParaCopiar(datos: DatosPublicos, titulo = 'Datos del Conductor'): string {
+export function textoParaCopiar(datos: DatosPublicos, titulo = 'Datos del conductor'): string {
   return `${titulo}
 =====================
 Nombres: ${conGuion(datos.nombres)}

@@ -27,6 +27,18 @@ const ROLE_COLORS = {
 type RoleTab = 'Conductor' | 'Proveedor' | 'Mis Grupos' | 'Ubicaciones';
 const ROLE_TABS: RoleTab[] = ['Conductor', 'Proveedor', 'Mis Grupos', 'Ubicaciones'];
 
+/**
+ * Rótulo visible de cada pestaña. La clave interna 'Mis Grupos' se conserva (la comparan
+ * HomeScreen y MainHeader), pero el usuario pidió que el rótulo diga «Mis grupos» (18-09-2026):
+ * esta pantalla pintaba la clave cruda.
+ */
+const ETIQUETA_DEL_TAB: Record<RoleTab, string> = {
+  Conductor: 'Conductor',
+  Proveedor: 'Proveedor',
+  'Mis Grupos': 'Mis grupos',
+  Ubicaciones: 'Ubicaciones',
+};
+
 export function SelectGroupsForServiceScreen() {
   const navigation = useNavigation<SelectNav>();
   const route = useRoute<SelectRoute>();
@@ -197,7 +209,7 @@ export function SelectGroupsForServiceScreen() {
             onPress={() => handleRoleChange(tab)}
           >
             <Text style={[styles.roleTabText, activeRoleTab === tab && styles.roleTabTextActive]}>
-              {tab}
+              {ETIQUETA_DEL_TAB[tab]}
             </Text>
           </TouchableOpacity>
         ))}

@@ -182,7 +182,7 @@ function circulo(ctx: CanvasRenderingContext2D, x: number, y: number, radio: num
  */
 export async function componerImagenDeDatos(
   datos: DatosPublicos,
-  titulo = 'Datos del Conductor'
+  titulo = 'Datos del conductor'
 ): Promise<Blob | null> {
   if (!hayDocumento()) return null;
 
@@ -347,7 +347,7 @@ export async function copiarDatosDelServicio(
   datos: DatosPublicos,
   opciones: OpcionesDeCopiado
 ): Promise<ResultadoDeCopiado> {
-  const titulo = opciones.titulo ?? 'Datos del Conductor';
+  const titulo = opciones.titulo ?? 'Datos del conductor';
   const texto = textoParaCopiar(datos, titulo);
 
   let imagen: Blob | null = null;
