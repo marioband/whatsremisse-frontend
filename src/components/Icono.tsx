@@ -26,6 +26,8 @@ import { Image, ImageSourcePropType, StyleProp, ImageStyle } from 'react-native'
 import iconoAjustes from '../iconos/icono-ajustes.png';
 import iconoBuscar from '../iconos/icono-buscar.png';
 import iconoCopiar from '../iconos/icono-copiar.png';
+import iconoCorazonBorde from '../iconos/icono-corazon-borde.png';
+import iconoCorazonLleno from '../iconos/icono-corazon-lleno.png';
 import iconoGrupos from '../iconos/icono-grupos.png';
 
 export const ICONO_BUSCAR: ImageSourcePropType = iconoBuscar;
@@ -40,6 +42,14 @@ export const ICONO_COPIAR: ImageSourcePropType = iconoCopiar;
  * se lee bien.
  */
 export const ICONO_GRUPOS: ImageSourcePropType = iconoGrupos;
+/**
+ * Los corazones de **Mis grupos** (18-09-2026, los dos PNG que dio el usuario): el de
+ * borde (♡) y el relleno (♥). Vienen ya pintados en `#333333` —el color que el usuario
+ * fijó para los dos estados— y recortados a su tinta, así que se pintan SIN `color`;
+ * `tamano` es su lado mayor y se usa el mismo que el engranaje (20) para que midan igual.
+ */
+export const ICONO_CORAZON_BORDE: ImageSourcePropType = iconoCorazonBorde;
+export const ICONO_CORAZON_LLENO: ImageSourcePropType = iconoCorazonLleno;
 
 interface IconoProps {
   fuente: ImageSourcePropType;

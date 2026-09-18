@@ -143,8 +143,20 @@ export function MyServicesScreen() {
             )}
           </View>
 
-          <Text style={styles.routeText}>📍 {service.origin_address}</Text>
-          <Text style={styles.routeText}>🏁 {service.destination_address}</Text>
+          {/* Los mismos puntos que las tarjetas del inicio (18-09-2026): origen en azul
+              de marca y destino en oscuro, en vez de los emoji de pin y bandera. */}
+          <View style={styles.routeRow}>
+            <View style={styles.dotOrigin} />
+            <Text style={styles.routeText} numberOfLines={1}>
+              {service.origin_address}
+            </Text>
+          </View>
+          <View style={styles.routeRow}>
+            <View style={styles.dotDestination} />
+            <Text style={styles.routeText} numberOfLines={1}>
+              {service.destination_address}
+            </Text>
+          </View>
 
           {service.observations && service.observations.length > 0 && (
             <Text style={styles.obsText}>📝 {service.observations.join(' • ')}</Text>
@@ -156,8 +168,10 @@ export function MyServicesScreen() {
           </View>
 
           {/* Historial del cierre: monto, quién pagó y quién confirmó (0013). */}
+          {/* Historial del cierre, sin el check verde (el usuario lo retiró el
+              18-09-2026: el texto ya dice que se pagó y quién confirmó). */}
           {!!historialDePago(service) && (
-            <Text style={styles.pagoText}>✅ {historialDePago(service)}</Text>
+            <Text style={styles.pagoText}>{historialDePago(service)}</Text>
           )}
 
           {/* Rol en ese servicio + entrada a la zona donde se actúa. */}
@@ -332,10 +346,30 @@ const styles = StyleSheet.create({
   },
   rolTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
   abrirTexto: { color: AZUL, fontSize: 11, fontWeight: '700' },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  /* Igual que ServiceCard: origen azul de marca, destino oscuro. */
+  dotOrigin: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: AZUL,
+    marginRight: 8,
+  },
+  dotDestination: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: OSCURO,
+    marginRight: 8,
+  },
   routeText: {
     fontSize: 13,
     color: '#444',
-    marginBottom: 2,
+    flex: 1,
   },
   obsText: {
     fontSize: 12,

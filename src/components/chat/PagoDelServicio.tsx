@@ -343,7 +343,8 @@ export function PagoDelServicio({
         {/* ------------------------------------------------ cerrado */}
         {resumen.estado === 'CONFIRMADO' && (
           <>
-            <Text style={styles.historial}>✅ {historialDePago(service) || 'Pago confirmado'}</Text>
+            {/* Sin el check verde (retirado el 18-09-2026): el texto ya cuenta el cierre. */}
+            <Text style={styles.historial}>{historialDePago(service) || 'Pago confirmado'}</Text>
             {cerrando && (
               <Text style={[styles.espera, styles.cierre]}>
                 Cerrando la conversación… el servicio queda en Mis servicios.

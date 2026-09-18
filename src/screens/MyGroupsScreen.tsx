@@ -5,10 +5,10 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from
 
 import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { Fab } from '../components/Fab';
-import { Icono, ICONO_GRUPOS } from '../components/Icono';
+import { Icono, ICONO_CORAZON_BORDE, ICONO_CORAZON_LLENO, ICONO_GRUPOS } from '../components/Icono';
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
-import { CORAZON_DE_GRUPO, TEXTO_SUAVE } from '../lib/colors';
+import { TEXTO_SUAVE } from '../lib/colors';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -64,9 +64,9 @@ export function MyGroupsScreen() {
           style={styles.actionBtn}
           accessibilityLabel={item.favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
         >
-          {/* El corazón es el mismo color con el borde (♡) y relleno (♥): lo que cambia
-              al tocarlo es el glifo, no el color (pedido del usuario, 18-09-2026). */}
-          <Text style={styles.heart}>{item.favorite ? '\u2665' : '\u2661'}</Text>
+          {/* Los dos corazones son los PNG del usuario (18-09-2026), en #333333 y del
+              mismo tamaño que el engranaje de al lado. */}
+          <Icono fuente={item.favorite ? ICONO_CORAZON_LLENO : ICONO_CORAZON_BORDE} tamano={20} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionBtn}
@@ -189,10 +189,6 @@ const styles = StyleSheet.create({
   actionBtn: {
     padding: 8,
     marginLeft: 4,
-  },
-  heart: {
-    fontSize: 20,
-    color: CORAZON_DE_GRUPO,
   },
   emptyText: {
     textAlign: 'center',
