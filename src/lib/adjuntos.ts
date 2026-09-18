@@ -22,6 +22,7 @@
  * Todas devuelven `{ ok: false, motivo }` en vez de lanzar: la pantalla muestra el motivo y
  * el chat sigue funcionando (una foto no puede tumbar la conversación).
  */
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
@@ -42,18 +43,46 @@ export const BUCKET_DE_ADJUNTOS = 'chat-adjuntos';
 
 const CANCELADO = 'cancelado';
 
-function desdeResultado(resultado: ImagePicker.ImagePickerResult): Resultado<FotoElegida> {
+/**
+ * Ancho máximo con el que se suben las fotos del chat. Medido: una foto de un móvil de
+ * 12 MP pesa 2-3 MB aunque el selector la comprima, y el que abre el chat se la descarga
+ * ENTERA (una foto por burbuja). A 1600 px de ancho se ve igual en el chat y pesa ~150 KB.
+ */
+export const ANCHO_MAXIMO_DE_FOTO = 1600;
+
+/**
+ * Deja la foto lista para subir: la reduce si viene más grande que `ANCHO_MAXIMO_DE_FOTO` y
+ * la comprime (JPEG 0,7). Si algo falla se devuelve la ORIGINAL: una foto más pesada nunca
+ * puede impedir mandar el mensaje.
+ */
+async function reducirFoto(foto: FotoElegida): Promise<FotoElegida> {
+  const acciones: ImageManipulator.Action[] =
+    foto.ancho > ANCHO_MAXIMO_DE_FOTO ? [{ resize: { width: ANCHO_MAXIMO_DE_FOTO } }] : [];
+  try {
+    const lista = await ImageManipulator.manipulateAsync(foto.uri, acciones, {
+      compress: 0.7,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+    return { uri: lista.uri, ancho: lista.width, alto: lista.height };
+  } catch {
+    return foto;
+  }
+}
+
+async function desdeResultado(
+  resultado: ImagePicker.ImagePickerResult
+): Promise<Resultado<FotoElegida>> {
   if (resultado.canceled || !resultado.assets?.length) {
     return { ok: false, motivo: CANCELADO };
   }
   const asset = resultado.assets[0];
   return {
     ok: true,
-    valor: {
+    valor: await reducirFoto({
       uri: asset.uri,
       ancho: asset.width ?? 0,
       alto: asset.height ?? 0,
-    },
+    }),
   };
 }
 
@@ -68,9 +97,10 @@ export async function elegirFoto(): Promise<Resultado<FotoElegida>> {
     }
     const resultado = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
+      // 0,9 en el selector y 0,7 al reducir: una sola compresión fuerte al final.
+      quality: 0.9,
     });
-    return desdeResultado(resultado);
+    return await desdeResultado(resultado);
   } catch (err) {
     return { ok: false, motivo: `No se pudo abrir la galería: ${mensajeDeError(err)}` };
   }
@@ -87,9 +117,9 @@ export async function tomarFoto(): Promise<Resultado<FotoElegida>> {
     }
     const resultado = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
+      quality: 0.9,
     });
-    return desdeResultado(resultado);
+    return await desdeResultado(resultado);
   } catch (err) {
     return { ok: false, motivo: `No se pudo usar la cámara: ${mensajeDeError(err)}` };
   }
