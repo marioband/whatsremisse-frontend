@@ -10,6 +10,7 @@ import {
   FlatList,
   SafeAreaView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 
 import { Icono, ICONO_BUSCAR } from '../components/Icono';
@@ -414,6 +415,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     paddingVertical: 4,
+    // Sin el recuadro de foco del navegador (misma regla que la barra del chat).
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
   },
   loader: {
     marginTop: 12,

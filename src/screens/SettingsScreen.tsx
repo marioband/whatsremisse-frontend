@@ -6,6 +6,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } fr
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { limpiarCacheCompleta } from '../lib/cache';
+import { AZUL } from '../lib/colors';
 import { registrarResumenEnConsola, reiniciarContadores, textoDelResumen } from '../lib/medidor';
 import { limpiarCacheDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -17,19 +18,18 @@ const DARK_BG = '#2D2D2D';
 interface MenuOption {
   id: string;
   label: string;
-  icon: string;
   route: keyof RootStackParamList;
   params?: Record<string, unknown>;
 }
 
 const MENU_OPTIONS: MenuOption[] = [
-  { id: 'profile', label: 'Mi perfil', icon: '👤', route: 'ProfileSetup' },
-  { id: 'payment', label: 'Datos de pago', icon: '💳', route: 'PaymentDetails' },
-  { id: 'services', label: 'Mis servicios', icon: '🚗', route: 'MyServices' },
-  { id: 'stats', label: 'Estadísticas', icon: '📊', route: 'Estadisticas' },
-  { id: 'navigation', label: 'Navegación', icon: '🧭', route: 'Navegacion' },
-  { id: 'privacy', label: 'Privacidad', icon: '🔒', route: 'Privacy' },
-  { id: 'membership', label: 'Membresía (30 días)', icon: '🎫', route: 'Membership' },
+  { id: 'profile', label: 'Mi perfil', route: 'ProfileSetup' },
+  { id: 'payment', label: 'Datos de pago', route: 'PaymentDetails' },
+  { id: 'services', label: 'Mis servicios', route: 'MyServices' },
+  { id: 'stats', label: 'Estadísticas', route: 'Estadisticas' },
+  { id: 'navigation', label: 'Navegación', route: 'Navegacion' },
+  { id: 'privacy', label: 'Privacidad', route: 'Privacy' },
+  { id: 'membership', label: 'Membresía (30 días)', route: 'Membership' },
 ];
 
 export function SettingsScreen() {
@@ -92,24 +92,36 @@ export function SettingsScreen() {
 
         {/* Menu options */}
         <View style={styles.menuContainer}>
-          {MENU_OPTIONS.map((option, index) => (
-            <TouchableOpacity
-              key={option.id}
-              style={[styles.menuItem, index !== MENU_OPTIONS.length - 1 && styles.menuItemBorder]}
-              onPress={() => handleNavigate(option.route, option.params)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuIcon}>{option.icon}</Text>
-              <Text style={styles.menuLabel}>{option.label}</Text>
-              <Text style={styles.menuArrow}>&gt;</Text>
-            </TouchableOpacity>
-          ))}
+          {MENU_OPTIONS.map((option, index) => {
+            // El botón de Membresía va entero en azul de la marca, con el texto y la
+            // flecha en blanco (pedido del usuario, 18-09-2026).
+            const esMembresia = option.id === 'membership';
+            return (
+              <TouchableOpacity
+                key={option.id}
+                style={[
+                  styles.menuItem,
+                  index !== MENU_OPTIONS.length - 1 && styles.menuItemBorder,
+                  esMembresia && styles.menuItemMembresia,
+                ]}
+                onPress={() => handleNavigate(option.route, option.params)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.menuLabel, esMembresia && styles.menuLabelMembresia]}>
+                  {option.label}
+                </Text>
+                <Text style={[styles.menuArrow, esMembresia && styles.menuArrowMembresia]}>
+                  &gt;
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Diagnóstico de llamadas externas: solo en desarrollo */}
         {__DEV__ && (
           <TouchableOpacity style={styles.devItem} onPress={mostrarMedidor} activeOpacity={0.7}>
-            <Text style={styles.menuIcon}>📉</Text>
+            <Text style={styles.devIcon}>📉</Text>
             <Text style={styles.menuLabel}>Llamadas a Google (dev)</Text>
             <Text style={styles.menuArrow}>&gt;</Text>
           </TouchableOpacity>
@@ -202,12 +214,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  menuIcon: {
-    fontSize: 20,
-    marginRight: 16,
-    width: 28,
-    textAlign: 'center',
-  },
   menuLabel: {
     flex: 1,
     fontSize: 16,
@@ -217,6 +223,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#aaa',
     fontWeight: '300',
+  },
+  /* Membresía: la fila completa en azul, con el texto y la flecha en blanco. */
+  menuItemMembresia: {
+    backgroundColor: AZUL,
+  },
+  menuLabelMembresia: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  menuArrowMembresia: {
+    color: '#fff',
+  },
+  devIcon: {
+    fontSize: 20,
+    marginRight: 16,
+    width: 28,
+    textAlign: 'center',
   },
   devItem: {
     flexDirection: 'row',

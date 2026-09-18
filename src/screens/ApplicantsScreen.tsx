@@ -9,6 +9,7 @@ import {
   FlatList,
   TouchableOpacity,
   SafeAreaView,
+  Platform,
 } from 'react-native';
 
 import { ApplicantCard } from '../components/ApplicantCard';
@@ -17,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDePostulantes } from '../hooks/useEstimacionesDePostulantes';
 import { Alert } from '../lib/alert';
+import { normalizar } from '../lib/busqueda';
 import {
   BORDE_SUAVE,
   FONDO_TARJETA,
@@ -37,14 +39,6 @@ type ApplicantsNav = StackNavigationProp<
   'ApplicantsScreen' | 'Settings' | 'CreateService'
 >;
 type ApplicantsRoute = RouteProp<RootStackParamList, 'ApplicantsScreen'>;
-
-/** Sin acentos ni mayúsculas, para que "jose" encuentre "José". */
-function normalizar(texto: string): string {
-  return texto
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
 
 /**
  * Postulantes del servicio, con la estructura de la última referencia del usuario:
@@ -373,6 +367,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: TEXTO,
     paddingVertical: 0,
+    // Sin el recuadro de foco del navegador (misma regla que la barra del chat).
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
   },
   footer: {
     backgroundColor: '#fff',

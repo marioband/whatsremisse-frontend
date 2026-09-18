@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { EstadoServicioBar } from '../components/EstadoServicioBar';
 import { Fab } from '../components/Fab';
 import { ProviderServiceCard } from '../components/ProviderServiceCard';
@@ -14,6 +15,8 @@ import {
   listaDelProveedor,
   ordenarEnProceso,
 } from '../lib/apartadosDelInicio';
+import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
+import { TEXTO_SUAVE } from '../lib/colors';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -55,6 +58,14 @@ export function ProviderHomeScreen() {
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('Publicados');
   const [showArchived, setShowArchived] = useState(false);
 
+  /**
+   * La lupa del apartado (18-09-2026): filtra la lista que se está VIENDO (Publicados,
+   * En proceso o Archivados). Los contadores de las píldoras no cambian: son del
+   * apartado completo, no de la búsqueda.
+   */
+  const [buscarAbierto, setBuscarAbierto] = useState(false);
+  const [consulta, setConsulta] = useState('');
+
   // En este modo solo se ven los servicios que yo publiqué como proveedor; los
   // de otros usuarios (aunque estén abiertos o ya aceptados) no son míos.
   const myProviderServices = useMemo(
@@ -78,7 +89,7 @@ export function ProviderHomeScreen() {
     [myProviderServices]
   );
 
-  const filteredServices = useMemo(() => {
+  const serviciosDelApartado = useMemo(() => {
     if (activeStatus === 'En proceso') {
       // El viaje en curso, las reservas en curso y lo terminado con el pago abierto,
       // ordenados por `ordenarEnProceso` (activos → reservas próximas → pagos
@@ -90,6 +101,17 @@ export function ProviderHomeScreen() {
     // todavía no hicieron el toque "toca para iniciar" (regla del usuario).
     return serviciosDelInicio.filter((s) => !estaEnProcesoDelProveedor(s));
   }, [serviciosDelInicio, activeStatus]);
+
+  /**
+   * Lo que se pinta: el apartado ya pasado por la lupa. Busca en lo que se ve en las
+   * tarjetas (nombre del proveedor, título, origen, destino y observaciones), sin
+   * acentos ni mayúsculas. El proveedor es su propio nombre, así que "mi nombre" también
+   * filtra (útil para separar servicios de varias cuentas o locales).
+   */
+  const filteredServices = useMemo(
+    () => filtrarPorBusqueda(serviciosDelApartado, consulta, (s) => camposDeBusquedaDeServicio(s)),
+    [serviciosDelApartado, consulta]
+  );
 
   const handleCardPress = (service: ServiceAlert) => {
     const postulantesPendientes = applications.filter(
@@ -186,10 +208,34 @@ export function ProviderHomeScreen() {
             );
           })}
         </View>
-        <TouchableOpacity style={styles.filterBtn}>
-          <Text style={styles.filterIcon}>▼</Text>
-        </TouchableOpacity>
+        <View style={styles.filterActions}>
+          {/* La lupa del apartado: la misma que en Postulantes y en el inicio del
+              conductor (el botón abre el campo y, abierto, cierra). */}
+          <BotonDeBusqueda
+            abierto={buscarAbierto}
+            onPress={() => {
+              setBuscarAbierto((abierto) => !abierto);
+              setConsulta('');
+            }}
+            color={TEXTO_SUAVE}
+            tamano={20}
+            estilo={styles.filterBtn}
+            etiqueta="Buscar servicio"
+          />
+          <TouchableOpacity style={[styles.filterBtn, styles.filterBtnSeparado]}>
+            <Text style={styles.filterIcon}>▼</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* El campo de la lupa, debajo de las píldoras del apartado */}
+      {buscarAbierto && (
+        <BarraDeBusqueda
+          consulta={consulta}
+          onCambiarConsulta={setConsulta}
+          placeholder="Buscar por título, origen o destino"
+        />
+      )}
 
       {/* Archived link */}
       <TouchableOpacity style={styles.archivedLink} onPress={() => setShowArchived((v) => !v)}>
@@ -204,7 +250,11 @@ export function ProviderHomeScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            {showArchived ? 'No hay servicios archivados' : 'No hay servicios disponibles'}
+            {consulta.trim()
+              ? 'Ningún servicio coincide con la búsqueda.'
+              : showArchived
+                ? 'No hay servicios archivados'
+                : 'No hay servicios disponibles'}
           </Text>
         }
       />
@@ -271,10 +321,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  filterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   filterBtn: {
     padding: 8,
     backgroundColor: '#f0f2f5',
     borderRadius: 8,
+    /* La caja del ▼ y la de la lupa miden lo mismo: van en la misma fila. */
+    minWidth: 36,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterBtnSeparado: {
+    marginLeft: 8,
   },
   filterIcon: {
     fontSize: 14,

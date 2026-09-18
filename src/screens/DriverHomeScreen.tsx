@@ -3,6 +3,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { Fab } from '../components/Fab';
 import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +12,8 @@ import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { ordenarEnProceso } from '../lib/apartadosDelInicio';
-import { AZUL } from '../lib/colors';
+import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
+import { AZUL, TEXTO_SUAVE } from '../lib/colors';
 import { esProgramado } from '../lib/datetime';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import {
@@ -78,6 +80,14 @@ export function DriverHomeScreen() {
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('Disponibles');
   const [showArchived, setShowArchived] = useState(false);
 
+  /**
+   * La lupa del apartado (18-09-2026): filtra la lista que se ESTÁ VIENDO con lo que se
+   * escribe. Los contadores de las píldoras no se tocan: siguen siendo los del apartado
+   * completo, porque el apartado no cambia porque uno busque dentro de él.
+   */
+  const [buscarAbierto, setBuscarAbierto] = useState(false);
+  const [consulta, setConsulta] = useState('');
+
   const currentDriverId = session?.user?.id ?? '';
 
   const getApplication = (serviceId: string) =>
@@ -93,26 +103,37 @@ export function DriverHomeScreen() {
     return 0;
   };
 
-  const getDisplayGroupName = (serviceId: string): string | undefined => {
-    const groupIds = services.filter((s) => s.id === serviceId).map((s) => s.group_id);
-    if (groupIds.length === 0) return undefined;
+  /**
+   * Nombre del grupo por el que le llegó la alerta (el que se ve en la tarjeta).
+   *
+   * Está en `useCallback` porque la búsqueda del apartado lo usa dentro de un `useMemo`:
+   * sin esto la función cambiaría de identidad en cada render y el filtro se reharía
+   * siempre (y el lint lo marca, con razón).
+   */
+  const getDisplayGroupName = useCallback(
+    (serviceId: string): string | undefined => {
+      const groupIds = services.filter((s) => s.id === serviceId).map((s) => s.group_id);
+      if (groupIds.length === 0) return undefined;
 
-    const priority: Record<'owner' | 'admin' | 'member', number> = {
-      owner: 3,
-      admin: 2,
-      member: 1,
-    };
-    let best = groups.find((g) => g.id === groupIds[0]);
+      const priority: Record<'owner' | 'admin' | 'member', number> = {
+        owner: 3,
+        admin: 2,
+        member: 1,
+      };
 
-    groupIds.forEach((gid) => {
-      const g = groups.find((gg) => gg.id === gid);
-      if (g && best && priority[g.role] > priority[best.role]) {
-        best = g;
-      }
-    });
+      let best = groups.find((g) => g.id === groupIds[0]);
 
-    return best?.name;
-  };
+      groupIds.forEach((gid) => {
+        const g = groups.find((gg) => gg.id === gid);
+        if (g && best && priority[g.role] > priority[best.role]) {
+          best = g;
+        }
+      });
+
+      return best?.name;
+    },
+    [services, groups]
+  );
 
   /**
    * El servicio ya es MÍO: el proveedor me aceptó (aunque el viaje todavía no
@@ -449,7 +470,7 @@ export function DriverHomeScreen() {
   const isDriver = role === 'DRIVER';
   const isBlocked = driverDebt > debtThreshold;
 
-  const displayServices = useMemo(() => {
+  const serviciosDelApartado = useMemo(() => {
     if (showArchived) {
       return myActiveServices
         .filter((s) => s.archived)
@@ -473,6 +494,20 @@ export function DriverHomeScreen() {
     showArchived,
     opcionesDelInicio,
   ]);
+
+  /**
+   * Lo que se pinta: el apartado ya pasado por la lupa. Busca en lo que se ve en las
+   * tarjetas (proveedor, grupo, título, origen, destino y observaciones) y sin acentos,
+   * así que vale lo mismo para Disponibles, En proceso y Archivados: la lupa del
+   * apartado filtra SIEMPRE la lista que se está viendo.
+   */
+  const displayServices = useMemo(
+    () =>
+      filtrarPorBusqueda(serviciosDelApartado, consulta, (s) =>
+        camposDeBusquedaDeServicio(s, getDisplayGroupName(s.id))
+      ),
+    [serviciosDelApartado, consulta, getDisplayGroupName]
+  );
 
   // Medidas de distancia y tiempo (función Premium): del conductor al origen y
   // del origen al destino. Sin premium (o sin clave de Google) no se pide nada.
@@ -520,10 +555,34 @@ export function DriverHomeScreen() {
             );
           })}
         </View>
-        <TouchableOpacity style={styles.filterBtn}>
-          <Text style={styles.filterIcon}>▼</Text>
-        </TouchableOpacity>
+        <View style={styles.filterActions}>
+          {/* La lupa del apartado: la misma que en Postulantes (el botón abre el campo
+              y, abierto, cierra). */}
+          <BotonDeBusqueda
+            abierto={buscarAbierto}
+            onPress={() => {
+              setBuscarAbierto((abierto) => !abierto);
+              setConsulta('');
+            }}
+            color={TEXTO_SUAVE}
+            tamano={20}
+            estilo={styles.filterBtn}
+            etiqueta="Buscar servicio"
+          />
+          <TouchableOpacity style={[styles.filterBtn, styles.filterBtnSeparado]}>
+            <Text style={styles.filterIcon}>▼</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* El campo de la lupa, debajo de las píldoras del apartado */}
+      {buscarAbierto && (
+        <BarraDeBusqueda
+          consulta={consulta}
+          onCambiarConsulta={setConsulta}
+          placeholder="Buscar por proveedor, grupo, origen o destino"
+        />
+      )}
 
       {/* Archived link */}
       <TouchableOpacity style={styles.archivedLink} onPress={() => setShowArchived((v) => !v)}>
@@ -586,11 +645,13 @@ export function DriverHomeScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            {showArchived
-              ? 'No hay servicios archivados'
-              : activeStatus === 'En proceso'
-                ? 'Todavía no tienes servicios en proceso.'
-                : 'No hay servicios disponibles'}
+            {consulta.trim()
+              ? 'Ningún servicio coincide con la búsqueda.'
+              : showArchived
+                ? 'No hay servicios archivados'
+                : activeStatus === 'En proceso'
+                  ? 'Todavía no tienes servicios en proceso.'
+                  : 'No hay servicios disponibles'}
           </Text>
         }
       />
@@ -663,10 +724,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  filterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   filterBtn: {
     padding: 8,
     backgroundColor: '#f0f2f5',
     borderRadius: 8,
+    /* La caja del ▼ y la de la lupa miden lo mismo: van en la misma fila. */
+    minWidth: 36,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterBtnSeparado: {
+    marginLeft: 8,
   },
   filterIcon: {
     fontSize: 14,

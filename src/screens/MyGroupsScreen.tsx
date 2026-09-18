@@ -1,11 +1,14 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
+import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { Fab } from '../components/Fab';
 import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
+import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
+import { TEXTO_SUAVE } from '../lib/colors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type GroupsNav = StackNavigationProp<
@@ -26,6 +29,19 @@ const ROLE_COLORS = {
 export function MyGroupsScreen() {
   const navigation = useNavigation<GroupsNav>();
   const { groups, toggleFavoriteGroup } = useMockStore();
+
+  /**
+   * La lupa de Mis grupos (18-09-2026): busca por el nombre del grupo —lo que se ve en la
+   * tarjeta— y sin acentos, así que "newlan" encuentra "Newlan" y "grupo prueba" encuentra
+   * "Grupo de Prueba Andre".
+   */
+  const [buscarAbierto, setBuscarAbierto] = useState(false);
+  const [consulta, setConsulta] = useState('');
+
+  const gruposVisibles = useMemo(
+    () => filtrarPorBusqueda(groups, consulta, camposDeBusquedaDeGrupo),
+    [groups, consulta]
+  );
 
   const getCardColor = (group: GroupItem) => {
     if (group.favorite) return ROLE_COLORS.favorite;
@@ -67,13 +83,40 @@ export function MyGroupsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Barra de la lupa: el mismo botón que en los apartados del inicio */}
+      <View style={styles.filterBar}>
+        <BotonDeBusqueda
+          abierto={buscarAbierto}
+          onPress={() => {
+            setBuscarAbierto((abierto) => !abierto);
+            setConsulta('');
+          }}
+          color={TEXTO_SUAVE}
+          tamano={20}
+          estilo={styles.filterBtn}
+          etiqueta="Buscar grupo"
+        />
+      </View>
+
+      {buscarAbierto && (
+        <BarraDeBusqueda
+          consulta={consulta}
+          onCambiarConsulta={setConsulta}
+          placeholder="Buscar grupo por nombre"
+        />
+      )}
+
       {/* Group list */}
       <FlatList
-        data={groups}
+        data={gruposVisibles}
         keyExtractor={(item) => item.id}
         renderItem={renderGroupCard}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<Text style={styles.emptyText}>No tienes grupos</Text>}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {consulta.trim() ? 'Ningún grupo coincide con la búsqueda.' : 'No tienes grupos'}
+          </Text>
+        }
       />
 
       {/* FAB */}
@@ -86,6 +129,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: LIGHT_BG,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#ddd',
+  },
+  filterBtn: {
+    padding: 8,
+    backgroundColor: '#f0f2f5',
+    borderRadius: 8,
+    minWidth: 36,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   list: {
     padding: 12,
