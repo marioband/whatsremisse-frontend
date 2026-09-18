@@ -947,7 +947,7 @@ export async function insertGroupMember(
 async function describirBloqueoDeFila(
   groupId: string,
   targetUserId: string,
-  accion: 'eliminar al integrante' | 'cambiar el rol'
+  accion: 'eliminar al integrante' | 'cambiar el rol' | 'marcar el grupo como favorito'
 ): Promise<string> {
   const partes: string[] = [];
   let objetivoEsElCreador: boolean | null = null;
@@ -1099,7 +1099,8 @@ export async function updateGroupMember(
   if (!data || data.length === 0) {
     // El UPDATE no tocó ninguna fila: o la política lo filtró (RLS) o la fila no
     // existe. Los dos casos hay que decirlos, no tragarlos.
-    throw new Error(await describirBloqueoDeFila(groupId, userId, 'cambiar el rol'));
+    const accion = updates.role ? 'cambiar el rol' : 'marcar el grupo como favorito';
+    throw new Error(await describirBloqueoDeFila(groupId, userId, accion));
   }
 }
 
