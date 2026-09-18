@@ -10,7 +10,7 @@
  * defecto Waze (regla del usuario).
  */
 
-import { guardarCache, leerCache } from './cache';
+import { guardarCache, leerCache, borrarDeCache } from './cache';
 import { ServiceAlert } from '../types';
 
 export type AppDeNavegacion = 'GOOGLE_MAPS' | 'WAZE';
@@ -144,6 +144,42 @@ export function etiquetaDelBoton(paradas: ParadaDeNavegacion[], indice: number):
   return `Ir a Destino ${posicion}`;
 }
 
+/** El hito que abre el destino: "Conductor en el punto de origen (Ubicado)". */
+export const PASO_UBICADO = 1;
+
+/** ¿El conductor ya reportó que está en el origen? (lo que abre el botón de destino). */
+export function viajeReportadoComoUbicado(servicio: {
+  driver_progress_step?: number | null;
+}): boolean {
+  return (servicio?.driver_progress_step ?? 0) >= PASO_UBICADO;
+}
+
+/**
+ * Qué parada ofrece el botón AHORA.
+ *
+ * Lo decide el REPORTE del viaje, no las pulsaciones anteriores (regla del usuario,
+ * 18-09-2026): "el botón de ir a destino está condicionado a que antes se debe haber
+ * presionado el botón ir a origen, eso no debe ser así, el botón debe estar condicionado
+ * al reporte del conductor cuando desliza ubicado".
+ *
+ *   * Sin reportar "Ubicado": el botón ofrece el ORIGEN (y sigue en el origen aunque se
+ *     pulse, porque el destino todavía no toca).
+ *   * Reportado: ofrece el primer destino sin haber tenido que pulsar "Ir a origen"; a
+ *     partir de ahí la marca de las pulsaciones manda (avanza por las paradas y, tras la
+ *     última, vuelve al origen).
+ */
+export function indiceDelBoton(
+  paradas: ParadaDeNavegacion[],
+  reportado: boolean,
+  marca: number | null
+): number {
+  if (paradas.length === 0) return 0;
+  if (!reportado) return 0;
+  if (marca !== null && marca > 0) return Math.min(marca, paradas.length - 1);
+  if (marca === 0) return 0; // dio la vuelta al ciclo: le toca el origen
+  return paradas.length > 1 ? 1 : 0;
+}
+
 /** Después de la última parada el botón vuelve al origen (el viaje recomienza). */
 export function indiceSiguiente(paradas: ParadaDeNavegacion[], indice: number): number {
   if (paradas.length === 0) return 0;
@@ -208,10 +244,84 @@ export function indiceGuardado(
   conductor: string,
   ahora = Date.now()
 ): number {
+  return marcaDeParada(paradas, serviceId, conductor, ahora) ?? 0;
+}
+
+/**
+ * La marca tal cual: `null` es "no hay marca" (nunca se pulsó), que NO es lo mismo que
+ * una marca en 0 (el conductor dio la vuelta al ciclo y le toca el origen).
+ */
+export function marcaDeParada(
+  paradas: ParadasDeNavegacion,
+  serviceId: string,
+  conductor: string,
+  ahora = Date.now()
+): number | null {
   const marca = paradas[serviceId];
-  if (!marca) return 0;
-  if (!conductor || marca.conductor !== conductor) return 0;
+  if (!marca) return null;
+  if (!conductor || marca.conductor !== conductor) return null;
   const cuando = new Date(marca.cuando).getTime();
-  if (!Number.isFinite(cuando) || ahora - cuando >= VIGENCIA_DE_LA_PARADA_MS) return 0;
-  return Number.isInteger(marca.indice) && marca.indice > 0 ? marca.indice : 0;
+  if (!Number.isFinite(cuando) || ahora - cuando >= VIGENCIA_DE_LA_PARADA_MS) return null;
+  return Number.isInteger(marca.indice) && marca.indice >= 0 ? marca.indice : null;
+}
+
+// ---------------------------------------------------------------------------------
+// Volver al chat desde el que se abrió la ruta
+// ---------------------------------------------------------------------------------
+
+/**
+ * El botón de navegación abre Waze en OTRA pestaña (medido: la app no se descarga), pero
+ * al volver el navegador del teléfono puede recargar la pestaña: el conductor veía
+ * "estado de inicio cargando el logo" y perdía el chat. El propio botón deja aquí una
+ * marca con el servicio y la pantalla de inicio se la lleva una sola vez para devolverlo
+ * a ese chat. Caduca pronto a propósito: no se secuestra la app al abrirla más tarde.
+ */
+export const CLAVE_CHAT_DE_VUELTA = 'conductor:chat-de-vuelta';
+export const VIGENCIA_DEL_CHAT_DE_VUELTA_MS = 10 * 60 * 1000;
+
+export interface MarcaDeVuelta {
+  serviceId: string;
+  cuando: string;
+}
+
+/** ¿La marca sigue valiendo? (puro, para probar con node) */
+export function marcaDeVueltaVigente(
+  marca: MarcaDeVuelta | null | undefined,
+  ahora = Date.now()
+): boolean {
+  if (!marca || !marca.serviceId) return false;
+  const cuando = new Date(marca.cuando).getTime();
+  if (!Number.isFinite(cuando)) return false;
+  const transcurrido = ahora - cuando;
+  return transcurrido >= 0 && transcurrido < VIGENCIA_DEL_CHAT_DE_VUELTA_MS;
+}
+
+/** Deja la marca de "estaba en este chat" (no puede impedir abrir la ruta si falla). */
+export async function marcarChatDeVuelta(serviceId: string): Promise<void> {
+  try {
+    await guardarCache(CLAVE_CHAT_DE_VUELTA, {
+      serviceId,
+      cuando: new Date().toISOString(),
+    } satisfies MarcaDeVuelta);
+  } catch {
+    // Sin marca: como antes.
+  }
+}
+
+/** El servicio al que hay que volver, o null. NO la consume: la consume `limpiar`. */
+export async function leerChatDeVuelta(): Promise<string | null> {
+  try {
+    const marca = await leerCache<MarcaDeVuelta>(CLAVE_CHAT_DE_VUELTA, SIN_TTL);
+    return marcaDeVueltaVigente(marca) ? (marca as MarcaDeVuelta).serviceId : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function limpiarChatDeVuelta(): Promise<void> {
+  try {
+    await borrarDeCache(CLAVE_CHAT_DE_VUELTA);
+  } catch {
+    // Nada: la marca caduca sola.
+  }
 }

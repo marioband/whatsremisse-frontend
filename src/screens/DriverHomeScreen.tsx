@@ -35,6 +35,7 @@ import {
   HuellasDePostulacion,
   leerHuellasDePostulacion,
 } from '../lib/marcaDePostulacion';
+import { leerChatDeVuelta, limpiarChatDeVuelta } from '../lib/navegacion';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -68,7 +69,6 @@ export function DriverHomeScreen() {
     archiveService,
     unarchiveService,
     applyToService,
-    cancelApplication,
     driverDebt,
     debtThreshold,
     emitChatNotification,
@@ -313,6 +313,30 @@ export function DriverHomeScreen() {
     [services, applications, opcionesDelInicio]
   );
 
+  /**
+   * Volver al chat del que el conductor salió a abrir la ruta.
+   *
+   * El botón de navegación abre Waze en otra pestaña (la app no se descarga), pero al
+   * volver el navegador del TELÉFONO puede recargar la pestaña: el conductor veía
+   * "estado de inicio cargando el logo" y perdía el chat. El propio botón deja una marca
+   * (`marcarChatDeVuelta`); aquí se consume UNA vez y, si el servicio sigue en su lista,
+   * se le devuelve a ese chat. Sin servicios cargados no se consume: la marca espera.
+   */
+  useEffect(() => {
+    if (myActiveServices.length === 0) return;
+    let vigente = true;
+    leerChatDeVuelta().then((serviceId) => {
+      if (!vigente || !serviceId) return;
+      limpiarChatDeVuelta();
+      if (myActiveServices.some((s) => s.id === serviceId)) {
+        navigation.navigate('Chat', { serviceId });
+      }
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [myActiveServices, navigation]);
+
   // "Disponibles": alertas nuevas, postuladas, el rechazo recién llegado (3 segundos) y
   // la tarjeta ACEPTADA que todavía no arrancó (se queda aquí hasta el toque "toca para
   // iniciar"). Un rechazo en pie ya no se ve.
@@ -419,10 +443,8 @@ export function DriverHomeScreen() {
     unarchiveService(serviceId);
   };
 
-  const handleCancelApplication = (serviceId: string) => {
-    cancelApplication(serviceId, currentDriverId);
-    Alert.alert('Postulación anulada', 'Ya no estás postulado a este servicio.');
-  };
+  // El deslizamiento del conductor archiva, no anula: la acción de anular la
+  // postulación se quitó el 18-09-2026 (el usuario: "la acción es archivar, no anular").
 
   const isDriver = role === 'DRIVER';
   const isBlocked = driverDebt > debtThreshold;
@@ -551,7 +573,6 @@ export function DriverHomeScreen() {
               onPress={() => handleCardPress(item)}
               onArchive={() => handleArchive(item.id)}
               onUnarchive={() => handleUnarchive(item.id)}
-              onCancelApplication={application ? () => handleCancelApplication(item.id) : undefined}
               showArchived={showArchived}
               disableSwipe={inEnProceso || accepted}
               showReservaIndicator={esReserva}
