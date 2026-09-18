@@ -269,6 +269,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: LIGHT_BG,
+    /**
+     * Sin el hueco SUPERIOR (18-09-2026): va DEBAJO de la cabecera, que ya reserva el
+     * notch; con los dos, quedaba una franja blanca entre la barra negra y los botones.
+     */
+    paddingTop: 0,
   },
   filterBar: {
     flexDirection: 'row',

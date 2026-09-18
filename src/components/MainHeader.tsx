@@ -84,6 +84,12 @@ export function MainHeader({ activeTab, onTabChange }: MainHeaderProps) {
 const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: DARK_BG,
+    /**
+     * Sin el hueco inferior (18-09-2026): la franja negra es de ARRIBA, así que no tiene por
+     * qué reservar el espacio del indicador de inicio. En el iPhone medía 185 px de alto
+     * (59 del notch + 49 + 43 de la barra + 34 que sobraban abajo).
+     */
+    paddingBottom: 0,
   },
   header: {
     flexDirection: 'row',

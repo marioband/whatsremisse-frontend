@@ -689,6 +689,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: LIGHT_BG,
+    /**
+     * Sin el hueco SUPERIOR (18-09-2026): esta pantalla va DEBAJO de la cabecera
+     * (`MainHeader`), que ya reserva el notch. Antes lo reservaban las dos y quedaba una
+     * franja blanca de 59 px entre la barra negra y los botones del apartado — es el
+     * "espacio en blanco" que reportó el usuario desde su iPhone.
+     */
+    paddingTop: 0,
   },
   filterBar: {
     flexDirection: 'row',

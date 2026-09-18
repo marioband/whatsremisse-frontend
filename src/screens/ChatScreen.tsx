@@ -24,6 +24,7 @@ import { useMockStore } from '../context/MockStoreContext';
 import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
+import { useTecladoAbierto } from '../hooks/useTecladoAbierto';
 import {
   elegirFoto,
   fueCancelado,
@@ -1111,6 +1112,9 @@ export function ChatScreen() {
     effectiveDriverId,
   ]);
 
+  // Con el teclado abierto, la barra de escribir no lleva hueco inferior: va pegada a él.
+  const tecladoAbierto = useTecladoAbierto();
+
   if (!service) {
     return (
       <SafeAreaView style={styles.container}>
@@ -1137,7 +1141,7 @@ export function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, styles.sinInsetInferior]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1246,25 +1250,29 @@ export function ChatScreen() {
           </View>
         )}
 
-        {chatCerrado ? (
-          <View style={styles.cerrado}>
-            <Text style={styles.cerradoTexto}>
-              Conversación cerrada: tu postulación fue rechazada. Si el servicio sigue disponible en
-              tus grupos puedes volver a postularte.
-            </Text>
-          </View>
-        ) : (
-          <ChatInputBar
-            value={input}
-            onChangeText={setInput}
-            onSend={mensajeEnEdicion ? handleGuardarEdicion : () => handleSend(input)}
-            onSendVoice={handleSendVoice}
-            onAttachment={handleAttachment}
-            editando={!!mensajeEnEdicion}
-            onCancelarEdicion={handleCancelarEdicion}
-            placeholder={mensajeEnEdicion ? PLACEHOLDER_EDICION : undefined}
-          />
-        )}
+        {/* El hueco del indicador de inicio lo lleva la barra de escribir, y solo cuando el
+            teclado NO está abierto: con el teclado asomaba como una franja en blanco. */}
+        <SafeAreaView style={[styles.zonaDelInput, tecladoAbierto && styles.sinInsetInferior]}>
+          {chatCerrado ? (
+            <View style={styles.cerrado}>
+              <Text style={styles.cerradoTexto}>
+                Conversación cerrada: tu postulación fue rechazada. Si el servicio sigue disponible
+                en tus grupos puedes volver a postularte.
+              </Text>
+            </View>
+          ) : (
+            <ChatInputBar
+              value={input}
+              onChangeText={setInput}
+              onSend={mensajeEnEdicion ? handleGuardarEdicion : () => handleSend(input)}
+              onSendVoice={handleSendVoice}
+              onAttachment={handleAttachment}
+              editando={!!mensajeEnEdicion}
+              onCancelarEdicion={handleCancelarEdicion}
+              placeholder={mensajeEnEdicion ? PLACEHOLDER_EDICION : undefined}
+            />
+          )}
+        </SafeAreaView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1273,7 +1281,17 @@ export function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    /** El hueco de abajo lo lleva la barra de escribir (ver `zonaDelInput`). */
+    paddingBottom: 0,
     backgroundColor: '#FFFFFF',
+  },
+  /** Barra de escribir + bandeja: van al fondo, pegadas al borde o al teclado. */
+  zonaDelInput: {
+    paddingTop: 0,
+  },
+  /** Deja el inset de la SafeAreaView a cero (arriba o abajo según dónde se aplique). */
+  sinInsetInferior: {
+    paddingBottom: 0,
   },
   flex: {
     flex: 1,
