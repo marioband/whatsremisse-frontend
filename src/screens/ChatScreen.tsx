@@ -21,6 +21,7 @@ import { SwipeStatusButton } from '../components/SwipeStatusButton';
 import { ChatHeader, MessageList, PagoDelServicio, ProviderStatusBar } from '../components/chat';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
 import {
@@ -555,6 +556,17 @@ export function ChatScreen() {
     const id = setInterval(() => cargarMensajes(true), SONDEO_MS);
     return () => clearInterval(id);
   }, [chatCompartido, cargarMensajes]);
+
+  // Al VOLVER del fondo (abrir Waze, cambiar de app, desbloquear el teléfono) se relee la
+  // conversación y la fila del servicio en el acto: Safari del iPhone congela la pestaña y
+  // la conexión de avisos queda muerta sin que nadie se entere, así que sin esto los
+  // mensajes del otro lado tardaban hasta SONDEO_MS en verse.
+  useAlVolverALaApp(
+    useCallback(() => {
+      cargarMensajes(true);
+      if (serviceId) refrescarServicio(serviceId);
+    }, [cargarMensajes, refrescarServicio, serviceId])
+  );
 
   useEffect(() => {
     if (isDriver) {

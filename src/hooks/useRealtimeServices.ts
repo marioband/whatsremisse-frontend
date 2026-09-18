@@ -23,7 +23,11 @@ let canalServicios = 0;
  * se descartaba y por eso una tarjeta anulada seguía en el otro dispositivo
  * hasta recargar.
  */
-export function useRealtimeServices(onChange: (cambio: CambioServicio) => void) {
+export function useRealtimeServices(
+  onChange: (cambio: CambioServicio) => void,
+  /** Sube cuando la app vuelve del fondo: fuerza a rehacer la suscripción. */
+  generacion = 0
+) {
   // El callback vive en un ref para que el canal se suscriba UNA vez por montaje
   // (antes el efecto dependía de la función, se resuscribía en cada render y
   // podía quedarse sin canal).
@@ -62,5 +66,5 @@ export function useRealtimeServices(onChange: (cambio: CambioServicio) => void) 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [generacion]);
 }

@@ -12,7 +12,11 @@ export type CambioAplicacion =
 let canalAplicaciones = 0;
 
 /** Postulaciones en vivo (para que el contador de postulantes no se quede viejo). */
-export function useRealtimeApplications(onChange: (cambio: CambioAplicacion) => void) {
+export function useRealtimeApplications(
+  onChange: (cambio: CambioAplicacion) => void,
+  /** Sube cuando la app vuelve del fondo: fuerza a rehacer la suscripción. */
+  generacion = 0
+) {
   const callbackRef = useRef(onChange);
   useEffect(() => {
     callbackRef.current = onChange;
@@ -52,5 +56,5 @@ export function useRealtimeApplications(onChange: (cambio: CambioAplicacion) => 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [generacion]);
 }

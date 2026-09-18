@@ -16,7 +16,6 @@ import {
   desplazamientoMaximo,
   fotogramaDeBarra,
   llegoAlUmbral,
-  puntoDeAgarre,
   VUELO_MS,
 } from '../lib/barraDeProceso';
 import { VERDE_ACCION, VERDE_DESLIZABLE } from '../lib/colors';
@@ -119,8 +118,6 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
   /** `translateX` (px) del relleno claro: su ancho es fijo (de margen a margen). */
   const relleno = useRef(new Animated.Value(0)).current;
   const trackRef = useRef<View>(null);
-  /** Borde izquierdo de la barra en la pantalla, para convertir el toque. */
-  const pageXRef = useRef(0);
   const anchoRef = useRef(0);
   /** Desplazamiento actual del pulgar (para saber dónde cayó el dedo). */
   const desplazamientoRef = useRef(0);
@@ -128,20 +125,12 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
   const agarreRef = useRef(THUMB_SIZE / 2);
   /**
    * Arranque del gesto, para seguir al dedo por DESPLAZAMIENTO (no por posición
-   * absoluta). Es lo que hace que el pulgar siga al dedo 1 a 1 aunque no se haya podido
-   * medir el borde de la barra: sin esto, `locationX` viene referido al elemento que hay
-   * debajo del dedo (el pulgar, el relleno o el rótulo) y cada tramo arrastraba un salto
-   * de 5 px: el "no es fluido, muestra retrasos" que reportó el usuario.
+   * absoluta). Es lo que hace que el pulgar siga al dedo 1 a 1: `moveX` (el dedo) y `x0`
+   * (dónde empezó el gesto) vienen del MISMO evento, así que no hay que convertir nada
+   * entre la ventana y la página — que es justo lo que se rompía en el iPhone, donde
+   * Safari mide la barra respecto a la ventana y el dedo respecto a la página.
    */
   const gestoRef = useRef({ x0: 0, absolutaInicial: 0 });
-  /**
-   * Con qué referencias se está midiendo ESTE gesto. Se decide una sola vez, al
-   * empezar: mezclar en el mismo gesto la posición absoluta (que necesita el borde de la
-   * barra ya medido) con la relativa al toque metía un salto de 5 px en cuanto llegaba
-   * la medición (el pulgar se adelantaba). Con la decisión tomada de una vez, el pulgar
-   * sigue al dedo 1 a 1 de principio a fin.
-   */
-  const usarBordeRef = useRef(false);
   /** Último valor de "listo" sin pasar por React: el arrastre no re-renderiza. */
   const listoRef = useRef(false);
 
@@ -178,26 +167,31 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
     estadoRef.current = { volando };
   }, [volando]);
 
+  /**
+   * Mide la barra para saber su ANCHO (el recorrido del pulgar y el largo del relleno).
+   *
+   * Ya NO se usa su borde izquierdo. En el iPhone, Safari mide la barra y el dedo en
+   * sistemas distintos (la barra respecto a la ventana, el dedo respecto a la página, y la
+   * barra de direcciones se recoge al arrastrar), así que mezclarlos dejaba el pulgar
+   * trabado a la mitad y sin llegar nunca al umbral (reporte del usuario, 18-09-2026). El
+   * dedo se sigue SIEMPRE por desplazamiento —el camino que la propia medición del banco
+   * dio como 1 a 1—, que no depende de ninguna coordenada de ventana.
+   */
   const medir = () => {
-    trackRef.current?.measureInWindow((x, _y, width) => {
-      pageXRef.current = x;
+    trackRef.current?.measureInWindow((_x, _y, width) => {
       anchoRef.current = width;
       setTrackWidth((actual) => (Math.abs(actual - width) > 1 ? width : actual));
     });
   };
 
   /**
-   * Posición del dedo dentro de la barra (0 = borde izquierdo).
-   *
-   * Con el borde de la barra medido se usa la posición absoluta. Sin medición (el
-   * `measureInWindow` de react-native-web puede no haber respondido todavía) se sigue al
-   * dedo por desplazamiento desde el punto donde empezó el gesto, que da el mismo
-   * seguimiento 1 a 1 sin depender de coordenadas de ventana.
+   * Posición del dedo dentro de la barra (0 = borde izquierdo), por DESPLAZAMIENTO desde
+   * el punto donde empezó el gesto: `moveX` y `x0` vienen del mismo evento, así que el
+   * pulgar sigue al dedo 1 a 1 sin depender de dónde esté la barra en la pantalla.
    */
-  const posicionEnBarra = (gesture: PanResponderGestureState, locationX: number) => {
+  const posicionEnBarra = (gesture: PanResponderGestureState) => {
     const ancho = anchoDeBarra();
     if (!ancho) return 0;
-    if (usarBordeRef.current) return clamp(gesture.moveX - pageXRef.current, 0, ancho);
     const delta = gesture.moveX - gestoRef.current.x0;
     return clamp(gestoRef.current.absolutaInicial + delta, 0, ancho);
   };
@@ -228,42 +222,31 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
       // El gesto no se cede a la lista ni al scroll mientras se arrastra.
       onPanResponderTerminationRequest: () => false,
       onShouldBlockNativeResponder: () => true,
-      onPanResponderGrant: (evt, gesture: PanResponderGestureState) => {
-        // El borde de la barra se mide otra vez en cada gesto: si la pantalla cambió de
-        // tamaño, o la medición inicial no llegó, aquí se recupera.
+      onPanResponderGrant: (_evt, gesture: PanResponderGestureState) => {
+        // El ancho se mide otra vez en cada gesto: si la pantalla cambió de tamaño, o la
+        // medición inicial no llegó, aquí se recupera.
         medir();
-        // Se decide UNA sola vez con qué referencias se mide este gesto (ver
-        // `usarBordeRef`): mezclarlas metía un salto de 5 px a mitad de arrastre.
-        usarBordeRef.current = pageXRef.current > 0;
-        if (usarBordeRef.current) {
-          // Con el borde medido, el dedo y el pulgar comparten el sistema de la barra:
-          // se conserva el punto de agarre y el dedo que cae fuera del pulgar lo trae.
-          const dentro = clamp(gesture.x0 - pageXRef.current, 0, anchoDeBarra());
-          agarreRef.current = puntoDeAgarre(dentro, desplazamientoRef.current, THUMB_SIZE, MARGEN);
-        } else {
-          // Sin el borde medido no se puede saber en qué punto de la barra cayó el dedo
-          // (`locationX` de react-native-web viene referido al elemento que hay debajo):
-          // se sigue al dedo por DESPLAZAMIENTO desde donde estaba el pulgar, que da el
-          // mismo seguimiento 1 a 1 desde el primer píxel, sin saltos ni zona muerta.
-          agarreRef.current = THUMB_SIZE / 2;
-          gestoRef.current = {
-            x0: gesture.x0,
-            // El "dedo equivalente" arranca en el centro del pulgar: dentro y el
-            // desplazamiento quedan en el mismo sistema y el pulgar no salta al pulsar.
-            absolutaInicial: desplazamientoRef.current + THUMB_SIZE / 2,
-          };
-        }
+        // El dedo se sigue por DESPLAZAMIENTO desde donde está el pulgar: es el único
+        // camino que no mezcla coordenadas de la ventana con las del dedo (el que se
+        // trababa en el iPhone).
+        agarreRef.current = THUMB_SIZE / 2;
+        gestoRef.current = {
+          x0: gesture.x0,
+          // El "dedo equivalente" arranca en el centro del pulgar: dentro y el
+          // desplazamiento quedan en el mismo sistema y el pulgar no salta al pulsar.
+          absolutaInicial: desplazamientoRef.current + THUMB_SIZE / 2,
+        };
         listoRef.current = false;
         setDragging(true);
         setListo(false);
-        pintarArrastre(posicionEnBarra(gesture, evt.nativeEvent.locationX));
+        pintarArrastre(posicionEnBarra(gesture));
       },
-      onPanResponderMove: (evt, gesture: PanResponderGestureState) => {
-        pintarArrastre(posicionEnBarra(gesture, evt.nativeEvent.locationX));
+      onPanResponderMove: (_evt, gesture: PanResponderGestureState) => {
+        pintarArrastre(posicionEnBarra(gesture));
       },
-      onPanResponderRelease: (evt, gesture: PanResponderGestureState) => {
+      onPanResponderRelease: (_evt, gesture: PanResponderGestureState) => {
         const ancho = anchoDeBarra() || 1;
-        const dentro = posicionEnBarra(gesture, evt.nativeEvent.locationX);
+        const dentro = posicionEnBarra(gesture);
 
         setDragging(false);
         setListo(false);

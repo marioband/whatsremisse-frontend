@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, Linking, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, Linking, Platform, View } from 'react-native';
 
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
@@ -72,6 +72,30 @@ export function BotonDeNavegacion({
     await marcarChatDeVuelta(service.id);
 
     try {
+      // En el navegador del TELÉFONO la ruta se abre en la MISMA pestaña.
+      //
+      // `Linking.openURL` en web es `window.open(url, target, 'noopener')` (así lo
+      // implementa react-native-web): una pestaña NUEVA. En el iPhone eso deja una pestaña
+      // encima, con su X para cerrarla, y al volver Safari ya había descargado la de la
+      // app ("aparece el app pero reiniciada", reporte del usuario del 18-09-2026). Con
+      // `location.assign`, iOS entrega el enlace al Waze instalado y la página de la app se
+      // queda donde estaba.
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const antes = window.location.href;
+        window.location.assign(url);
+        // Si Waze no está instalado, el navegador se queda en la web de Waze: se vuelve a
+        // la app para no dejar al conductor fuera de ella.
+        setTimeout(() => {
+          if (typeof document === 'undefined' || document.hidden) return;
+          if (
+            window.location.href !== antes &&
+            /waze\.com|google\.com\/maps/.test(window.location.href)
+          ) {
+            window.history.back();
+          }
+        }, 2500);
+        return;
+      }
       await Linking.openURL(url);
     } catch {
       // Sin app que atienda el enlace (o navegador que lo bloquea): se dice, no se

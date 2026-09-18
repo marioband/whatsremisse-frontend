@@ -6,9 +6,11 @@ import React, {
   useReducer,
   ReactNode,
   useRef,
+  useState,
 } from 'react';
 
 import { useAuth } from './AuthContext';
+import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
 import { useRealtimeApplications } from '../hooks/useRealtimeApplications';
 import { useRealtimeGroups } from '../hooks/useRealtimeGroups';
 import { useRealtimeServices } from '../hooks/useRealtimeServices';
@@ -688,8 +690,8 @@ function userProfileToPatch(profile: UserProfile): ProfilePatch {
 }
 
 export function MockStoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(mockReducer, initialState);
   const { session, profile } = useAuth();
+  const [state, dispatch] = useReducer(mockReducer, initialState);
   const loadedRef = useRef(false);
   /**
    * Candado de los envíos a la base: la misma publicación o el mismo compartir SOLO
@@ -793,6 +795,20 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
   // Sincronización en tiempo real: las tarjetas aparecen y desaparecen en los
   // dos dispositivos sin recargar.
+  //
+  // `generacionDeVuelta` sube cada vez que la app VUELVE del fondo (Safari del iPhone
+  // congela la pestaña en cuanto sales: abrir Waze, cambiar de app, bloquear la pantalla,
+  // y al volver la conexión está muerta sin avisar). Al subir, los tres canales se
+  // vuelven a levantar (sus deps la incluyen) y además se releen los datos en el acto, sin
+  // esperar al respaldo de 15 s: era el "tarda unos segundos en aparecer el postulante".
+  const [generacionDeVuelta, setGeneracionDeVuelta] = useState(0);
+  useAlVolverALaApp(
+    useCallback(() => {
+      setGeneracionDeVuelta((n) => n + 1);
+      load();
+    }, [load])
+  );
+
   useRealtimeServices(async (cambio) => {
     // La tarjeta anulada llega como DELETE y sin `new`: si no se mira `old`, el
     // evento se descarta y la tarjeta se queda en el otro dispositivo.
@@ -840,15 +856,19 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     if (cambio.evento === 'INSERT' && fila.provider_id !== myId) {
       avisarDeServicioNuevo(fila.title, { serviceId: fila.id });
     }
-  });
+  }, generacionDeVuelta);
 
-  useRealtimeGroups(session?.user?.id, (group) => {
-    const exists = state.groups.some((g) => g.id === group.id);
-    const next = exists
-      ? state.groups.map((g) => (g.id === group.id ? group : g))
-      : [...state.groups, group];
-    dispatch({ type: 'SET_GROUPS', payload: next });
-  });
+  useRealtimeGroups(
+    session?.user?.id,
+    (group) => {
+      const exists = state.groups.some((g) => g.id === group.id);
+      const next = exists
+        ? state.groups.map((g) => (g.id === group.id ? group : g))
+        : [...state.groups, group];
+      dispatch({ type: 'SET_GROUPS', payload: next });
+    },
+    generacionDeVuelta
+  );
 
   // Avisos con la app CERRADA: el dispositivo registra su token de Expo Push en cuanto hay
   // sesión (el push real lo manda la base, migración 0025). En web no hay token.
@@ -904,7 +924,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         tituloDelServicio: servicio?.title,
       });
     }
-  });
+  }, generacionDeVuelta);
 
   /**
    * Devuelve si la base ACEPTÓ el cambio (mismo patrón que `escribirServicio`). Antes

@@ -12,7 +12,9 @@ let canalGrupos = 0;
  */
 export function useRealtimeGroups(
   userId: string | undefined,
-  onChange: (group: GroupItem) => void
+  onChange: (group: GroupItem) => void,
+  /** Sube cuando la app vuelve del fondo: fuerza a rehacer la suscripción. */
+  generacion = 0
 ) {
   const callbackRef = useRef(onChange);
   useEffect(() => {
@@ -55,5 +57,5 @@ export function useRealtimeGroups(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, generacion]);
 }
