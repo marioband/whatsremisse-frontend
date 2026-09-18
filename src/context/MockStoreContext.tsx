@@ -47,7 +47,7 @@ import {
   ProfilePatch,
 } from '../lib/database';
 import { Candado, claveDeEnvio, crearCandado } from '../lib/envioUnico';
-import { describeError } from '../lib/errors';
+import { describeError, esFalloDeTransporte, textoDeErrorParaElUsuario } from '../lib/errors';
 import { conGrupos } from '../lib/gruposDeServicio';
 import {
   guardarHuellasDePostulacion,
@@ -58,6 +58,7 @@ import {
   fusionarLista,
   fusionarServicio,
   hitoAdelantado,
+  pasoConfirmado,
   pasoDelSiguienteHito,
 } from '../lib/serviciosSincronizados';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -931,7 +932,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const detalleDe = (err: unknown, titulo: string, archivo = '0012_reporte_del_conductor.sql') =>
     esFuncionAusente(err)
       ? `${avisoDeMigracion(archivo)}\n\nDetalle: ${describeError(err)}`
-      : `${titulo}\n\n${describeError(err)}`;
+      : `${titulo}\n\n${textoDeErrorParaElUsuario(err)}`;
 
   const escribirServicio = async (
     serviceId: string,
@@ -970,6 +971,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (err) {
       console.error('[MockStore] reportarAvance error:', err);
+      /**
+       * Fallo de TRANSPORTE: la base pudo aplicar el avance igualmente y perderse la
+       * respuesta. Antes esto deshacía un hito que SÍ estaba guardado (y volvía a
+       * aparecer al recargar): se lee la fila y, si confirma el paso, se da por bueno.
+       */
+      if (esFalloDeTransporte(err)) {
+        const fila = await fetchServiceAlertById(serviceId).catch(() => null);
+        if (fila && pasoConfirmado(fila, paso)) {
+          dispatch({ type: 'UPDATE_SERVICE', payload: fila });
+          return true;
+        }
+      }
       Alert.alert('No se pudo reportar el avance', detalleDe(err, 'El backend rechazó el reporte'));
       return false;
     }

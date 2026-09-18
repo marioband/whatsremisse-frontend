@@ -47,7 +47,7 @@ import {
   ServiceMessage,
   updateServiceMessage,
 } from '../lib/database';
-import { describeError } from '../lib/errors';
+import { describeError, esFalloDeTransporte, textoDeErrorParaElUsuario } from '../lib/errors';
 import { IniciosDelViaje, leerIniciosDelViaje, yaInicio } from '../lib/inicioDelViaje';
 import { estadoEfectivoDeMiPostulacion, filaDeMiPostulacion } from '../lib/listaDelConductor';
 import {
@@ -65,6 +65,7 @@ import {
   CONFIRMACION_ELIMINAR,
   dentroDeLaVentanaDeEdicion,
   idSinGuardar,
+  mensajeYaGuardado,
   PLACEHOLDER_EDICION,
 } from '../lib/mensajes';
 import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
@@ -559,14 +560,36 @@ export function ChatScreen() {
     ]);
   }, [chatCerrado, navigation]);
 
-  /** Guarda en la base y deja el mensaje local si la tabla aún no existe. */
+  /**
+   * ¿El mensaje que se quedó sin respuesta está guardado? Se lee la conversación y se
+   * busca el mismo texto/tipo/firma entre las últimas filas (no hay id en común: la app
+   * se lo inventa antes de guardar). Si la lectura también falla, se devuelve null.
+   */
+  const buscarElMismoMensaje = async (local: ServiceMessage): Promise<ServiceMessage | null> => {
+    try {
+      const filas = await fetchServiceMessages(serviceId, effectiveDriverId);
+      return mensajeYaGuardado(filas, local);
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Guarda en la base y deja el mensaje local si la tabla aún no existe.
+   *
+   * Cuando la escritura se queda SIN RESPUESTA (fallo de transporte) el mensaje pudo
+   * llegar igualmente a la base —medido el 18-09-2026: el aviso "No se pudo enviar" salió
+   * con el "Sistema: Viaje finalizado." ya guardado—, así que antes de darlo por perdido
+   * se comprueba y, solo si de verdad no está, se reintenta UNA vez. El POST de un mensaje
+   * no se reintenta solo (no es idempotente): la comprobación es lo que evita duplicarlo.
+   */
   const persistir = async (
     local: ServiceMessage,
     metadata: Record<string, unknown>,
     avisoDelSistema = false
   ) => {
-    try {
-      const guardado = await insertServiceMessage({
+    const enviar = () =>
+      insertServiceMessage({
         serviceId,
         driverId: effectiveDriverId,
         senderId: local.sender_id,
@@ -574,17 +597,38 @@ export function ChatScreen() {
         type: local.type,
         metadata,
       });
+    const adoptar = (guardado: ServiceMessage) => {
       setMensajes((prev) => prev.map((m) => (m.id === local.id ? guardado : m)));
       setChatCompartido(true);
+    };
+
+    try {
+      adoptar(await enviar());
     } catch (err) {
       if (esTablaAusente(err)) {
         setChatCompartido(false);
-      } else {
-        Alert.alert(
-          avisoDelSistema ? 'No se pudo dejar el aviso del sistema' : 'No se pudo enviar',
-          describeError(err)
-        );
+        return;
       }
+      let fallo: unknown = err;
+      if (esFalloDeTransporte(err)) {
+        const guardado = await buscarElMismoMensaje(local);
+        if (guardado) {
+          adoptar(guardado);
+          return;
+        }
+        try {
+          adoptar(await enviar());
+          return;
+        } catch (err2) {
+          fallo = err2;
+        }
+      }
+      // El detalle técnico va a la consola: al usuario no se le enseña una pila de llamadas.
+      console.error('[Chat] no se pudo guardar el mensaje:', describeError(fallo), fallo);
+      Alert.alert(
+        avisoDelSistema ? 'No se pudo dejar el aviso del sistema' : 'No se pudo enviar',
+        textoDeErrorParaElUsuario(fallo)
+      );
     }
   };
 

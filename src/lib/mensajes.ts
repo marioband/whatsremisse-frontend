@@ -60,6 +60,36 @@ export const AVISO_MIGRACION_0019 =
 export const AVISO_SIN_CAMBIOS = 'El mensaje quedó igual: no se declaró ninguna edición.';
 
 /**
+ * ¿El mensaje que acabo de intentar guardar ya está en la conversación?
+ *
+ * Se usa cuando la escritura se quedó SIN RESPUESTA (fallo de transporte): la fila pudo
+ * llegar igualmente a la base y no hay identificador en común, porque la app se inventa
+ * el id antes de guardar (`msg-…`, `sys-…`). Se miran solo las últimas filas y se compara
+ * el texto, el tipo y quién lo firma — NUNCA las horas, porque el reloj del dispositivo y
+ * el del servidor no tienen por qué coincidir, y una comparación de horas fallida haría
+ * reintentar un mensaje que ya está guardado (duplicado).
+ *
+ * Devuelve la fila guardada (para quedarse con su id y su hora reales) o null.
+ */
+export function mensajeYaGuardado<
+  T extends { content: string; type?: string; sender_id?: string | null },
+>(
+  filas: T[],
+  local: { content: string; type?: string; sender_id?: string | null },
+  ultimas = 5
+): T | null {
+  const recientes = filas.slice(-Math.max(1, ultimas));
+  for (let i = recientes.length - 1; i >= 0; i -= 1) {
+    const fila = recientes[i];
+    if (fila.content !== local.content) continue;
+    if ((fila.type || 'TEXT') !== (local.type || 'TEXT')) continue;
+    if ((fila.sender_id || null) !== (local.sender_id || null)) continue;
+    return fila;
+  }
+  return null;
+}
+
+/**
  * Qué se puede hacer con un mensaje propio AHORA. La interfaz no ofrece una
  * acción imposible: fuera de la ventana de 15 minutos solo queda eliminar, y el
  * menú lo dice.

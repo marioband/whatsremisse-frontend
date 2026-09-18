@@ -134,3 +134,16 @@ export function hitoAdelantado(
   if (paso <= (servicio.driver_progress_step ?? 0)) return null;
   return { ...servicio, driver_progress_step: paso };
 }
+
+/**
+ * ¿La fila confirma el hito que se intentó reportar? Se comprueba al leer de nuevo el
+ * servicio cuando la escritura se quedó sin respuesta (fallo de transporte): en ese caso
+ * la base pudo aplicar el avance igualmente, y sin esta comprobación la pantalla deshacía
+ * un hito que SÍ estaba guardado. `>=` porque la base solo avanza.
+ */
+export function pasoConfirmado(
+  servicio: { driver_progress_step?: number | null } | null | undefined,
+  paso: number
+): boolean {
+  return (servicio?.driver_progress_step ?? 0) >= paso;
+}
