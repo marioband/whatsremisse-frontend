@@ -72,7 +72,7 @@ export function ChatHeader({
             <Icono fuente={ICONO_BUSCAR} tamano={20} estilo={styles.iconoHeader} />
           )}
         </TouchableOpacity>
-        <TouchableOpacity onPress={onSettings} accessibilityLabel="Ajustes">
+        <TouchableOpacity onPress={onSettings} accessibilityLabel="Cuenta">
           <Icono fuente={ICONO_AJUSTES} tamano={20} estilo={styles.iconoHeader} />
         </TouchableOpacity>
       </View>

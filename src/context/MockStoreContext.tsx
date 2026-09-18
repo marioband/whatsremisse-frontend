@@ -1019,19 +1019,31 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const archivarSegunRol = async (serviceId: string, archivado: boolean) => {
-    if (!isSupabaseConfigured) return;
+  /**
+   * Devuelve si la base ACEPTÓ el cambio. Antes no devolvía nada y quien llama
+   * despachaba el archivado igual: la tarjeta desaparecía de la pantalla a la vez que
+   * salía el aviso de que no se pudo archivar, y todo volvía al recargar. Con `false`
+   * el estado local no se toca.
+   */
+  const archivarSegunRol = async (serviceId: string, archivado: boolean): Promise<boolean> => {
+    if (!isSupabaseConfigured) return false;
     try {
       if (esServicioPropio(serviceId)) {
-        await updateServiceAlert(serviceId, { archived: archivado });
+        const guardado = await updateServiceAlert(serviceId, { archived: archivado });
+        if (!guardado) {
+          Alert.alert('No se pudo archivar', 'La base no cambió la tarjeta.');
+          return false;
+        }
       } else {
         // El conductor archiva solo para él (service_archives): la bandera del
         // servicio es una sola y ocultarla afectaría al proveedor.
         await archivarServicio(serviceId, archivado);
       }
+      return true;
     } catch (err) {
       console.error('[MockStore] archivarSegunRol error:', err);
-      Alert.alert('No se pudo archivar', detalleDe(err, 'El backend rechazó el archivado'));
+      Alert.alert('No se pudo archivar', textoDeErrorParaElUsuario(err));
+      return false;
     }
   };
 
@@ -1144,7 +1156,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         await deleteServiceAlert(serviceId);
       } catch (err) {
         console.error('[MockStore] deleteServiceAlert error:', err);
-        Alert.alert('No se pudo anular la tarjeta', describeError(err));
+        Alert.alert('No se pudo anular la tarjeta', textoDeErrorParaElUsuario(err));
         return false;
       }
       dispatch({ type: 'REMOVE_SERVICE', payload: { serviceId } });
@@ -1190,7 +1202,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
           // Antes el error se tragaba y la tarjeta quedaba pintada como postulada
           // sin fila en la base (el proveedor no veía al postulante).
           console.error('[MockStore] postularAServicio error:', err);
-          Alert.alert('No se pudo postular', describeError(err));
+          Alert.alert('No se pudo postular', textoDeErrorParaElUsuario(err));
           return;
         }
       }
@@ -1206,7 +1218,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
           // el conductor no aparecía aceptado en ningún sitio. Como con el rechazo, se
           // avisa y se dice qué falló.
           console.error('[MockStore] approveApplicationInDb error:', err);
-          Alert.alert('No se pudo aceptar al postulante', describeError(err));
+          Alert.alert('No se pudo aceptar al postulante', textoDeErrorParaElUsuario(err));
           return;
         }
       }
@@ -1228,7 +1240,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
           await rejectApplicationFromDb(serviceId, driverId);
         } catch (err) {
           console.error('[MockStore] rejectApplicationFromDb error:', err);
-          Alert.alert('No se pudo rechazar al postulante', describeError(err));
+          Alert.alert('No se pudo rechazar al postulante', textoDeErrorParaElUsuario(err));
           return;
         }
       }
@@ -1282,12 +1294,13 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     },
     archiveService: async (serviceId) => {
-      await archivarSegunRol(serviceId, true);
-      dispatch({ type: 'ARCHIVE_SERVICE', payload: { serviceId } });
+      // Solo si la base lo archivó de verdad.
+      if (await archivarSegunRol(serviceId, true))
+        dispatch({ type: 'ARCHIVE_SERVICE', payload: { serviceId } });
     },
     unarchiveService: async (serviceId) => {
-      await archivarSegunRol(serviceId, false);
-      dispatch({ type: 'UNARCHIVE_SERVICE', payload: { serviceId } });
+      if (await archivarSegunRol(serviceId, false))
+        dispatch({ type: 'UNARCHIVE_SERVICE', payload: { serviceId } });
     },
     addMessage: (serviceId, message) =>
       dispatch({ type: 'ADD_MESSAGE', payload: { serviceId, message } }),
@@ -1427,7 +1440,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_MEMBER_ROLE', payload: { groupId, memberId, role } });
       } catch (err) {
         console.error('[MockStore] updateMemberRole error:', err);
-        Alert.alert('No se pudo cambiar el rol', describeError(err));
+        Alert.alert('No se pudo cambiar el rol', textoDeErrorParaElUsuario(err));
       }
     },
     removeMember: async (groupId, memberId) => {
@@ -1443,7 +1456,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         return true;
       } catch (err) {
         console.error('[MockStore] removeMember error:', err);
-        Alert.alert('No se pudo eliminar al integrante', describeError(err));
+        Alert.alert('No se pudo eliminar al integrante', textoDeErrorParaElUsuario(err));
         return false;
       }
     },

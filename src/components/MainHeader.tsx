@@ -43,7 +43,7 @@ export function MainHeader({ activeTab, onTabChange }: MainHeaderProps) {
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => navigation.navigate('Settings')}
-            accessibilityLabel="Ajustes"
+            accessibilityLabel="Cuenta"
           >
             {/* El avatar (18-09-2026): el usuario lo quería "a la altura del logo de
                 WhatsRemisse y un poco más ancho". Medido en la app: el logo tiene 15 px

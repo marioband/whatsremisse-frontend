@@ -223,6 +223,8 @@ export function PagoDelServicio({
                 <TouchableOpacity
                   style={[styles.botonDireccion, styles.botonAzul]}
                   onPress={() => setDireccion('DRIVER_PAYS_PROVIDER')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Yo pago"
                   disabled={ocupado}
                 >
                   <Text style={styles.botonTexto}>Yo pago</Text>
@@ -230,6 +232,8 @@ export function PagoDelServicio({
                 <TouchableOpacity
                   style={[styles.botonDireccion, styles.botonOscuro]}
                   onPress={() => setDireccion('PROVIDER_PAYS_DRIVER')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Me deben"
                   disabled={ocupado}
                 >
                   <Text style={styles.botonTexto}>Me deben</Text>
@@ -250,6 +254,8 @@ export function PagoDelServicio({
                   <TouchableOpacity
                     style={[styles.botonDeclarar, ocupado && styles.botonApagado]}
                     onPress={enviarDeclaracion}
+                    accessibilityRole="button"
+                    accessibilityLabel="Declarar el monto"
                     disabled={ocupado}
                   >
                     <Text style={styles.botonTexto}>
@@ -260,6 +266,7 @@ export function PagoDelServicio({
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity onPress={() => setDireccion(null)} disabled={ocupado}>
+                  accessibilityRole="button" accessibilityLabel="Cambiar de dirección del pago"
                   <Text style={styles.cambiar}>← cambiar</Text>
                 </TouchableOpacity>
                 <Text style={styles.ayuda}>
@@ -288,6 +295,8 @@ export function PagoDelServicio({
                       ocupado && styles.botonApagado,
                     ]}
                     onPress={() => onResolver(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Aceptar monto"
                     disabled={ocupado}
                   >
                     <Text style={styles.botonTexto}>Aceptar monto</Text>
@@ -299,6 +308,8 @@ export function PagoDelServicio({
                       ocupado && styles.botonApagado,
                     ]}
                     onPress={() => onResolver(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Rechazar monto"
                     disabled={ocupado}
                   >
                     <Text style={styles.botonTexto}>Rechazar</Text>
@@ -332,6 +343,8 @@ export function PagoDelServicio({
               <TouchableOpacity
                 style={[styles.botonConfirmar, ocupado && styles.botonApagado]}
                 onPress={onConfirmar}
+                accessibilityRole="button"
+                accessibilityLabel="Confirmar pago recibido"
                 disabled={ocupado}
               >
                 <Text style={styles.botonTexto}>Confirmar pago recibido</Text>

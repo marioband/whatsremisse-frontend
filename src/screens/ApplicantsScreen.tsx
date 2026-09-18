@@ -29,6 +29,7 @@ import {
   TEXTO_TENUE,
 } from '../lib/colors';
 import { fetchPublicProfile } from '../lib/database';
+import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { DatosPublicos, datosDesdePerfilPublico } from '../lib/perfilPublico';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas, Punto } from '../lib/routes';
@@ -195,21 +196,35 @@ export function ApplicantsScreen() {
           text: 'Cancelar búsqueda',
           style: 'destructive',
           onPress: async () => {
-            rejectApplication(service.id);
-            // 0018: dejar de estar compartido es borrar los grupos, no solo el
-            // principal; si no, los conductores de los otros grupos la seguirían
-            // viendo.
-            await compartirServicio(service.id, []);
-            // Sin `driver_progress_step: 0`: el paso del viaje solo avanza (regla de
-            // `fusionarServicio`); aquí vale 0 de todas formas porque la tarjeta
-            // todavía no tiene conductor asignado.
-            const sinCompartir = {
-              ...service,
-              group_id: '',
-              assigned_driver_id: null,
-            };
-            updateService(sinCompartir);
-            navigation.navigate('CreateService', { service: sinCompartir });
+            try {
+              rejectApplication(service.id);
+              // 0018: dejar de estar compartido es borrar los grupos, no solo el
+              // principal; si no, los conductores de los otros grupos la seguirían
+              // viendo.
+              const dejoDeCompartirse = await compartirServicio(service.id, []);
+              // Sin `driver_progress_step: 0`: el paso del viaje solo avanza (regla de
+              // `fusionarServicio`); aquí vale 0 de todas formas porque la tarjeta
+              // todavía no tiene conductor asignado.
+              const sinCompartir = {
+                ...service,
+                group_id: '',
+                assigned_driver_id: null,
+              };
+              // Si la base no la dejó de compartir, NO se navega: la pantalla diría que ya
+              // no está compartida mientras los conductores la siguen viendo (y la tarjeta
+              // volvería a aparecer compartida al recargar).
+              if (!dejoDeCompartirse) {
+                Alert.alert(
+                  'No se pudo cancelar la búsqueda',
+                  'La tarjeta sigue compartida con tus grupos. Vuelve a intentarlo.'
+                );
+                return;
+              }
+              updateService(sinCompartir);
+              navigation.navigate('CreateService', { service: sinCompartir });
+            } catch (err) {
+              Alert.alert('No se pudo cancelar la búsqueda', textoDeErrorParaElUsuario(err));
+            }
           },
         },
       ]
@@ -253,7 +268,7 @@ export function ApplicantsScreen() {
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => navigation.navigate('Settings')}
-            accessibilityLabel="Ajustes"
+            accessibilityLabel="Cuenta"
           >
             <Icono fuente={ICONO_AJUSTES} tamano={22} />
           </TouchableOpacity>

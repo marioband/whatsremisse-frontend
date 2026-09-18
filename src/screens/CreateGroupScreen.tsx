@@ -5,7 +5,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } fro
 
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
-import { describeError } from '../lib/errors';
+import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type CreateGroupNav = StackNavigationProp<RootStackParamList, 'CreateGroup'>;
@@ -38,7 +38,7 @@ export function CreateGroupScreen() {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[CreateGroup] no se pudo crear el grupo:', err);
-      Alert.alert('No se pudo crear el grupo', describeError(err));
+      Alert.alert('No se pudo crear el grupo', textoDeErrorParaElUsuario(err));
     } finally {
       setCreating(false);
     }

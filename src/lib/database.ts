@@ -146,7 +146,7 @@ function sinCamposDeLa0024(mapped: Partial<DbServiceAlert>): Partial<DbServiceAl
 }
 
 export async function insertServiceAlert(service: Partial<ServiceAlert>): Promise<ServiceAlert> {
-  if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
   const mapped = mapServiceAlertToDb(service);
   const { data, error } = await supabase.from('service_alerts').insert(mapped).select().single();
   if (!error) return mapServiceAlertFromDb(data);
@@ -448,13 +448,22 @@ export async function postularAServicio(
 
 export async function approveApplicationInDb(serviceId: string, driverId: string): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error: appError } = await supabase
+  // Regla del proyecto: PostgREST contesta 204 / sin error aunque la política RLS no deje
+  // tocar NINGUNA fila. Sin pedir las filas afectadas, el postulante quedaba aceptado en
+  // pantalla (y el chat abierto) mientras en la base el servicio seguía sin conductor, y
+  // todo volvía atrás al recargar. Se piden las filas y se comprueba que el cambio llegó.
+  const { data: aprobadas, error: appError } = await supabase
     .from('applications')
     .update({ status: 'APPROVED' })
     .eq('service_id', serviceId)
-    .eq('driver_id', driverId);
+    .eq('driver_id', driverId)
+    .select('id');
   if (appError) throw appError;
+  if (!aprobadas || aprobadas.length === 0) {
+    throw new Error('La postulación no se pudo aceptar: la base no cambió ninguna fila.');
+  }
 
+  // Cero filas aquí SÍ es legítimo (puede ser el único postulante), así que solo se mira el error.
   const { error: rejectError } = await supabase
     .from('applications')
     .update({ status: 'REJECTED' })
@@ -462,15 +471,19 @@ export async function approveApplicationInDb(serviceId: string, driverId: string
     .neq('driver_id', driverId);
   if (rejectError) throw rejectError;
 
-  const { error: serviceError } = await supabase
+  const { data: asignados, error: serviceError } = await supabase
     .from('service_alerts')
     .update({
       status: 'STATUS_AT_ORIGIN',
       assigned_driver_id: driverId,
       driver_progress_step: 0,
     })
-    .eq('id', serviceId);
+    .eq('id', serviceId)
+    .select('id');
   if (serviceError) throw serviceError;
+  if (!asignados || asignados.length === 0) {
+    throw new Error('El servicio no se pudo asignar al conductor: la base no cambió ninguna fila.');
+  }
 }
 
 export async function rejectApplicationInDb(serviceId: string): Promise<void> {
@@ -481,11 +494,15 @@ export async function rejectApplicationInDb(serviceId: string): Promise<void> {
     .eq('service_id', serviceId);
   if (appError) throw appError;
 
-  const { error: serviceError } = await supabase
+  const { data: reabiertos, error: serviceError } = await supabase
     .from('service_alerts')
     .update({ status: 'STATUS_OPEN', assigned_driver_id: null })
-    .eq('id', serviceId);
+    .eq('id', serviceId)
+    .select('id');
   if (serviceError) throw serviceError;
+  if (!reabiertos || reabiertos.length === 0) {
+    throw new Error('El servicio no se pudo reabrir: la base no cambió ninguna fila.');
+  }
 }
 
 /**
@@ -980,7 +997,7 @@ export async function insertGroup(
   name: string,
   ownerId: string
 ): Promise<{ group: DbGroup; member: DbGroupMember }> {
-  if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
   const { data: group, error: groupError } = await supabase
     .from('groups')
     .insert({ name, owner_id: ownerId })
@@ -1003,7 +1020,7 @@ export async function insertGroupMember(
   userId: string,
   role: 'admin' | 'member' = 'member'
 ): Promise<DbGroupMember> {
-  if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
   const { data, error } = await supabase
     .from('group_members')
     .insert({ group_id: groupId, user_id: userId, role })
@@ -1331,7 +1348,7 @@ export async function insertMessage(
   type: ChatMessage['type'] = 'TEXT',
   metadata: Record<string, unknown> = {}
 ): Promise<ChatMessage> {
-  if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
   const { data, error } = await supabase
     .from('messages')
     .insert({ group_id: groupId, sender_id: senderId, content, type, metadata })
@@ -1416,7 +1433,7 @@ export async function insertServiceMessage(params: {
   type?: ChatMessage['type'];
   metadata?: Record<string, unknown>;
 }): Promise<ServiceMessage> {
-  if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
   const { data, error } = await supabase
     .from('service_messages')
     .insert({

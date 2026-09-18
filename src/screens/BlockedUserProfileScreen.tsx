@@ -83,7 +83,7 @@ export function BlockedUserProfileScreen() {
 
         {/* Vehicle data */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Datos del vehículo</Text>
+          <Text style={styles.sectionTitle}>Datos del Vehículo</Text>
           {renderRow('Marca', user.brand)}
           {renderRow('Modelo', user.model)}
           {renderRow('Año', user.year)}

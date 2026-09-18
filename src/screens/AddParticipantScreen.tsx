@@ -17,7 +17,7 @@ import { Icono, ICONO_BUSCAR } from '../components/Icono';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { countVisibleProfiles, searchProfiles } from '../lib/database';
-import { describeError } from '../lib/errors';
+import { describeError, textoDeErrorParaElUsuario } from '../lib/errors';
 import { initialOf } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -143,7 +143,7 @@ export function AddParticipantScreen() {
           if (!mounted) return;
           // eslint-disable-next-line no-console
           console.error('[AddParticipant] searchProfiles error:', err);
-          setSearchError(describeError(err));
+          setSearchError(textoDeErrorParaElUsuario(err));
           setResults([]);
         })
         .finally(() => {

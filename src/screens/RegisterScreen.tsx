@@ -15,7 +15,7 @@ import {
 import logoWhatsRemisse from '../../assets/logo-whatsremisse.png';
 import { useAuth } from '../context/AuthContext';
 import { Alert } from '../lib/alert';
-import { describeError } from '../lib/errors';
+import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type RegisterNav = StackNavigationProp<RootStackParamList, 'Register'>;
@@ -56,7 +56,7 @@ export function RegisterScreen() {
       Alert.alert('Código enviado', `Se envió el código al ${phone}.`);
       navigation.navigate('Login', { phone });
     } catch (err) {
-      const message = describeError(err);
+      const message = textoDeErrorParaElUsuario(err);
       setError(message);
       Alert.alert('No se pudo continuar', message);
     } finally {

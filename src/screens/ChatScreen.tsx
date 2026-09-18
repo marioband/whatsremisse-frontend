@@ -957,7 +957,7 @@ export function ChatScreen() {
         setEdicionDisponible(false);
         Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
       } else {
-        Alert.alert('No se pudo editar', describeError(err));
+        Alert.alert('No se pudo editar', textoDeErrorParaElUsuario(err));
       }
     } finally {
       setAccionOcupada(false);
@@ -999,7 +999,7 @@ export function ChatScreen() {
         setEdicionDisponible(false);
         Alert.alert('Editar y eliminar', AVISO_MIGRACION_0019);
       } else {
-        Alert.alert('No se pudo eliminar', describeError(err));
+        Alert.alert('No se pudo eliminar', textoDeErrorParaElUsuario(err));
       }
     } finally {
       setAccionOcupada(false);

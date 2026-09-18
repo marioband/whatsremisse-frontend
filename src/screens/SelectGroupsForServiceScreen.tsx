@@ -181,7 +181,7 @@ export function SelectGroupsForServiceScreen() {
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => navigation.navigate('Settings')}
-            accessibilityLabel="Ajustes"
+            accessibilityLabel="Cuenta"
           >
             <Icono fuente={ICONO_AJUSTES} tamano={22} />
           </TouchableOpacity>

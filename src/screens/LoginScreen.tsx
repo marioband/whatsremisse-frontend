@@ -12,7 +12,7 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { Alert } from '../lib/alert';
-import { describeError } from '../lib/errors';
+import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type LoginRoute = RouteProp<RootStackParamList, 'Login'>;
@@ -44,7 +44,7 @@ export function LoginScreen() {
       }
       // La navegación a Main o ProfileSetup la maneja RootNavigator según requiresProfileSetup
     } catch (err) {
-      Alert.alert('Error al iniciar sesión', describeError(err));
+      Alert.alert('Error al iniciar sesión', textoDeErrorParaElUsuario(err));
     } finally {
       setLoading(false);
     }

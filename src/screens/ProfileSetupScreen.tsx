@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useMockStore, UserProfile } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
-import { describeError } from '../lib/errors';
+import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SetupNav = StackNavigationProp<RootStackParamList, 'ProfileSetup'>;
@@ -151,7 +151,7 @@ export function ProfileSetupScreen() {
         navigation.goBack();
       }
     } catch (err) {
-      const message = describeError(err);
+      const message = textoDeErrorParaElUsuario(err);
       // eslint-disable-next-line no-console
       console.error('[ProfileSetup] Error guardando:', err);
       setSaveError(message);

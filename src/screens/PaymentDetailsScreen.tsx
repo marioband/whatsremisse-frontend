@@ -13,7 +13,7 @@ import {
 
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
-import { describeError } from '../lib/errors';
+import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type PaymentNav = StackNavigationProp<RootStackParamList, 'PaymentDetails'>;
@@ -70,7 +70,7 @@ export function PaymentDetailsScreen() {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[PaymentDetails] Error guardando datos de pago:', err);
-      Alert.alert('No se pudieron guardar los datos de pago', describeError(err));
+      Alert.alert('No se pudieron guardar los datos de pago', textoDeErrorParaElUsuario(err));
     } finally {
       setSaving(false);
     }
