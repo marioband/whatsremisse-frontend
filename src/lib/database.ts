@@ -864,12 +864,18 @@ export async function updateApplication(
     mapped.provider_chat_started = updates.providerChatStarted;
   if (updates.seenByDriver !== undefined) mapped.seen_by_driver = updates.seenByDriver;
 
-  const { error } = await supabase
+  // Como en el resto del proyecto: se piden las filas y se comprueba que el cambio
+  // llegó (PostgREST responde sin error aunque la política RLS no deje tocar nada).
+  const { data: actualizadas, error } = await supabase
     .from('applications')
     .update(mapped)
     .eq('service_id', serviceId)
-    .eq('driver_id', driverId);
+    .eq('driver_id', driverId)
+    .select('id');
   if (error) throw error;
+  if (!actualizadas || actualizadas.length === 0) {
+    throw new Error('La base no actualizó la postulación (revisa que siga existiendo).');
+  }
 }
 
 export function mapGroupFromDb(row: DbGroup, memberRow?: DbGroupMember): GroupItem {

@@ -385,10 +385,11 @@ export function CreateServiceScreen() {
   };
 
   /** Guardar: la tarjeta queda en la lista; sin grupos, "no compartida". */
-  const handleGuardar = () => {
-    // Guarda SÍNCRONA: "Guardar" también crea una tarjeta, y el borrador se arma con la
-    // hora del toque (`service-<Date.now()>`), así que dos toques seguidos eran dos
-    // borradores distintos = dos tarjetas. Aquí el segundo toque no hace nada.
+  const handleGuardar = async () => {
+    // El candado sigue siendo lo que evita el doble toque ("Guardar" también crea una
+    // tarjeta y el borrador se arma con la hora del toque, así que dos toques seguidos
+    // eran dos borradores distintos = dos tarjetas). Es asíncrona solo para poder
+    // esperar a la base antes de anunciar que se guardó.
     if (guardandoRef.current) return;
 
     const servicio = construirServicio();
@@ -396,7 +397,13 @@ export function CreateServiceScreen() {
     guardandoRef.current = true;
 
     if (editingService) {
-      updateService(servicio);
+      // El aviso de éxito va DESPUÉS de saber que la base lo guardó: antes salía
+      // «Servicio guardado» aunque el UPDATE no hubiera tocado ninguna fila.
+      const guardado = await updateService(servicio);
+      if (!guardado) {
+        guardandoRef.current = false;
+        return;
+      }
       limpiarBorradorDeServicio();
       Alert.alert(
         'Servicio guardado',

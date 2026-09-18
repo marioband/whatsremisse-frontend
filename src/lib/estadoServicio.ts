@@ -136,7 +136,7 @@ export function estadoDeServicio(
       };
     }
     if (paso === 1) return { etiqueta: 'Conductor ubicado', color: OSCURO, compartido };
-    if (paso === 2) return { etiqueta: 'Servicio en proceso', color: OSCURO, compartido };
+    if (paso === 2) return { etiqueta: 'Servicio en Proceso', color: OSCURO, compartido };
     return { etiqueta: 'En camino', color: AZUL, compartido };
   }
 

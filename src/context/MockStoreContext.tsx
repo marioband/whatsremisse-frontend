@@ -567,7 +567,7 @@ interface MockContextValue extends MockState {
    * conjunto completo: un array vacío deja la tarjeta como "Servicio no compartido".
    */
   compartirServicio: (serviceId: string, groupIds: string[]) => Promise<boolean>;
-  updateService: (service: ServiceAlert) => void;
+  updateService: (service: ServiceAlert) => Promise<boolean>;
   /** Anula la tarjeta: la borra de la base y de la lista. */
   deleteService: (serviceId: string) => Promise<boolean>;
   /** Postularme a una alerta. Es asíncrona (escribe la fila y devuelve el puesto). */
@@ -906,12 +906,36 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const persistService = async (serviceId: string, updates: Partial<ServiceAlert>) => {
-    if (!isSupabaseConfigured) return;
+  /**
+   * Devuelve si la base ACEPTÓ el cambio (mismo patrón que `escribirServicio`). Antes
+   * atrapaba el error y solo lo dejaba en consola, así que quien llama despachaba el
+   * cambio local igual: la pantalla daba el servicio por guardado y al refrescar volvía
+   * el valor viejo.
+   */
+  const persistService = async (
+    serviceId: string,
+    updates: Partial<ServiceAlert>
+  ): Promise<boolean> => {
+    if (!isSupabaseConfigured) return true;
     try {
-      await updateServiceAlert(serviceId, updates);
+      const actualizado = await updateServiceAlert(serviceId, updates);
+      // Sin fila devuelta la base no cambió nada (RLS, sesión): se avisa en vez de dar
+      // el guardado por hecho.
+      if (!actualizado) {
+        Alert.alert(
+          'No se pudo guardar el servicio',
+          'La base no cambió la tarjeta. Vuelve a intentarlo.'
+        );
+        return false;
+      }
+      return true;
     } catch (err) {
       console.error('[MockStore] updateServiceAlert error:', err);
+      Alert.alert(
+        'No se pudo guardar el servicio',
+        detalleDe(err, 'El backend rechazó el guardado')
+      );
+      return false;
     }
   };
 
@@ -932,12 +956,14 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     serviceId: string,
     driverId: string,
     updates: Partial<Application>
-  ) => {
-    if (!isSupabaseConfigured) return;
+  ): Promise<boolean> => {
+    if (!isSupabaseConfigured) return true;
     try {
       await updateApplication(serviceId, driverId, updates);
+      return true;
     } catch (err) {
       console.error('[MockStore] updateApplication error:', err);
+      return false;
     }
   };
 
@@ -1148,8 +1174,10 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       });
     },
     updateService: async (service) => {
-      await persistService(service.id, service);
+      // Solo si la base lo guardó: la pantalla que llama anuncia el éxito después.
+      if (!(await persistService(service.id, service))) return false;
       dispatch({ type: 'UPDATE_SERVICE', payload: service });
+      return true;
     },
     deleteService: async (serviceId) => {
       try {
@@ -1198,6 +1226,15 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
             dispatch({ type: 'UPSERT_APPLICATION', payload: fila });
             return;
           }
+          // La base respondió SIN error pero sin fila (`.maybeSingle()`): la postulación
+          // no quedó registrada. Antes se caía al respaldo local y el conductor veía su
+          // tarjeta como postulada mientras el proveedor no lo veía en postulantes.
+          Alert.alert(
+            'No se pudo postular',
+            'La base no registró tu postulación. Vuelve a intentarlo.'
+          );
+          await refrescar();
+          return;
         } catch (err) {
           // Antes el error se tragaba y la tarjeta quedaba pintada como postulada
           // sin fila en la base (el proveedor no veía al postulante).
@@ -1229,7 +1266,11 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         try {
           await rejectApplicationInDb(serviceId);
         } catch (err) {
+          // Igual que al aceptar: si la base no lo hizo, la pantalla no puede decir que
+          // sí (antes el error quedaba en consola y el postulante desaparecía igual).
           console.error('[MockStore] rejectApplicationInDb error:', err);
+          Alert.alert('No se pudo descartar el servicio', textoDeErrorParaElUsuario(err));
+          return;
         }
       }
       dispatch({ type: 'REJECT_APPLICATION', payload: { serviceId } });
@@ -1290,7 +1331,17 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         // Sin la 0022 aplicada la función no existe: el toque sigue valiendo en el
         // teléfono del conductor (marca local) y el proveedor no lo verá hasta que
         // aplique la migración. No se avisa al conductor: él no tiene que arreglar esto.
-        console.warn('[MockStore] no se pudo dejar el arranque en la base (¿falta la 0022?):', err);
+        if (esFuncionAusente(err)) {
+          console.warn(
+            '[MockStore] no se pudo dejar el arranque en la base (¿falta la 0022?):',
+            err
+          );
+          return;
+        }
+        // Cualquier otro fallo (no ser el conductor asignado, sesión caída) sí importa:
+        // el proveedor nunca vería el arranque y la discrepancia no se notaría.
+        console.error('[MockStore] marcarArranqueDelViaje error:', err);
+        Alert.alert('No se pudo marcar el arranque', textoDeErrorParaElUsuario(err));
       }
     },
     archiveService: async (serviceId) => {
@@ -1474,14 +1525,25 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     },
     startProviderChat: async (serviceId, driverId) => {
-      await persistApplication(serviceId, driverId, {
+      // La marca es la que abre el chat al conductor: si la base no la guardó, no se
+      // pinta (el conductor seguiría viendo el chat cerrado hasta recargar).
+      const guardado = await persistApplication(serviceId, driverId, {
         providerChatStarted: true,
         seenByDriver: false,
       });
+      if (!guardado) {
+        Alert.alert(
+          'No se pudo abrir el chat',
+          'La base no guardó el cambio. Vuelve a intentarlo.'
+        );
+        return;
+      }
       dispatch({ type: 'START_PROVIDER_CHAT', payload: { serviceId, driverId } });
     },
     markDriverSeenChat: async (serviceId, driverId) => {
-      await persistApplication(serviceId, driverId, { seenByDriver: true });
+      // Se llama dentro de un efecto al abrir el chat: si falla, no se avisa (el efecto
+      // volvería a intentarlo) y NO se marca como visto lo que la base no guardó.
+      if (!(await persistApplication(serviceId, driverId, { seenByDriver: true }))) return;
       dispatch({ type: 'MARK_DRIVER_SEEN_CHAT', payload: { serviceId, driverId } });
     },
     enableSettlement: async (serviceId) => {
