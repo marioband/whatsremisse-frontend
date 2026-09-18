@@ -7,7 +7,11 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useNombresDeProveedores } from '../hooks/useNombreDelProveedor';
 import { AZUL, OSCURO, VERDE_ACCION } from '../lib/colors';
-import { estaPagadoYCerrado, estadoDeServicio } from '../lib/estadoServicio';
+import {
+  estaPagadoYCerrado,
+  estadoDeServicio,
+  etiquetaParaMisServicios,
+} from '../lib/estadoServicio';
 import { nombreParaMostrar } from '../lib/nombreDelProveedor';
 import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -136,9 +140,11 @@ export function MyServicesScreen() {
             <Text style={styles.companyName} numberOfLines={1}>
               {nombreParaMostrar(service, nombresDeProveedor[service.provider_id])}
             </Text>
-            {!!estado.etiqueta && (
+            {/* Sin el "Pagado y cerrado": lo retiró el usuario el 18-09-2026 (lo
+                cuenta el historial de pago de abajo). El resto de estados sí se ven. */}
+            {!!etiquetaParaMisServicios(estado.etiqueta) && (
               <View style={[styles.statusBadge, { backgroundColor: estado.color }]}>
-                <Text style={styles.statusText}>{estado.etiqueta}</Text>
+                <Text style={styles.statusText}>{etiquetaParaMisServicios(estado.etiqueta)}</Text>
               </View>
             )}
           </View>
@@ -202,7 +208,7 @@ export function MyServicesScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mis Servicios</Text>
+        <Text style={styles.headerTitle}>Mis servicios</Text>
         {/* Sin el icono del auto (el usuario pidió quitarlo, 18-09-2026): el espaciador
             deja el título centrado, igual que en Cuenta. */}
         <View style={styles.headerSpacer} />

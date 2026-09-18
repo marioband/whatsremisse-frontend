@@ -40,6 +40,12 @@ export interface DbServiceAlert {
   provider_bcp_account: string | null;
   provider_bcp_cci: string | null;
   scheduled_at: string | null;
+  // Pago, observaciones y unidad tal como los eligió el proveedor (migración 0024).
+  // Opcionales: mientras la migración no esté aplicada la fila no las trae.
+  payment_method?: string | null;
+  payment_term?: string | null;
+  observations?: string[] | null;
+  vehicle_type?: string | null;
   // Pago entre conductor y proveedor (migración 0013)
   pago_estado: string;
   pago_direccion: string | null;

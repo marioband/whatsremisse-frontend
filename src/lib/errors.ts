@@ -28,6 +28,28 @@ export function describeError(err: unknown): string {
 }
 
 /**
+ * ¿El error dice que la COLUMNA no existe? (PostgREST: `42703`, o `PGRST204` «schema
+ * cache», que es como responde cuando la tabla todavía no tiene esa columna).
+ *
+ * Lo usa el guardado de servicios: las columnas de pago, fecha de pago, observaciones y
+ * unidad las añade la migración **0024**, y si aún no está aplicada hay que reintentar sin
+ * ellas (el servicio se publica igual, mostrando los respaldos en la tarjeta) en vez de
+ * dejar al usuario sin publicar con «column payment_method does not exist».
+ */
+export function esColumnaAusente(err: unknown): boolean {
+  const e = err as { code?: string; message?: string; details?: string; hint?: string } | null;
+  if (!e) return false;
+  const codigo = e.code || '';
+  const texto = `${e.message || ''} ${e.details || ''} ${e.hint || ''}`.toLowerCase();
+  return (
+    codigo === '42703' ||
+    codigo === 'PGRST204' ||
+    texto.includes('does not exist') ||
+    texto.includes('schema cache')
+  );
+}
+
+/**
  * ¿El fallo fue de TRANSPORTE —la petición se quedó sin respuesta— y no del servidor?
  *
  * supabase-js marca estos fallos con `status: 0`, sin `code`, con el nombre del error

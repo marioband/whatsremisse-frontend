@@ -50,7 +50,8 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F2F5',
+    // Fondo general del app en blanco (el usuario lo fijó el 18-09-2026).
+    backgroundColor: '#FFFFFF',
   },
   content: {
     flex: 1,

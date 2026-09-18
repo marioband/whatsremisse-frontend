@@ -46,7 +46,7 @@ import { ServiceAlert } from '../types';
 type HomeNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
 
 const BLUE = '#3F51B5';
-const LIGHT_BG = '#F0F2F5';
+const LIGHT_BG = '#FFFFFF';
 const BADGE_RED = '#C2333F';
 /** Cuánto se queda a la vista la tarjeta del rechazo recién llegado (3 segundos). */
 const VISTA_DE_RECHAZO_MS = 3000;

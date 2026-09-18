@@ -29,7 +29,7 @@ type HomeNav = StackNavigationProp<
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
-const LIGHT_BG = '#F0F2F5';
+const LIGHT_BG = '#FFFFFF';
 
 /**
  * Apartados del inicio del PROVEEDOR (17-09-2026): "Todos" → "Publicados"; fuera

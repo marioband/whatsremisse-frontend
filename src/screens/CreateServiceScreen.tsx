@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,13 @@ import { TimeWheelPicker } from '../components/TimeWheelPicker';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import {
+  BorradorDeServicio,
+  borradorTieneDatos,
+  guardarBorradorDeServicio,
+  leerBorradorDeServicio,
+  limpiarBorradorDeServicio,
+} from '../lib/borradorDeServicio';
 import {
   combinarFechaYHora,
   etiquetaRelativa,
@@ -52,7 +59,7 @@ type CreateRoute = RouteProp<RootStackParamList, 'CreateService'>;
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
-const LIGHT_BG = '#F0F2F5';
+const LIGHT_BG = '#FFFFFF';
 const OSCURO = '#2D2D2D';
 const ROJO_ACCION = '#C2333F';
 
@@ -120,6 +127,76 @@ export function CreateServiceScreen() {
    * después en el documento).
    */
   const [campoConSugerencias, setCampoConSugerencias] = useState<string | null>(null);
+
+  /**
+   * El borrador del dispositivo (18-09-2026): si el proveedor llena el formulario y se va
+   * con el botón atrás —sin pulsar Guardar, Anular ni Elegir grupos—, al volver a "Nuevo
+   * servicio" lo escrito sigue ahí (`lib/borradorDeServicio.ts`).
+   */
+  useEffect(() => {
+    if (isEditing) return;
+    let vigente = true;
+    leerBorradorDeServicio().then((borrador) => {
+      if (!vigente || !borrador) return;
+      setOrigin(borrador.origin);
+      setDestinations(borrador.destinations.length > 0 ? borrador.destinations : ['']);
+      setCoordsOrigen(borrador.coordsOrigen);
+      setCoordsDestinos(borrador.coordsDestinos);
+      setFare(borrador.fare);
+      setPaymentType(borrador.paymentType);
+      setOtherPayment(borrador.otherPayment);
+      setPaymentDate(borrador.paymentDate);
+      setCustomPaymentDate(borrador.customPaymentDate);
+      setUnitType(borrador.unitType);
+      setObservation(borrador.observation);
+      setFechaServicio(new Date(borrador.fechaServicio));
+      setHoraServicio(new Date(borrador.horaServicio));
+      setAlMomento(borrador.alMomento);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [isEditing]);
+
+  /** Se guarda con cada cambio: así el botón atrás no pierde nada (no hay "al desmontar"
+   *  fiable en una pantalla que puede quedar en el historial). */
+  useEffect(() => {
+    if (isEditing) return;
+    const borrador: BorradorDeServicio = {
+      origin,
+      destinations,
+      coordsOrigen,
+      coordsDestinos,
+      fare,
+      paymentType,
+      otherPayment,
+      paymentDate,
+      customPaymentDate,
+      unitType,
+      observation,
+      fechaServicio: fechaServicio.toISOString(),
+      horaServicio: horaServicio.toISOString(),
+      alMomento,
+    };
+    if (!borradorTieneDatos(borrador)) return;
+    guardarBorradorDeServicio(borrador);
+  }, [
+    isEditing,
+    origin,
+    destinations,
+    coordsOrigen,
+    coordsDestinos,
+    fare,
+    paymentType,
+    otherPayment,
+    paymentDate,
+    customPaymentDate,
+    unitType,
+    observation,
+    fechaServicio,
+    horaServicio,
+    alMomento,
+  ]);
 
   /** Aviso de un campo: al abrir se levanta; al cerrar, solo si sigue siendo el mío. */
   const avisoDeSugerencias = (campo: string) => (visibles: boolean) => {
@@ -320,6 +397,7 @@ export function CreateServiceScreen() {
 
     if (editingService) {
       updateService(servicio);
+      limpiarBorradorDeServicio();
       Alert.alert(
         'Servicio guardado',
         estaCompartido(editingService)
@@ -331,6 +409,8 @@ export function CreateServiceScreen() {
     }
 
     addService({ ...servicio, group_id: '' });
+    // Ya quedó guardado en la lista: el borrador del formulario se descarta.
+    limpiarBorradorDeServicio();
     Alert.alert(
       'Servicio guardado',
       'La tarjeta quedó en tu lista como "Servicio no compartido". Para que la vean los ' +
@@ -355,7 +435,15 @@ export function CreateServiceScreen() {
     if (!editingService) {
       Alert.alert('Descartar servicio', 'Se perderá lo que escribiste. ¿Descartarlo?', [
         { text: 'Seguir editando', style: 'cancel' },
-        { text: 'Descartar', style: 'destructive', onPress: () => navigation.goBack() },
+        {
+          text: 'Descartar',
+          style: 'destructive',
+          onPress: () => {
+            // El usuario lo pidió descartar: también se borra el borrador del dispositivo.
+            limpiarBorradorDeServicio();
+            navigation.goBack();
+          },
+        },
       ]);
       return;
     }

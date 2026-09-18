@@ -1,4 +1,4 @@
-import { describeError } from './errors';
+import { describeError, esColumnaAusente } from './errors';
 import { conGrupos } from './gruposDeServicio';
 import { displayName } from './names';
 import type { LecturaDeChat } from './palomas';
@@ -61,6 +61,12 @@ export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
     pago_confirmado_at: row.pago_confirmado_at ?? null,
     pago_confirmado_por: row.pago_confirmado_por ?? null,
     scheduled_at: row.scheduled_at ?? undefined,
+    // Pago, observaciones y unidad (0024): si la migración no está aplicada la fila no
+    // trae las columnas, `row.*` es undefined y la tarjeta sigue con sus respaldos.
+    payment_method: row.payment_method ?? undefined,
+    payment_term: row.payment_term ?? undefined,
+    observations: row.observations ?? undefined,
+    vehicle_type: row.vehicle_type ?? undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
     completed_at: null,
@@ -115,15 +121,45 @@ export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbS
     mapped.provider_bcp_account = service.provider_bcp_account;
   if (service.provider_bcp_cci !== undefined) mapped.provider_bcp_cci = service.provider_bcp_cci;
   if (service.scheduled_at !== undefined) mapped.scheduled_at = service.scheduled_at;
+  // Pago, observaciones y unidad (migración 0024). Sin esto el INSERT los descartaba y la
+  // tarjeta mostraba los respaldos «BCP»/«Al término» (lo reportó el usuario el 18-09-2026).
+  if (service.payment_method !== undefined) mapped.payment_method = service.payment_method;
+  if (service.payment_term !== undefined) mapped.payment_term = service.payment_term;
+  if (service.observations !== undefined) mapped.observations = service.observations;
+  if (service.vehicle_type !== undefined) mapped.vehicle_type = service.vehicle_type;
   return mapped;
+}
+
+/** Las columnas que añade la 0024, para poder reintentar sin ellas. */
+function sinCamposDeLa0024(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
+  const copia = { ...mapped };
+  delete copia.payment_method;
+  delete copia.payment_term;
+  delete copia.observations;
+  delete copia.vehicle_type;
+  return copia;
 }
 
 export async function insertServiceAlert(service: Partial<ServiceAlert>): Promise<ServiceAlert> {
   if (!isSupabaseConfigured) throw new Error('Supabase not configured');
   const mapped = mapServiceAlertToDb(service);
   const { data, error } = await supabase.from('service_alerts').insert(mapped).select().single();
-  if (error) throw error;
-  return mapServiceAlertFromDb(data);
+  if (!error) return mapServiceAlertFromDb(data);
+
+  // Sin la 0024, el INSERT falla entero por las columnas que no existen: se reintenta sin
+  // ellas para que el proveedor no se quede sin publicar (la tarjeta mostrará los
+  // respaldos «BCP»/«Al término») y se avisa por consola de qué migración falta.
+  if (!esColumnaAusente(error)) throw error;
+  const reintento = await supabase
+    .from('service_alerts')
+    .insert(sinCamposDeLa0024(mapped))
+    .select()
+    .single();
+  if (reintento.error) throw reintento.error;
+  console.warn(
+    '[database] el servicio se publicó sin pago, observaciones ni unidad: falta aplicar 0024_pago_y_observaciones_del_servicio.sql'
+  );
+  return mapServiceAlertFromDb(reintento.data);
 }
 
 // ---------------------------------------------------------------------------
@@ -476,11 +512,23 @@ export async function updateServiceAlert(
   updates: Partial<ServiceAlert>
 ): Promise<ServiceAlert | null> {
   if (!isSupabaseConfigured) return null;
-  const { data, error } = await supabase
+  const mapped = mapServiceAlertToDb(updates);
+  let { data, error } = await supabase
     .from('service_alerts')
-    .update(mapServiceAlertToDb(updates))
+    .update(mapped)
     .eq('id', serviceId)
     .select();
+  // Igual que al publicar: sin la 0024 aplicada el UPDATE falla por las columnas que no
+  // existen, así que se reintenta sin ellas (el resto del cambio sí se guarda).
+  if (error && esColumnaAusente(error)) {
+    const reintento = await supabase
+      .from('service_alerts')
+      .update(sinCamposDeLa0024(mapped))
+      .eq('id', serviceId)
+      .select();
+    data = reintento.data;
+    error = reintento.error;
+  }
   if (error) throw error;
 
   const fila = (data || [])[0];

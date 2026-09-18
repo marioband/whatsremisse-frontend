@@ -29,6 +29,22 @@ export const APPS_DE_NAVEGACION: { id: AppDeNavegacion; etiqueta: string }[] = [
   { id: 'WAZE', etiqueta: 'Waze' },
 ];
 
+/**
+ * Colores del interruptor del selector (fijados por el usuario el 18-09-2026): al
+ * activarlo, la **barra va en `#B8BED8`** y el **círculo en el azul institucional**
+ * (`#3F51B5`). Antes el selector era el `Switch` del sistema, que pintaba la barra con
+ * `trackColor` pero el círculo lo dibujaba el navegador (se veía verde), así que la
+ * tarjeta se pinta a mano y los colores salen de aquí.
+ */
+export const COLORES_DEL_INTERRUPTOR = {
+  apagado: { pista: '#CCCCCC', circulo: '#FFFFFF' },
+  encendido: { pista: '#B8BED8', circulo: '#3F51B5' },
+} as const;
+
+export function coloresDelInterruptor(encendido: boolean) {
+  return encendido ? COLORES_DEL_INTERRUPTOR.encendido : COLORES_DEL_INTERRUPTOR.apagado;
+}
+
 export function etiquetaDeApp(app: AppDeNavegacion): string {
   return APPS_DE_NAVEGACION.find((a) => a.id === app)?.etiqueta ?? 'Waze';
 }

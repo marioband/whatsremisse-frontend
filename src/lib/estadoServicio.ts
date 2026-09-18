@@ -64,6 +64,18 @@ export function estaPagadoYCerrado(service: ServiceAlert): boolean {
  * `Servicio vencido` es del proveedor (su alerta se pasó de hora sin conductor);
  * el conductor ve esas alertas como `No disponible`, nunca la jerga del proveedor.
  */
+/**
+ * Etiqueta de estado que se pinta en las TARJETAS de "Mis servicios".
+ *
+ * El usuario quitó de ahí el "Pagado y cerrado" (18-09-2026): el historial de pago que
+ * va debajo ("S/ 80.00 · pagó el proveedor · confirmó el conductor…") ya cuenta que se
+ * pagó y quién confirmó, así que el rótulo repetía la misma información. En el resto de
+ * sitios (el chat, la franja de las tarjetas del inicio) la etiqueta sigue igual.
+ */
+export function etiquetaParaMisServicios(etiqueta: string): string {
+  return etiqueta === 'Pagado y cerrado' ? '' : etiqueta;
+}
+
 export function estadoDeServicio(
   service: ServiceAlert,
   postulantesPendientes = 0,

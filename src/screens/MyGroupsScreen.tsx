@@ -29,7 +29,7 @@ type GroupsNav = StackNavigationProp<
 >;
 
 const DARK_BG = '#2D2D2D';
-const LIGHT_BG = '#F0F2F5';
+const LIGHT_BG = '#FFFFFF';
 /** Separación entre tarjetas: el `marginBottom` de `styles.card` (ver `medirLaFila`). */
 const MARGEN_ENTRE_TARJETAS = 12;
 

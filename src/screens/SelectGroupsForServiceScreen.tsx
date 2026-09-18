@@ -6,6 +6,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from
 import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import { limpiarBorradorDeServicio } from '../lib/borradorDeServicio';
 import { EstadoDeEnvio, estadoDelBotonDeEnvio, opacidadDelBotonDeEnvio } from '../lib/envioUnico';
 import { gruposDeServicio } from '../lib/gruposDeServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -120,6 +121,8 @@ export function SelectGroupsForServiceScreen() {
 
       // Tarjeta nueva: se publica UNA vez y se comparte con todos los grupos elegidos.
       const id = await addService({ ...draftService, group_id: '' }, seleccionados);
+      // El servicio ya se publicó: el borrador del formulario no debe reaparecer.
+      limpiarBorradorDeServicio();
       if (!id) return;
 
       // Se notifica una sola vez por servicio, aunque se comparta a varios grupos.

@@ -1,4 +1,3 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -30,12 +29,47 @@ const MARGEN = 5;
 const THUMB_RADIO = 8;
 /** Esquinas de la barra (el modelo las tiene redondeadas). */
 const TRACK_RADIO = 8;
-/** Tamaño del glifo de la flecha dentro del pulgar (proporción del modelo: el
- *  glifo ocupa ~2/3 del ancho del pulgar). */
-const ICONO_PX = 40;
+/**
+ * La flecha y la palomita del pulgar se DIBUJAN CON FORMAS (no con la fuente de iconos).
+ *
+ * Por qué (18-09-2026, lo reportó el usuario: "la flecha... en su inicio está fuera de la
+ * barra verde, debería estar dentro"): el glifo de `MaterialCommunityIcons` no trae su
+ * tinta centrada en su caja de línea. MEDIDO en el banco con la fuente real: la tinta de
+ * `arrow-right-bold` a 40 px caía **+3,3 px a la derecha y +3,4 px abajo** del centro del
+ * pulgar, así que la punta se apoyaba en el borde del cuadro claro (y desaparecía contra
+ * la barra verde, que es del mismo color). Con formas, el dibujo ES la caja: queda
+ * centrado exacto y se ve igual en cualquier teléfono, cargue o no la fuente.
+ *
+ * Medidas: la flecha ocupa ~2/3 del pulgar (30x16 en un pulgar de 44), como el modelo.
+ */
+const FLECHA_ANCHO = 30;
+const FLECHA_ALTO = 16;
+const FLECHA_BRAZO = 20;
+const FLECHA_GROSOR = 8;
+const FLECHA_PUNTA = FLECHA_ANCHO - FLECHA_BRAZO + 2;
 
 const clamp = (valor: number, minimo: number, maximo: number) =>
   Math.max(minimo, Math.min(valor, maximo));
+
+/** La flecha del pulgar: brazo + punta, dentro de una caja de FLECHA_ANCHO x FLECHA_ALTO. */
+function FlechaDentro() {
+  return (
+    <View style={styles.flecha}>
+      <View style={styles.flechaBrazo} />
+      <View style={styles.flechaPunta} />
+    </View>
+  );
+}
+
+/** La palomita (cuando el arrastre ya pasó el umbral), también con dos barras. */
+function PalomitaDentro() {
+  return (
+    <View style={styles.palomita}>
+      <View style={[styles.palomitaBarra, styles.palomitaCorta]} />
+      <View style={[styles.palomitaBarra, styles.palomitaLarga]} />
+    </View>
+  );
+}
 
 interface Props {
   /** Hito que se reporta al deslizar: 0 = Ubicado, 1 = En proceso, 2 = Finalizado. */
@@ -308,7 +342,7 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
         )}
 
         <Animated.View style={[styles.thumb, { transform: [{ translateX }] }]}>
-          <MaterialCommunityIcons name={fotograma.icono} size={ICONO_PX} color={VERDE_ACCION} />
+          {fotograma.icono === 'check-bold' ? <PalomitaDentro /> : <FlechaDentro />}
         </Animated.View>
       </View>
     </View>
@@ -355,6 +389,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     // Debajo del pulgar: el modelo deja que el pulgar pase por encima del texto.
     zIndex: 1,
+  },
+  /* La flecha: se centra sola dentro del pulgar (la caja ES el dibujo). */
+  flecha: {
+    width: FLECHA_ANCHO,
+    height: FLECHA_ALTO,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flechaBrazo: {
+    width: FLECHA_BRAZO,
+    height: FLECHA_GROSOR,
+    backgroundColor: VERDE_ACCION,
+  },
+  flechaPunta: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderTopWidth: FLECHA_ALTO / 2,
+    borderBottomWidth: FLECHA_ALTO / 2,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftWidth: FLECHA_PUNTA,
+    borderLeftColor: VERDE_ACCION,
+  },
+  /* La palomita: dos barras giradas que se tocan en el vértice. */
+  palomita: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  palomitaBarra: {
+    position: 'absolute',
+    height: 7,
+    borderRadius: 1,
+    backgroundColor: VERDE_ACCION,
+  },
+  palomitaCorta: {
+    width: 12,
+    left: 2,
+    bottom: 6,
+    transform: [{ rotate: '45deg' }],
+  },
+  palomitaLarga: {
+    width: 22,
+    left: 9,
+    bottom: 11,
+    transform: [{ rotate: '-45deg' }],
   },
   thumb: {
     position: 'absolute',
