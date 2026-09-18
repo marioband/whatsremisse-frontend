@@ -23,7 +23,17 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
+import {
+  elegirFoto,
+  fueCancelado,
+  subirFoto,
+  textoDeFoto,
+  textoDeUbicacion,
+  tomarFoto,
+  ubicacionParaAdjuntar,
+} from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
+import { marcarAvisoPropio } from '../lib/avisos';
 import { AZUL } from '../lib/colors';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import {
@@ -97,6 +107,16 @@ function normalizar(texto: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+/** Clases de mensaje que la lista sabe pintar. */
+const TIPOS_DE_MENSAJE: Message['type'][] = [
+  'TEXT',
+  'SYSTEM',
+  'VOICE',
+  'PHOTO',
+  'LOCATION',
+  'CONTACT',
+];
+
 export function ChatScreen() {
   const navigation = useNavigation<ChatNav>();
   const route = useRoute<ChatRoute>();
@@ -112,7 +132,6 @@ export function ChatScreen() {
     declararPago,
     resolverDeclaracionDePago,
     confirmarPagoRecibido,
-    emitChatNotification,
     refrescar,
     refrescarServicio,
     userProfile,
@@ -124,6 +143,9 @@ export function ChatScreen() {
   // false = la tabla `service_messages` (migración 0010) no está aplicada: el
   // chat funciona, pero solo en este dispositivo. Se avisa en pantalla.
   const [chatCompartido, setChatCompartido] = useState(true);
+  // Adjunto en curso (foto/ubicación): mientras se elige, se sube o se pide el permiso no
+  // se puede lanzar otro (ni dos veces el mismo).
+  const [adjuntoEnCurso, setAdjuntoEnCurso] = useState(false);
   const [buscarAbierto, setBuscarAbierto] = useState(false);
   const [consulta, setConsulta] = useState('');
   const [pagoOcupado, setPagoOcupado] = useState(false);
@@ -525,7 +547,12 @@ export function ChatScreen() {
     [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion, cargarLecturas]
   );
 
-  useRealtimeServiceMessages(serviceId, callbacksTiempoReal);
+  // Por cada mensaje del chat (y por cada hito, que entra como aviso del sistema) se
+  // avisa al dispositivo que lo recibe: hace falta saber quién soy y qué papel tengo.
+  useRealtimeServiceMessages(serviceId, callbacksTiempoReal, {
+    miId: userId || null,
+    miRol: isDriver ? 'DRIVER' : 'PROVIDER',
+  });
 
   // Respaldo: si el tiempo real no está activado en el proyecto, los mensajes
   // del otro lado entran igual (cada SONDEO_MS) al reabrir la conversación.
@@ -643,9 +670,9 @@ export function ChatScreen() {
         service_alert_id: m.service_id,
         sender_id: m.sender_id,
         content: m.content,
-        // La lista de mensajes solo distingue texto, nota de voz y sistema; las
-        // demás clases (foto, ubicación, contacto) se pintan como texto.
-        type: m.type === 'VOICE' ? 'VOICE' : m.type === 'SYSTEM' ? 'SYSTEM' : 'TEXT',
+        // La lista pinta cada clase con su burbuja: texto, aviso del sistema, nota de voz,
+        // foto (imagen) y ubicación (con su enlace al mapa). Lo desconocido va como texto.
+        type: TIPOS_DE_MENSAJE.includes(m.type) ? m.type : 'TEXT',
         metadata: m.metadata,
         created_at: m.created_at,
         edited_at: m.edited_at ?? null,
@@ -662,6 +689,10 @@ export function ChatScreen() {
 
   const addSystemMessage = (content: string, avisoDeAccion = false) => {
     if (!service) return;
+    // Los avisos del sistema no llevan autor: se marca el eco para que este
+    // dispositivo (el que provoca el cambio) no se avise a sí mismo cuando el
+    // tiempo real le devuelva su propio mensaje.
+    marcarAvisoPropio(content);
     const local: ServiceMessage = {
       id: `sys-${Date.now()}`,
       service_id: serviceId,
@@ -705,9 +736,9 @@ export function ChatScreen() {
 
     // El texto de los tres avisos vive en `lib/mensajes.ts` (la misma fuente que decide
     // cuáles llevan la hora al pintarse).
-    const mensaje = avisoDelHito(paso);
-    addSystemMessage(mensaje);
-    emitChatNotification('Hito del viaje', mensaje.replace('Sistema: ', ''));
+    // El aviso del hito lo recibe el OTRO lado (llega por tiempo real al chat
+    // compartido): este dispositivo no se avisa a sí mismo.
+    addSystemMessage(avisoDelHito(paso));
   };
 
   // ------------------------------------------------------------------- pago
@@ -724,12 +755,6 @@ export function ChatScreen() {
         ? `Sistema: El conductor declara que le debe ${montoEnTexto(monto)} al proveedor.`
         : `Sistema: El conductor declara que el proveedor le debe ${montoEnTexto(monto)}.`
     );
-    emitChatNotification(
-      'Monto declarado',
-      direccion === 'DRIVER_PAYS_PROVIDER'
-        ? `El conductor declara que te debe ${montoEnTexto(monto)}`
-        : `El conductor declara que le debes ${montoEnTexto(monto)}`
-    );
   };
 
   /** El proveedor acepta o rechaza el monto declarado. */
@@ -745,10 +770,6 @@ export function ChatScreen() {
         ? 'Sistema: El proveedor aceptó el monto. Pago en camino.'
         : 'Sistema: El proveedor rechazó el monto. El conductor debe corregirlo.'
     );
-    emitChatNotification(
-      aceptar ? 'Monto aceptado' : 'Monto rechazado',
-      aceptar ? 'El pago está en camino.' : 'Corrige el monto y vuelve a declararlo.'
-    );
   };
 
   /** Confirma el pago recibido: solo quien recibe el dinero. */
@@ -760,10 +781,13 @@ export function ChatScreen() {
     if (!guardado) return;
 
     addSystemMessage('Sistema: Pago confirmado. Servicio pagado y cerrado.');
-    emitChatNotification('Pago confirmado', 'El servicio quedó pagado y cerrado.');
   };
 
-  const handleSend = (content: string, type: 'TEXT' | 'VOICE' = 'TEXT') => {
+  const handleSend = (
+    content: string,
+    type: 'TEXT' | 'VOICE' | 'PHOTO' | 'LOCATION' = 'TEXT',
+    datosDelAdjunto: Record<string, unknown> = {}
+  ) => {
     const texto = content.trim();
     if (!texto || !service) return;
     // Conductor rechazado: no se escribe en una conversación cerrada (el campo de
@@ -773,7 +797,8 @@ export function ChatScreen() {
       startProviderChat(serviceId, effectiveDriverId);
     }
 
-    const metadata: Record<string, unknown> = type === 'VOICE' ? { duration: 3 } : {};
+    const metadata: Record<string, unknown> =
+      type === 'VOICE' ? { duration: 3 } : { ...datosDelAdjunto };
     const local: ServiceMessage = {
       id: `msg-${Date.now()}`,
       service_id: serviceId,
@@ -788,10 +813,7 @@ export function ChatScreen() {
 
     setMensajes((prev) => [...prev, local]);
     setInput('');
-    emitChatNotification(
-      isDriver ? 'Nuevo mensaje del conductor' : 'Nuevo mensaje del proveedor',
-      texto
-    );
+    // El aviso del mensaje lo da el dispositivo que lo RECIBE (tiempo real), no este.
     persistir(local, metadata);
   };
 
@@ -802,14 +824,56 @@ export function ChatScreen() {
     }, 800);
   };
 
-  const handleAttachment = (type: AttachmentType) => {
-    const labels: Record<AttachmentType, string> = {
-      photo: '🖼️ Foto',
-      camera: '📷 Cámara',
-      location: '📍 Ubicación',
-      contact: '👤 Contacto',
-    };
-    handleSend(labels[type], 'TEXT');
+  /**
+   * Bandeja de adjuntos: aquí se PIDE el permiso y llega el contenido de verdad.
+   *
+   * Antes los cuatro botones mandaban un texto («📷 Cámara», «📍 Ubicación»…): no abrían la
+   * cámara ni pedían la ubicación. Ahora la foto se sube al almacén y viaja como URL, y la
+   * ubicación se comparte con sus coordenadas (se abre en el mapa desde la burbuja).
+   * «Contacto» sigue como estaba: el usuario no lo pidió.
+   */
+  const handleAttachment = async (type: AttachmentType) => {
+    if (adjuntoEnCurso) return;
+
+    if (type === 'contact') {
+      handleSend('👤 Contacto', 'TEXT');
+      return;
+    }
+
+    setAdjuntoEnCurso(true);
+    try {
+      if (type === 'photo' || type === 'camera') {
+        const elegida = type === 'camera' ? await tomarFoto() : await elegirFoto();
+        if (!elegida.ok) {
+          if (!fueCancelado(elegida)) Alert.alert('Foto', elegida.motivo);
+          return;
+        }
+        const subida = await subirFoto(elegida.valor, userId);
+        if (!subida.ok) {
+          Alert.alert('Foto', subida.motivo);
+          return;
+        }
+        handleSend(textoDeFoto(type === 'camera'), 'PHOTO', {
+          url: subida.valor,
+          ancho: elegida.valor.ancho,
+          alto: elegida.valor.alto,
+        });
+        return;
+      }
+
+      const ubicacion = await ubicacionParaAdjuntar();
+      if (!ubicacion.ok) {
+        Alert.alert('Ubicación', ubicacion.motivo);
+        return;
+      }
+      handleSend(textoDeUbicacion(ubicacion.valor), 'LOCATION', {
+        lat: ubicacion.valor.lat,
+        lng: ubicacion.valor.lng,
+        precision: ubicacion.valor.precision ?? null,
+      });
+    } finally {
+      setAdjuntoEnCurso(false);
+    }
   };
 
   // ------------------------------------------------- editar / eliminar mensajes

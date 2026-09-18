@@ -7,13 +7,13 @@ import React, {
   ReactNode,
   useRef,
 } from 'react';
-import { Vibration } from 'react-native';
 
 import { useAuth } from './AuthContext';
 import { useRealtimeApplications } from '../hooks/useRealtimeApplications';
 import { useRealtimeGroups } from '../hooks/useRealtimeGroups';
 import { useRealtimeServices } from '../hooks/useRealtimeServices';
 import { Alert } from '../lib/alert';
+import { avisarDePostulacion, avisarDeServicioNuevo } from '../lib/avisos';
 import {
   approveApplicationInDb,
   fetchApplicationsForDriver,
@@ -54,6 +54,7 @@ import {
   leerHuellasDePostulacion,
   marcarPostulacion,
 } from '../lib/marcaDePostulacion';
+import { registrarTokenDePush } from '../lib/pushToken';
 import {
   fusionarLista,
   fusionarServicio,
@@ -63,7 +64,6 @@ import {
 } from '../lib/serviciosSincronizados';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { isVisibleAsDriver, isVisibleAsProvider } from '../lib/visibility';
-import { notifyHighPriority } from '../services/notifications';
 import { Application, ServiceAlert, ServiceStatus, Message, AppRole, Profile } from '../types';
 
 export interface GroupItem {
@@ -159,7 +159,6 @@ interface MockState {
   userProfile: UserProfile | null;
   driverDebt: number;
   debtThreshold: number;
-  notifiedServiceIds: Set<string>;
 }
 
 type MockAction =
@@ -199,7 +198,6 @@ type MockAction =
     }
   | { type: 'REMOVE_MEMBER'; payload: { groupId: string; memberId: string } }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile }
-  | { type: 'MARK_NOTIFIED'; payload: { serviceId: string } }
   | { type: 'START_PROVIDER_CHAT'; payload: { serviceId: string; driverId: string } }
   | { type: 'MARK_DRIVER_SEEN_CHAT'; payload: { serviceId: string; driverId: string } };
 
@@ -216,7 +214,6 @@ const initialState: MockState = {
   userProfile: null,
   driverDebt: 0,
   debtThreshold: 100,
-  notifiedServiceIds: new Set<string>(),
 };
 
 function mockReducer(state: MockState, action: MockAction): MockState {
@@ -530,12 +527,6 @@ function mockReducer(state: MockState, action: MockAction): MockState {
     case 'SET_USER_PROFILE':
       return { ...state, userProfile: action.payload };
 
-    case 'MARK_NOTIFIED': {
-      const next = new Set(state.notifiedServiceIds);
-      next.add(action.payload.serviceId);
-      return { ...state, notifiedServiceIds: next };
-    }
-
     case 'START_PROVIDER_CHAT':
       return {
         ...state,
@@ -627,8 +618,6 @@ interface MockContextValue extends MockState {
   removeMember: (groupId: string, memberId: string) => Promise<boolean>;
   setUserProfile: (profile: UserProfile) => void;
   persistUserProfile: (profile: UserProfile) => Promise<void>;
-  emitNotification: (serviceId: string, title?: string) => boolean;
-  emitChatNotification: (title: string, body?: string, data?: Record<string, any>) => void;
   startProviderChat: (serviceId: string, driverId: string) => void;
   markDriverSeenChat: (serviceId: string, driverId: string) => void;
   enableSettlement: (serviceId: string) => void;
@@ -843,12 +832,11 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: exists ? 'UPDATE_SERVICE' : 'ADD_SERVICE', payload: fila });
 
     // Al conductor le acaban de compartir un servicio: se le avisa en el momento.
-    // (Una alerta compartida a varios grupos es UNA fila: un solo aviso.)
+    // Es el aviso de CADA TARJETA de servicio, y va al que la recibe (el proveedor
+    // que la publica no se avisa a sí mismo). Una alerta compartida a varios grupos
+    // es UNA fila: un solo aviso.
     if (cambio.evento === 'INSERT' && fila.provider_id !== myId) {
-      notifyHighPriority('Nuevo servicio compartido', fila.title, {
-        serviceId: fila.id,
-        type: 'NEW_SERVICE',
-      });
+      avisarDeServicioNuevo(fila.title, { serviceId: fila.id });
     }
   });
 
@@ -859,6 +847,14 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       : [...state.groups, group];
     dispatch({ type: 'SET_GROUPS', payload: next });
   });
+
+  // Avisos con la app CERRADA: el dispositivo registra su token de Expo Push en cuanto hay
+  // sesión (el push real lo manda la base, migración 0025). En web no hay token.
+  useEffect(() => {
+    const id = profile?.id;
+    if (!id) return;
+    registrarTokenDePush(id).catch(() => undefined);
+  }, [profile?.id]);
 
   useRealtimeApplications((cambio) => {
     if (cambio.evento === 'DELETE') {
@@ -872,7 +868,40 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     const application = cambio.aplicacion;
     // Alta/actualización neutra: por aquí llegan postulaciones de OTROS conductores,
     // así que no puede cambiar el estado de la tarjeta en este dispositivo.
+    const previa = state.applications.find(
+      (a) => a.serviceId === application.serviceId && a.driverId === application.driverId
+    );
     dispatch({ type: 'UPSERT_APPLICATION', payload: application });
+
+    // Avisos de las postulaciones (parte del PROCESO del servicio): la postulación
+    // nueva la recibe el proveedor del servicio y la aceptación el conductor que se
+    // postuló. Antes la aceptación se avisaba en el teléfono del proveedor (el que
+    // acepta), así que el conductor no se enteraba nunca.
+    const miId = session?.user?.id ?? null;
+    const servicio = state.services.find((s) => s.id === application.serviceId);
+    if (
+      cambio.evento === 'INSERT' &&
+      miId &&
+      application.driverId !== miId &&
+      servicio?.provider_id === miId
+    ) {
+      avisarDePostulacion({
+        aceptada: false,
+        tituloDelServicio: servicio.title,
+      });
+    }
+    if (
+      cambio.evento === 'UPDATE' &&
+      miId &&
+      application.driverId === miId &&
+      application.status === 'APPROVED' &&
+      previa?.status !== 'APPROVED'
+    ) {
+      avisarDePostulacion({
+        aceptada: true,
+        tituloDelServicio: servicio?.title,
+      });
+    }
   });
 
   const persistService = async (serviceId: string, updates: Partial<ServiceAlert>) => {
@@ -1411,21 +1440,6 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         console.error('[MockStore] persistUserProfile error:', err);
         throw err;
       }
-    },
-    emitNotification: (serviceId, title) => {
-      if (state.notifiedServiceIds.has(serviceId)) return false;
-      dispatch({ type: 'MARK_NOTIFIED', payload: { serviceId } });
-      Vibration.vibrate?.(200);
-      notifyHighPriority(
-        'Nueva alerta de servicio',
-        title || 'Tienes un nuevo servicio disponible',
-        { serviceId, type: 'NEW_SERVICE' }
-      );
-      return true;
-    },
-    emitChatNotification: (title, body, data) => {
-      Vibration.vibrate?.(200);
-      notifyHighPriority(title, body || '', data ?? { type: 'CHAT' });
     },
     startProviderChat: async (serviceId, driverId) => {
       await persistApplication(serviceId, driverId, {

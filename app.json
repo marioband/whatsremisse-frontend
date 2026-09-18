@@ -19,7 +19,11 @@
       "permissions": [
         "NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ]
     },
     "notification": {
@@ -27,12 +31,28 @@
       "androidCollapsedTitle": "#{unread_notifications} nuevas alertas"
     },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "WhatsRemisse usa tus fotos para adjuntarlas en el chat.",
+          "cameraPermission": "WhatsRemisse usa la cámara para la foto que quieras enviar."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "WhatsRemisse usa tu ubicación para compartirla en el chat y medir la distancia al punto de origen."
+        }
+      ]
     ],
     "web": {},
     "extra": {
       "supabaseUrl": "YOUR_SUPABASE_URL",
-      "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY"
+      "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY",
+      "eas": {
+        "projectId": ""
+      }
     }
   }
 }

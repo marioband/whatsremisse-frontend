@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -79,15 +80,46 @@ export async function notifyHighPriority(
 }
 
 /**
- * Obtiene el token de Expo Push para enviar notificaciones remotas desde
- * Supabase / un backend. Se usa cuando haya credenciales de FCM/APNs.
+ * Obtiene el token de Expo Push del dispositivo, que es lo que permite avisar con la app
+ * CERRADA (la base lo guarda en `push_tokens` y llama a la API de Expo, migración 0025).
+ *
+ * Detalles que importan (18-09-2026):
+ *   * En WEB no existe: se devuelve null sin intentarlo (ahí los avisos solo suenan con la
+ *     app abierta).
+ *   * Hace falta el `projectId` de EAS (`app.json` → `extra.eas.projectId`). Sin él Expo
+ *     rechaza la petición: se explica por consola UNA vez, en vez de fallar en silencio.
+ *   * Cualquier otro fallo (permiso denegado, sin credenciales de FCM/APNs, simulador) se
+ *     avisa y devuelve null: sin push la app funciona igual.
  */
+let avisoDeProjectIdDado = false;
+
 export async function getExpoPushToken(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+
+  const projectId = projectIdDeEas();
+  if (!projectId) {
+    if (!avisoDeProjectIdDado) {
+      avisoDeProjectIdDado = true;
+      console.warn(
+        '[push] falta el projectId de EAS (app.json → extra.eas.projectId): sin él no se ' +
+          'pueden recibir avisos con la app cerrada. Los avisos con la app abierta siguen igual.'
+      );
+    }
+    return null;
+  }
+
   try {
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     return token;
   } catch (err) {
     console.warn('No se pudo obtener Expo Push Token:', err);
     return null;
   }
+}
+
+/** `projectId` de EAS declarado en `app.json` (extra.eas.projectId). */
+function projectIdDeEas(): string | null {
+  const extra = (Constants?.expoConfig?.extra ?? {}) as Record<string, any>;
+  const id = extra?.eas?.projectId ?? extra?.expoProjectId ?? '';
+  return typeof id === 'string' && id.trim() ? id.trim() : null;
 }

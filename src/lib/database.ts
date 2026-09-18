@@ -21,6 +21,11 @@ export interface ChatMessage {
   sender_name: string;
   content: string;
   type: 'TEXT' | 'SYSTEM' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT';
+  /**
+   * Datos del adjunto (migración 0026): `{ url, ancho, alto }` en una foto y `{ lat, lng }`
+   * en una ubicación. En `service_messages` existe desde la 0010.
+   */
+  metadata?: Record<string, any>;
   created_at: string;
   /** Cuándo se editó (migración 0019). `null` = nunca se editó. */
   edited_at: string | null;
@@ -856,6 +861,7 @@ export function mapMessageFromDb(row: DbMessage): ChatMessage {
     sender_name: '',
     content: row.content,
     type: row.type as ChatMessage['type'],
+    metadata: (row as { metadata?: Record<string, any> }).metadata || {},
     created_at: row.created_at,
     edited_at: (row as { edited_at?: string | null }).edited_at ?? null,
   };
@@ -1266,6 +1272,7 @@ export async function fetchMessagesForGroup(groupId: string): Promise<ChatMessag
       sender_name: displayName([profile?.full_name], ''),
       content: row.content,
       type: row.type as ChatMessage['type'],
+      metadata: row.metadata || {},
       created_at: row.created_at,
       edited_at: row.edited_at ?? null,
     };
@@ -1297,12 +1304,13 @@ export async function insertMessage(
   groupId: string,
   senderId: string,
   content: string,
-  type: ChatMessage['type'] = 'TEXT'
+  type: ChatMessage['type'] = 'TEXT',
+  metadata: Record<string, unknown> = {}
 ): Promise<ChatMessage> {
   if (!isSupabaseConfigured) throw new Error('Supabase not configured');
   const { data, error } = await supabase
     .from('messages')
-    .insert({ group_id: groupId, sender_id: senderId, content, type })
+    .insert({ group_id: groupId, sender_id: senderId, content, type, metadata })
     .select()
     .single();
   if (error) throw error;

@@ -73,7 +73,6 @@ export function DriverHomeScreen() {
     applyToService,
     driverDebt,
     debtThreshold,
-    emitChatNotification,
     marcarArranqueDelViaje,
   } = useMockStore();
 
@@ -448,12 +447,10 @@ export function DriverHomeScreen() {
       return;
     }
 
+    // El aviso de la postulación nueva lo recibe el PROVEEDOR (llega por tiempo real
+    // a su dispositivo cuando la base guarda la fila): el conductor que se postula no
+    // se avisa a sí mismo.
     applyToService(service.id, currentDriverId).then(releerMarcas);
-    emitChatNotification(
-      'Nueva postulaci\u00f3n',
-      `Un conductor postul\u00f3 al servicio: ${service.title}`,
-      { serviceId: service.id, type: 'NEW_APPLICATION' }
-    );
   };
 
   const handleArchive = (serviceId: string) => {

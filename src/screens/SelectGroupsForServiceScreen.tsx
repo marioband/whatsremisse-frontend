@@ -31,8 +31,7 @@ export function SelectGroupsForServiceScreen() {
   const navigation = useNavigation<SelectNav>();
   const route = useRoute<SelectRoute>();
   const { draftService, serviceId } = route.params;
-  const { role, setRole, groups, addService, updateService, compartirServicio, emitNotification } =
-    useMockStore();
+  const { role, setRole, groups, addService, updateService, compartirServicio } = useMockStore();
 
   // Si la tarjeta ya está compartida, sus grupos vienen marcados: el "Enviar" vuelve
   // a dejar el conjunto completo (quitar uno lo descomparte de ese grupo).
@@ -106,7 +105,8 @@ export function SelectGroupsForServiceScreen() {
         updateService({ ...draftService, id: serviceId });
         const compartido = await compartirServicio(serviceId, seleccionados);
         if (!compartido) return;
-        emitNotification(serviceId, draftService.title);
+        // El aviso de la tarjeta nueva lo reciben los conductores del grupo (tiempo
+        // real): el proveedor que publica no se avisa a sí mismo.
         publicado = true;
         setEstado('publicado');
         Alert.alert(
@@ -125,8 +125,6 @@ export function SelectGroupsForServiceScreen() {
       limpiarBorradorDeServicio();
       if (!id) return;
 
-      // Se notifica una sola vez por servicio, aunque se comparta a varios grupos.
-      emitNotification(id, draftService.title);
       publicado = true;
       setEstado('publicado');
 

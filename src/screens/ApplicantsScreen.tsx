@@ -63,7 +63,6 @@ export function ApplicantsScreen() {
     services,
     updateService,
     compartirServicio,
-    emitChatNotification,
   } = useMockStore();
 
   const serviceApplicants = useMemo(
@@ -169,12 +168,9 @@ export function ApplicantsScreen() {
   };
 
   const handleAceptar = (driverId: string) => {
+    // El aviso de la aceptación lo recibe el conductor por tiempo real (el
+    // proveedor es quien acepta: no se avisa a sí mismo).
     approveApplication(serviceId, driverId);
-    emitChatNotification(
-      '¡Postulación aceptada!',
-      `Fuiste seleccionado para el servicio: ${service?.title || serviceId}. El chat ya está disponible.`,
-      { serviceId, driverId, type: 'APPLICATION_ACCEPTED' }
-    );
     irAlChat(driverId);
   };
 

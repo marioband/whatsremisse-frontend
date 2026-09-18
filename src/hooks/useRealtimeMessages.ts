@@ -1,7 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
+import { avisarDeMensajeDeLaBase } from '../lib/avisos';
 import { ChatMessage } from '../lib/database';
 import { supabase } from '../lib/supabase';
+
+/** Quién soy y en qué grupo: el aviso es para el que recibe, no para el que escribe. */
+export interface AvisoDeGrupo {
+  miId?: string | null;
+  nombreDelGrupo?: string;
+}
 
 export interface GroupMessageCallbacks {
   /** Mensaje nuevo en el grupo. */
@@ -41,8 +48,16 @@ function filaDesdeEvento(row: any): ChatMessage {
  * `group_id` y el DELETE se atiende sin filtro (solo trae la clave) para que la
  * pantalla relea la conversación.
  */
-export function useRealtimeMessages(groupId: string | undefined, callbacks: GroupMessageCallbacks) {
+export function useRealtimeMessages(
+  groupId: string | undefined,
+  callbacks: GroupMessageCallbacks,
+  aviso: AvisoDeGrupo = {}
+) {
   const { onMessage, onUpdate, onDelete, onReads } = callbacks;
+  const avisoRef = useRef(aviso);
+  useEffect(() => {
+    avisoRef.current = aviso;
+  }, [aviso]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -61,6 +76,11 @@ export function useRealtimeMessages(groupId: string | undefined, callbacks: Grou
           const row = payload.new as any;
           if (!row?.id) return;
           onMessage(filaDesdeEvento(row));
+          avisarDeMensajeDeLaBase(row, {
+            miId: avisoRef.current.miId,
+            enGrupo: true,
+            nombreDelGrupo: avisoRef.current.nombreDelGrupo,
+          });
         }
       )
       .on(

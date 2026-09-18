@@ -15,10 +15,20 @@ import {
 
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
 import { Icono, ICONO_AJUSTES } from '../components/Icono';
+import { ContenidoDelMensaje } from '../components/chat/ContenidoDelMensaje';
 import { Palomas } from '../components/chat/Palomas';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useRealtimeMessages } from '../hooks/useRealtimeMessages';
+import {
+  elegirFoto,
+  fueCancelado,
+  subirFoto,
+  textoDeFoto,
+  textoDeUbicacion,
+  tomarFoto,
+  ubicacionParaAdjuntar,
+} from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
 import {
@@ -63,11 +73,13 @@ export function GroupChatScreen() {
   const route = useRoute<GroupChatRoute>();
   const { groupId, groupName } = route.params;
   const { session } = useAuth();
-  const { emitChatNotification, members, loadGroupMembers } = useMockStore();
+  const { members, loadGroupMembers } = useMockStore();
 
   const userId = session?.user?.id ?? '';
 
   const [input, setInput] = useState('');
+  // Mientras se elige/sube un adjunto no se lanza otro (ni dos veces el mismo).
+  const [adjuntoEnCurso, setAdjuntoEnCurso] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   // Mensaje que se está reescribiendo (migración 0019) y bloqueo mientras se
@@ -222,7 +234,7 @@ export function GroupChatScreen() {
     [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion, cargarLecturas]
   );
 
-  useRealtimeMessages(groupId, callbacksTiempoReal);
+  useRealtimeMessages(groupId, callbacksTiempoReal, { miId: userId, nombreDelGrupo: groupName });
 
   /**
    * ¿El mensaje que se quedó sin respuesta está ya guardado? Se lee el grupo y se busca
@@ -253,10 +265,11 @@ export function GroupChatScreen() {
    */
   const guardarMensaje = async (
     content: string,
-    type: ChatMessage['type']
+    type: ChatMessage['type'],
+    metadata: Record<string, unknown> = {}
   ): Promise<ChatMessage | null> => {
     if (!userId) return null;
-    const enviar = () => insertMessage(groupId, userId, content, type);
+    const enviar = () => insertMessage(groupId, userId, content, type, metadata);
     try {
       return await enviar();
     } catch (err) {
@@ -296,12 +309,8 @@ export function GroupChatScreen() {
       setInput(content);
       return;
     }
+    // El aviso lo da el dispositivo que recibe el mensaje (tiempo real), no este.
     setMessages((prev) => [...prev, msg]);
-    emitChatNotification(`Nuevo mensaje en ${groupName}`, content, {
-      groupId,
-      groupName,
-      type: 'GROUP_CHAT',
-    });
   };
 
   const handleSendVoice = async () => {
@@ -310,31 +319,62 @@ export function GroupChatScreen() {
     const msg = await guardarMensaje(content, 'VOICE');
     if (!msg) return;
     setMessages((prev) => [...prev, msg]);
-    emitChatNotification(`Nueva nota de voz en ${groupName}`, content, {
-      groupId,
-      groupName,
-      type: 'GROUP_CHAT',
-    });
     Alert.alert('Nota de voz', 'Enviada nota de voz de 3 segundos.');
   };
 
+  /**
+   * Bandeja de adjuntos del grupo: pide el permiso y manda el contenido de verdad.
+   *
+   * OJO (lo que estaba roto): antes se guardaba `type='CAMERA'`, que NO está entre las clases
+   * que admite la tabla (`TEXT, SYSTEM, VOICE, PHOTO, LOCATION, CONTACT`): la base rechazaba
+   * la fila con `23514 viola messages_type_check` y el mensaje se perdía. La foto de cámara
+   * es una FOTO (`PHOTO`), que es lo que corresponde.
+   */
   const handleAttachment = async (type: AttachmentType) => {
-    if (!userId) return;
-    const labels: Record<AttachmentType, string> = {
-      photo: '🖼️ Foto',
-      camera: '📷 Cámara',
-      location: '📍 Ubicación',
-      contact: '👤 Contacto',
-    };
-    const content = labels[type];
-    const msg = await guardarMensaje(content, type.toUpperCase() as ChatMessage['type']);
-    if (!msg) return;
-    setMessages((prev) => [...prev, msg]);
-    emitChatNotification(`Nuevo contenido en ${groupName}`, content, {
-      groupId,
-      groupName,
-      type: 'GROUP_CHAT',
-    });
+    if (!userId || adjuntoEnCurso) return;
+
+    if (type === 'contact') {
+      const msg = await guardarMensaje('👤 Contacto', 'CONTACT');
+      if (msg) setMessages((prev) => [...prev, msg]);
+      return;
+    }
+
+    setAdjuntoEnCurso(true);
+    try {
+      if (type === 'photo' || type === 'camera') {
+        const elegida = type === 'camera' ? await tomarFoto() : await elegirFoto();
+        if (!elegida.ok) {
+          if (!fueCancelado(elegida)) Alert.alert('Foto', elegida.motivo);
+          return;
+        }
+        const subida = await subirFoto(elegida.valor, userId);
+        if (!subida.ok) {
+          Alert.alert('Foto', subida.motivo);
+          return;
+        }
+        const msg = await guardarMensaje(textoDeFoto(type === 'camera'), 'PHOTO', {
+          url: subida.valor,
+          ancho: elegida.valor.ancho,
+          alto: elegida.valor.alto,
+        });
+        if (msg) setMessages((prev) => [...prev, msg]);
+        return;
+      }
+
+      const ubicacion = await ubicacionParaAdjuntar();
+      if (!ubicacion.ok) {
+        Alert.alert('Ubicación', ubicacion.motivo);
+        return;
+      }
+      const msg = await guardarMensaje(textoDeUbicacion(ubicacion.valor), 'LOCATION', {
+        lat: ubicacion.valor.lat,
+        lng: ubicacion.valor.lng,
+        precision: ubicacion.valor.precision ?? null,
+      });
+      if (msg) setMessages((prev) => [...prev, msg]);
+    } finally {
+      setAdjuntoEnCurso(false);
+    }
   };
 
   // ------------------------------------------------- editar / eliminar mensajes
@@ -472,8 +512,20 @@ export function GroupChatScreen() {
     const contenido = (
       <>
         {!isMe && <Text style={styles.senderName}>{senderLabel}</Text>}
-        <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
-          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMine]}>{item.content}</Text>
+        <View
+          style={[
+            styles.bubble,
+            isMe ? styles.bubbleRight : styles.bubbleLeft,
+            item.type === 'PHOTO' && styles.bubbleConFoto,
+          ]}
+        >
+          <ContenidoDelMensaje
+            tipo={item.type}
+            contenido={item.content}
+            metadata={item.metadata}
+            estiloTexto={[styles.bubbleText, isMe && styles.bubbleTextMine]}
+            colorDelEnlace={isMe ? 'rgba(255,255,255,0.85)' : '#555555'}
+          />
           <View style={styles.timeRow}>
             <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMine]}>{marca}</Text>
             {/* Palomitas (0020): solo en mis mensajes. */}
@@ -645,6 +697,8 @@ const styles = StyleSheet.create({
     color: '#2D2D2D',
     lineHeight: 20,
   },
+  /** La foto va a sangre dentro de la burbuja (sin relleno lateral extra). */
+  bubbleConFoto: { paddingHorizontal: 6, paddingTop: 6 },
   bubbleTextMine: {
     color: '#FFFFFF',
   },

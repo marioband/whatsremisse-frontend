@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, FlatList, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 
+import { ContenidoDelMensaje } from './ContenidoDelMensaje';
 import { Palomas } from './Palomas';
 import { AZUL, TEXTO } from '../../lib/colors';
 import { textoDelSistema } from '../../lib/mensajes';
@@ -136,9 +137,23 @@ export function MessageList({
       );
     }
 
+    // Foto y ubicación (migración 0026): cada clase con su contenido, dentro de la burbuja
+    // de siempre (la foto va a sangre: sin relleno lateral).
     return fila(
-      <View style={[styles.bubble, isMine ? styles.myBubble : styles.otherBubble]}>
-        <Text style={[styles.messageText, { color: palette.text }]}>{item.content}</Text>
+      <View
+        style={[
+          styles.bubble,
+          isMine ? styles.myBubble : styles.otherBubble,
+          item.type === 'PHOTO' && styles.photoBubble,
+        ]}
+      >
+        <ContenidoDelMensaje
+          tipo={item.type}
+          contenido={item.content}
+          metadata={item.metadata}
+          estiloTexto={[styles.messageText, { color: palette.text }]}
+          colorDelEnlace={palette.time}
+        />
         {horaYPalomas}
       </View>
     );
@@ -200,6 +215,8 @@ const styles = StyleSheet.create({
   },
   voiceDuration: { fontSize: 12 },
   messageText: { fontSize: 15 },
+  /** La foto va a sangre dentro de la burbuja (sin relleno lateral). */
+  photoBubble: { paddingHorizontal: 6, paddingTop: 6 },
   systemBubble: { alignSelf: 'center', marginVertical: 8 },
   systemText: { fontSize: 12, color: '#666', fontStyle: 'italic', textAlign: 'center' },
   /** Hora + palomitas, pegadas al borde derecho de la burbuja. */

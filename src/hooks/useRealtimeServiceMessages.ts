@@ -1,7 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
+import { avisarDeMensajeDeLaBase } from '../lib/avisos';
 import { ServiceMessage } from '../lib/database';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+
+/**
+ * Quién soy y qué papel tengo: es lo que decide si el mensaje que entra por tiempo
+ * real se avisa. El aviso es para el que RECIBE, nunca para el que escribe.
+ */
+export interface AvisoEnVivo {
+  miId?: string | null;
+  miRol?: 'DRIVER' | 'PROVIDER' | null;
+}
 
 export interface ServiceMessageCallbacks {
   /** Mensaje nuevo en la conversación. */
@@ -47,9 +57,15 @@ function filaDesdeEvento(row: any): ServiceMessage {
  */
 export function useRealtimeServiceMessages(
   serviceId: string | undefined,
-  callbacks: ServiceMessageCallbacks
+  callbacks: ServiceMessageCallbacks,
+  aviso: AvisoEnVivo = {}
 ) {
   const { onMessage, onUpdate, onDelete, onReads } = callbacks;
+  // En un ref para no volver a suscribirse cuando cambie el rol o el id.
+  const avisoRef = useRef(aviso);
+  useEffect(() => {
+    avisoRef.current = aviso;
+  }, [aviso]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !serviceId) return;
@@ -68,6 +84,12 @@ export function useRealtimeServiceMessages(
           const row = payload.new as any;
           if (!row?.id) return;
           onMessage(filaDesdeEvento(row));
+          // Por cada mensaje (y por cada hito del viaje, que llega como aviso del
+          // sistema) el aviso se da en el dispositivo que lo RECIBE.
+          avisarDeMensajeDeLaBase(row, {
+            miId: avisoRef.current.miId,
+            miRol: avisoRef.current.miRol,
+          });
         }
       )
       .on(

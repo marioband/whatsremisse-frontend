@@ -157,7 +157,7 @@ export interface Message {
   service_alert_id: string;
   sender_id: string | null;
   content: string;
-  type: 'TEXT' | 'SYSTEM' | 'VOICE';
+  type: 'TEXT' | 'SYSTEM' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT';
   metadata: Record<string, unknown>;
   created_at: string;
   sender_name?: string;

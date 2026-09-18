@@ -93,6 +93,8 @@ export interface DbMessage {
   sender_id: string;
   content: string;
   type: 'TEXT' | 'SYSTEM' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT';
+  /** Datos del adjunto (0026): `{ url }` en una foto, `{ lat, lng }` en una ubicación. */
+  metadata?: Record<string, any> | null;
   created_at: string;
   /** Cuándo se editó (migración 0019). `NULL` = nunca se editó. */
   edited_at: string | null;
