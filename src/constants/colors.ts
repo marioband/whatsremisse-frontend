@@ -11,8 +11,10 @@ export const COLORS = {
   chatBg: '#FFFFFF',
   inputBg: '#F0F2F5',
 
-  // Tarjetas de servicio
-  cardNew: '#FFFFFF',
+  // Tarjetas de servicio (pedido del usuario, 18-09-2026: TODAS en #F2F2F2, sean del
+  // conductor o del proveedor, para que la tarjeta se lea como superficie y no como
+  // "papel blanco" sobre el fondo del inicio).
+  cardNew: '#F2F2F2',
   cardAppliedOverlay: 'rgba(139, 149, 201, 0.60)',
   // La capa verde de "Servicio Aceptado" es tan translúcida como la azul: el
   // conductor tiene que seguir leyendo los datos del servicio bajo la capa.

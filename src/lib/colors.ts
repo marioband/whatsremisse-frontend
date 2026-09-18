@@ -35,13 +35,16 @@ export const TEXTO_SUAVE = '#444444';
 export const TEXTO_TENUE = '#888888';
 
 /**
- * Colores de las tarjetas de **Mis grupos**, por categoría (pedido del usuario,
- * 18-09-2026): primero los que soy propietario, después los que administro, luego mis
- * favoritos y al final los que solo integro.
+ * Colores de las tarjetas de **Mis grupos**, por categoría (pedido del usuario):
+ * primero los que soy propietario, después los que administro, luego mis favoritos y al
+ * final los que solo integro. El integrante se queda en #EAEAEA.
+ *
+ * Códigos cambiados el 18-09-2026 (2ª vuelta del día): propietario de #8B8FE8 a
+ * #B8BED8, administrador de #7FD8C9 a #B8B8B8 y favorito de #F5E17A a #F2F2F2.
  */
-export const GRUPO_PROPIETARIO = '#8B8FE8';
-export const GRUPO_ADMIN = '#7FD8C9';
-export const GRUPO_FAVORITO = '#F5E17A';
+export const GRUPO_PROPIETARIO = '#B8BED8';
+export const GRUPO_ADMIN = '#B8B8B8';
+export const GRUPO_FAVORITO = '#F2F2F2';
 export const GRUPO_INTEGRANTE = '#EAEAEA';
 
 /**

@@ -257,7 +257,8 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    /* Mismo fondo para todas las tarjetas de servicio (18-09-2026). */
+    backgroundColor: '#F2F2F2',
     borderRadius: 16,
     padding: 14,
     marginBottom: 12,
