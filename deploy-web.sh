@@ -70,6 +70,14 @@ else
   echo "    copia de seguridad del .env anterior: .env.bak-$FECHA"
 fi
 
+# Sin la anon key la app arranca con "Faltan credenciales" (el guardian de lib/supabase):
+# mejor abortar aqui que publicar una app muerta.
+CLAVE="$(grep '^EXPO_PUBLIC_SUPABASE_ANON_KEY=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
+if [ -z "$CLAVE" ]; then
+  echo "ERROR: .env no tiene EXPO_PUBLIC_SUPABASE_ANON_KEY."
+  exit 1
+fi
+
 # ---------------------------------------------------------------------------
 # 2) Compilar
 # ---------------------------------------------------------------------------
@@ -99,6 +107,12 @@ fi
 if ! grep -q -F "$API_URL" "$MAIN"; then
   echo "ERROR: el bundle NO lleva incrustada la direccion $API_URL."
   echo "Suele ser que el .env se leyo antes de escribirlo: borra web-build y recompila."
+  exit 1
+fi
+
+if ! grep -q -F "$CLAVE" "$MAIN"; then
+  echo "ERROR: el bundle NO lleva incrustada la anon key del .env."
+  echo "La app cargaria y quedaria con 'Faltan credenciales': no se publica."
   exit 1
 fi
 
@@ -155,6 +169,16 @@ fi
 
 echo
 echo "=== Listo ==="
+# El script suele lanzarse con sudo (hay que escribir en la carpeta del sitio). Lo que crea
+# dentro del arbol queda de root y luego el 'git pull' o el build del usuario fallan por
+# permisos: se devuelve la propiedad al dueno del arbol.
+DUENO_DE_LO_CREADO="$(stat -c '%u:%g' "$ARBOL" 2>/dev/null || true)"
+if [ "$(id -u)" = "0" ] && [ -n "$DUENO_DE_LO_CREADO" ] && [ "$DUENO_DE_LO_CREADO" != "0:0" ]; then
+  echo "=== Devolviendo la propiedad de lo que creo el script a $DUENO_DE_LO_CREADO ==="
+  chown -R "$DUENO_DE_LO_CREADO" web-build 2>/dev/null || true
+  chown "$DUENO_DE_LO_CREADO" .env 2>/dev/null || true
+  for f in .env.bak-*; do [ -e "$f" ] && chown "$DUENO_DE_LO_CREADO" "$f" 2>/dev/null || true; done
+fi
 echo "App:      $API_URL"
 if [ -n "$RESPALDO" ]; then
   echo "Respaldo: $RESPALDO (la version anterior; borralo cuando compruebes)"
