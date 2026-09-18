@@ -46,7 +46,19 @@
         }
       ]
     ],
-    "web": {},
+    "web": {
+      "name": "WhatsRemisse",
+      "shortName": "WhatsRemisse",
+      "description": "Servicios de transporte con tus grupos: conductor, proveedor y coordinación.",
+      "lang": "es",
+      "scope": "/",
+      "startUrl": "/",
+      "display": "standalone",
+      "orientation": "portrait",
+      "themeColor": "#333333",
+      "backgroundColor": "#333333",
+      "preferRelatedApplications": false
+    },
     "extra": {
       "supabaseUrl": "YOUR_SUPABASE_URL",
       "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY",
