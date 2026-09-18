@@ -1,23 +1,35 @@
 #!/usr/bin/env python3
 """
-Genera los iconos de la app instalable (PWA) a partir del logo.
+Genera los iconos de la app instalable (PWA) a partir de la marca.
 
-NO se ejecuta en el build: los PNG resultantes se suben al repo (`scripts/pwa/`) y el build
-solo los copia (`scripts/pwa-manifest.mjs`). Se vuelve a ejecutar aquí únicamente si cambia
-el logo. Necesita Pillow (`uv run --with pillow python scripts/pwa/generar-iconos.py`).
+NO se ejecuta en el build: los PNG resultantes viven en `scripts/pwa/` (subidos al repo) y el
+build solo los copia (`scripts/pwa-manifest.mjs`). Se vuelve a ejecutar aquí únicamente si
+cambia el logo. Necesita Pillow: `uv run --with pillow python scripts/pwa/generar-iconos.py`.
 
-Medidas: el icono es el globo del logo recortado a su tinta, centrado sobre el fondo oscuro
-del splash (`#333333`). El normal ocupa el 72 % del lado y el `maskable` el 58 %, porque
-Android recorta los maskable en círculo y hay que dejar aire (zona segura).
+De dónde sale `fuente-logo.png` (el globo con la persona, 1378x1388):
+  1. El asset es `assets/logo-whatsremisse.svg` (el mismo archivo que pasó el usuario el
+     18-09-2026; viewBox 0 0 1080 1080, 4 paths en blanco y el nombre "WhatsRemisse" en
+     Helvetica Neue Bold).
+  2. Ese SVG trae el nombre debajo. El usuario decidió el 18-09-2026 que el icono del app es
+     **solo el globo con la persona**, así que se recortó.
+  3. Se rasterizó en el navegador del banco sobre el fondo del splash (`#333333`) a 2160x2160
+     (2x) y se recortó la caja del globo: (391, 116, 1769, 1504) de esa imagen.
+     OJO con la fuente: el SVG pide `HelveticaNeueLTStd-Bd`, que no existe en el contenedor
+     (el nombre salía en serif); si algún día se rehace CON el nombre, hay que parchear la
+     familia a `Arial, Helvetica, 'Liberation Sans', 'DejaVu Sans', sans-serif; font-weight: 700`
+     y escalar el <text> al 90 % (con Arial mide 1030 de 1080 y se cortaba la última letra).
+
+Medidas: el globo ocupa el 72 % del lado en los iconos normales y el 58 % en el `maskable`
+(Android recorta los maskable en círculo: hay que dejar aire).
 """
 import os
 
 from PIL import Image
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FUENTE = os.path.join(RAIZ, 'assets', 'logo-whatsremisse.png')
+FUENTE = os.path.join(RAIZ, 'scripts', 'pwa', 'fuente-logo.png')
 DESTINO = os.path.join(RAIZ, 'scripts', 'pwa')
-FONDO = (51, 51, 51, 255)  # #333333
+FONDO = (51, 51, 51)  # #333333, el del splash y el background_color del manifest
 
 ICONOS = [
     (192, 0.72, 'icono-192.png'),
@@ -27,22 +39,23 @@ ICONOS = [
 ]
 
 
-def icono(globo, lado, ocupacion, ruta):
+def icono(marca, lado, ocupacion):
+    """Cuadrado de `lado` px: la marca centrada, a `ocupacion` del lado, sobre el fondo."""
+    objetivo = max(1, int(round(lado * ocupacion)))
+    escala = min(objetivo / marca.width, objetivo / marca.height)
+    ancho = max(1, int(round(marca.width * escala)))
+    alto = max(1, int(round(marca.height * escala)))
     lienzo = Image.new('RGBA', (lado, lado), FONDO)
-    ancho = max(1, int(round(lado * ocupacion)))
-    alto = max(1, int(round(ancho * globo.height / globo.width)))
-    globo.resize((ancho, alto), Image.LANCZOS)
-    lienzo.alpha_composite(globo.resize((ancho, alto), Image.LANCZOS), ((lado - ancho) // 2, (lado - alto) // 2))
-    lienzo.save(ruta)
-    return ruta
+    lienzo.alpha_composite(marca.resize((ancho, alto), Image.LANCZOS), ((lado - ancho) // 2, (lado - alto) // 2))
+    return lienzo
 
 
 def main():
-    os.makedirs(DESTINO, exist_ok=True)
-    globo = Image.open(FUENTE).convert('RGBA')
-    globo = globo.crop(globo.split()[3].getbbox())  # recortado a su tinta
+    marca = Image.open(FUENTE).convert('RGBA')
     for lado, ocupacion, nombre in ICONOS:
-        print('escrito:', icono(globo, lado, ocupacion, os.path.join(DESTINO, nombre)))
+        ruta = os.path.join(DESTINO, nombre)
+        icono(marca, lado, ocupacion).save(ruta)
+        print('escrito:', ruta)
 
 
 if __name__ == '__main__':

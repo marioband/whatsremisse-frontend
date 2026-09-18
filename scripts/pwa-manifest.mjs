@@ -124,6 +124,14 @@ if (existsSync(INDEX)) {
       '<link rel="icon" type="image/png" href="/pwa/icons/icono-192.png"></head>'
     );
   }
+  // iOS no mira el manifest para el icono de la pantalla de inicio: usa `apple-touch-icon`.
+  // Sin esto, en el iPhone el icono instalado sale con una captura de la página.
+  if (!/rel="apple-touch-icon"/.test(html) && !faltan.length) {
+    html = html.replace(
+      '</head>',
+      '<link rel="apple-touch-icon" sizes="180x180" href="/pwa/icons/icono-180-apple.png"></head>'
+    );
+  }
   if (html !== antes) {
     writeFileSync(INDEX, html);
     hecho.push('index.html: enlace al manifest y favicon');
