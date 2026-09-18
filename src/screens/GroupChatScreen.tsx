@@ -31,6 +31,7 @@ import {
   marcarLecturaDelGrupo,
   updateGroupMessage,
 } from '../lib/database';
+import { describeError, esFalloDeTransporte, textoDeErrorParaElUsuario } from '../lib/errors';
 import {
   AVISO_MIGRACION_0019,
   AVISO_SIN_CAMBIOS,
@@ -40,6 +41,7 @@ import {
   CONFIRMACION_ELIMINAR,
   dentroDeLaVentanaDeEdicion,
   idSinGuardar,
+  mensajeYaGuardado,
   PLACEHOLDER_EDICION,
 } from '../lib/mensajes';
 import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
@@ -221,54 +223,98 @@ export function GroupChatScreen() {
 
   useRealtimeMessages(groupId, callbacksTiempoReal);
 
+  /**
+   * ¿El mensaje que se quedó sin respuesta está ya guardado? Se lee el grupo y se busca
+   * el mismo texto/tipo/firma entre las últimas filas. Si la lectura también falla, null.
+   */
+  const buscarElMismoMensaje = async (
+    content: string,
+    type: ChatMessage['type']
+  ): Promise<ChatMessage | null> => {
+    try {
+      const filas = await fetchMessagesForGroup(groupId);
+      return mensajeYaGuardado(filas, { content, type, sender_id: userId ?? null });
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Guarda un mensaje en el grupo.
+   *
+   * Igual que en el chat del servicio: cuando la escritura se queda SIN RESPUESTA
+   * (fallo de transporte) la fila pudo llegar igualmente a la base, así que primero se
+   * comprueba y, solo si de verdad no está, se reintenta UNA vez. Antes, un corte de
+   * conexión devolvía el texto al campo para reenviar y, si el mensaje sí se había
+   * guardado, el reenvío lo DUPLICABA.
+   *
+   * Devuelve la fila guardada o null si de verdad no se pudo.
+   */
+  const guardarMensaje = async (
+    content: string,
+    type: ChatMessage['type']
+  ): Promise<ChatMessage | null> => {
+    if (!userId) return null;
+    const enviar = () => insertMessage(groupId, userId, content, type);
+    try {
+      return await enviar();
+    } catch (err) {
+      let fallo: unknown = err;
+      if (esFalloDeTransporte(err)) {
+        const guardado = await buscarElMismoMensaje(content, type);
+        if (guardado) return guardado;
+        try {
+          return await enviar();
+        } catch (err2) {
+          fallo = err2;
+        }
+      }
+      console.error('[GroupChat] no se pudo guardar el mensaje:', describeError(fallo), fallo);
+      Alert.alert('Error', textoDeErrorParaElUsuario(fallo));
+      return null;
+    }
+  };
+
   /** Aviso del sistema que declara la acción (edición o borrado). */
   const declararAccion = async (aviso: string) => {
     if (!userId) return;
-    try {
-      // Los mensajes del sistema del grupo llevan el autor que declara: la
-      // política de la tabla exige `auth.uid() = sender_id`. La pantalla los
-      // pinta centrados, y nadie puede editarlos ni borrarlos.
-      const msg = await insertMessage(groupId, userId, aviso, 'SYSTEM');
-      setMessages((prev) => [...prev, msg]);
-    } catch (err) {
-      console.error('[GroupChat] no se pudo dejar el aviso del sistema:', err);
-      Alert.alert('No se pudo dejar el aviso del sistema', (err as Error)?.message || '');
-    }
+    // Los mensajes del sistema del grupo llevan el autor que declara: la política de la
+    // tabla exige `auth.uid() = sender_id`. La pantalla los pinta centrados, y nadie
+    // puede editarlos ni borrarlos.
+    const msg = await guardarMensaje(aviso, 'SYSTEM');
+    if (msg) setMessages((prev) => [...prev, msg]);
   };
 
   const handleSend = async () => {
     if (!input.trim() || !userId) return;
     const content = input.trim();
     setInput('');
-    try {
-      const msg = await insertMessage(groupId, userId, content, 'TEXT');
-      setMessages((prev) => [...prev, msg]);
-      emitChatNotification(`Nuevo mensaje en ${groupName}`, content, {
-        groupId,
-        groupName,
-        type: 'GROUP_CHAT',
-      });
-    } catch {
-      Alert.alert('Error', 'No se pudo enviar el mensaje.');
+    const msg = await guardarMensaje(content, 'TEXT');
+    if (!msg) {
+      // No se guardó: el texto vuelve al campo (y el aviso ya se dio).
       setInput(content);
+      return;
     }
+    setMessages((prev) => [...prev, msg]);
+    emitChatNotification(`Nuevo mensaje en ${groupName}`, content, {
+      groupId,
+      groupName,
+      type: 'GROUP_CHAT',
+    });
   };
 
   const handleSendVoice = async () => {
     if (!userId) return;
     const content = '🎤 Nota de voz (0:03)';
-    try {
-      const msg = await insertMessage(groupId, userId, content, 'VOICE');
-      setMessages((prev) => [...prev, msg]);
-      emitChatNotification(`Nueva nota de voz en ${groupName}`, content, {
-        groupId,
-        groupName,
-        type: 'GROUP_CHAT',
-      });
-      Alert.alert('Nota de voz', 'Enviada nota de voz de 3 segundos.');
-    } catch {
-      Alert.alert('Error', 'No se pudo enviar la nota de voz.');
-    }
+    const msg = await guardarMensaje(content, 'VOICE');
+    if (!msg) return;
+    setMessages((prev) => [...prev, msg]);
+    emitChatNotification(`Nueva nota de voz en ${groupName}`, content, {
+      groupId,
+      groupName,
+      type: 'GROUP_CHAT',
+    });
+    Alert.alert('Nota de voz', 'Enviada nota de voz de 3 segundos.');
   };
 
   const handleAttachment = async (type: AttachmentType) => {
@@ -280,22 +326,14 @@ export function GroupChatScreen() {
       contact: '👤 Contacto',
     };
     const content = labels[type];
-    try {
-      const msg = await insertMessage(
-        groupId,
-        userId,
-        content,
-        type.toUpperCase() as ChatMessage['type']
-      );
-      setMessages((prev) => [...prev, msg]);
-      emitChatNotification(`Nuevo contenido en ${groupName}`, content, {
-        groupId,
-        groupName,
-        type: 'GROUP_CHAT',
-      });
-    } catch {
-      Alert.alert('Error', 'No se pudo enviar el contenido.');
-    }
+    const msg = await guardarMensaje(content, type.toUpperCase() as ChatMessage['type']);
+    if (!msg) return;
+    setMessages((prev) => [...prev, msg]);
+    emitChatNotification(`Nuevo contenido en ${groupName}`, content, {
+      groupId,
+      groupName,
+      type: 'GROUP_CHAT',
+    });
   };
 
   // ------------------------------------------------- editar / eliminar mensajes
