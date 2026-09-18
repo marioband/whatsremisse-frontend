@@ -1056,6 +1056,7 @@ export async function updateGroupMember(
   // UPDATE de `group_members` (0006) exige ser administrador, así que un integrante
   // normal no podía escribir ni su propia fila: el toque del corazón no hacía nada
   // (el UPDATE no tocaba filas, el cliente lo detectaba y revertía el cambio optimista).
+  let faltaLaRpcDelFavorito = false;
   if (updates.favorite !== undefined && !updates.role) {
     try {
       const { data, error } = await supabase.rpc('marcar_grupo_favorito', {
@@ -1068,6 +1069,10 @@ export async function updateGroupMember(
       throw new Error('No eres integrante de ese grupo.');
     } catch (err) {
       if (!esFuncionAusente(err)) throw err;
+      // Sin la 0023 solo el respaldo puede salvar el cambio, y ese solo funciona para
+      // quien es admin/owner del grupo. Si también falla, el aviso tiene que NOMBRAR la
+      // migración (por eso se recuerda aquí el error de PostgREST).
+      faltaLaRpcDelFavorito = true;
       // eslint-disable-next-line no-console
       console.warn(
         '[database] RPC marcar_grupo_favorito no instalada (0023), uso UPDATE directo:',
@@ -1100,7 +1105,15 @@ export async function updateGroupMember(
     // El UPDATE no tocó ninguna fila: o la política lo filtró (RLS) o la fila no
     // existe. Los dos casos hay que decirlos, no tragarlos.
     const accion = updates.role ? 'cambiar el rol' : 'marcar el grupo como favorito';
-    throw new Error(await describirBloqueoDeFila(groupId, userId, accion));
+    const detalle = await describirBloqueoDeFila(groupId, userId, accion);
+    if (faltaLaRpcDelFavorito) {
+      // Se devuelve con el código de "función ausente" a propósito: así el aviso de la
+      // app dice QUÉ migración aplicar y no un genérico "el backend rechazó el cambio".
+      const err = new Error(detalle) as Error & { code?: string };
+      err.code = 'PGRST202';
+      throw err;
+    }
+    throw new Error(detalle);
   }
 }
 
