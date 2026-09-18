@@ -104,11 +104,18 @@ fi
 
 echo "=== Build verificado: $(basename "$MAIN") ($(stat -c %s "$MAIN") bytes) ==="
 
-if [ -f scripts/verificar_build.py ] || [ -f /opt/data/tmp/verificar_build.py ]; then
-  VERIFICADOR=scripts/verificar_build.py
-  [ -f "$VERIFICADOR" ] || VERIFICADOR=/opt/data/tmp/verificar_build.py
-  echo "=== Verificador del proyecto ==="
-  python3 "$VERIFICADOR" web-build | tail -5 || true
+if [ -f scripts/verificar_build.py ]; then
+  echo "=== Verificador del proyecto (scripts/verificar_build.py) ==="
+  python3 scripts/verificar_build.py web-build | tail -4 || true
+elif [ -f /opt/data/tmp/verificar_build.py ]; then
+  echo "=== Verificador del proyecto (/opt/data/tmp/verificar_build.py) ==="
+  echo "    (ojo: su comprobación de la URL es un heurístico —busca la primera direccion"
+  echo "     con puerto y en este bundle aparece antes una de una libreria—; la comprobación"
+  echo "     exacta es la de arriba, la de $API_URL)"
+  python3 /opt/data/tmp/verificar_build.py web-build | tail -4 || true
+else
+  echo "=== Verificador del proyecto: no está en este árbol (se salta) ==="
+  echo "    Los controles que importan ya pasaron arriba: sin (process, y con $API_URL incrustada."
 fi
 
 # ---------------------------------------------------------------------------
@@ -125,7 +132,14 @@ else
   echo "    (no habia nada publicado en esa carpeta: no hay respaldo que guardar)"
 fi
 mkdir -p "$DESTINO"
-cp -r web-build/. "$DESTINO/"
+# Se copia el contenido tal cual, salvo un .env que pudiera quedar dentro: no tiene nada
+# que hacer en la raiz publica del sitio.
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --delete --exclude='.env' --exclude='.env.*' web-build/ "$DESTINO/"
+else
+  cp -r web-build/. "$DESTINO/"
+  rm -f "$DESTINO"/.env "$DESTINO"/.env.* 2>/dev/null || true
+fi
 
 # nginx lee del disco: no hace falta recargarlo. Solo se comprueba.
 echo "=== Comprobando lo que sirve el dominio ==="
