@@ -57,7 +57,14 @@
       "orientation": "portrait",
       "themeColor": "#333333",
       "backgroundColor": "#333333",
-      "preferRelatedApplications": false
+      "preferRelatedApplications": false,
+      "meta": {
+        "apple": {
+          "barStyle": "black",
+          "touchFullscreen": true,
+          "mobileWebAppCapable": true
+        }
+      }
     },
     "extra": {
       "supabaseUrl": "YOUR_SUPABASE_URL",
