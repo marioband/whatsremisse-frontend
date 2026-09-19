@@ -265,8 +265,12 @@ export function PagoDelServicio({
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => setDireccion(null)} disabled={ocupado}>
-                  accessibilityRole="button" accessibilityLabel="Cambiar de dirección del pago"
+                <TouchableOpacity
+                  onPress={() => setDireccion(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cambiar de dirección del pago"
+                  disabled={ocupado}
+                >
                   <Text style={styles.cambiar}>← cambiar</Text>
                 </TouchableOpacity>
                 <Text style={styles.ayuda}>
