@@ -1,7 +1,9 @@
-import { useNavigation } from '@react-navigation/native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -19,7 +21,8 @@ import { Icono, ICONO_CORAZON_BORDE, ICONO_CORAZON_LLENO, ICONO_GRUPOS } from '.
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
 import { useArrastreDeReordenamiento } from '../hooks/useArrastreDeReordenamiento';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
-import { TEXTO_SUAVE } from '../lib/colors';
+import { ROJO_ACCION, TEXTO_SUAVE } from '../lib/colors';
+import { fetchGruposSinLeer, silenciarGrupo } from '../lib/database';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -44,6 +47,52 @@ export function MyGroupsScreen() {
    */
   const [buscarAbierto, setBuscarAbierto] = useState(false);
   const [consulta, setConsulta] = useState('');
+
+  /**
+   * El globo con el contador de sin leer, por grupo (0028), y el silencio de cada uno.
+   *
+   * El contador sale de la base (`grupos_sin_leer`): cuenta lo que llegó después de la última vez
+   * que se abrió el chat del grupo, sin contar lo propio. Se recarga cada vez que la pantalla
+   * vuelve al frente, que es cuando puede haber cambiado.
+   */
+  const [sinLeer, setSinLeer] = useState<Record<string, number>>({});
+  const [silenciados, setSilenciados] = useState<Record<string, boolean>>({});
+
+  const cargarSinLeer = useCallback(() => {
+    void fetchGruposSinLeer()
+      .then(setSinLeer)
+      .catch(() => undefined);
+  }, []);
+
+  useFocusEffect(cargarSinLeer);
+
+  // El silencio se conoce por el grupo (viene de la base con la membresía); si el usuario lo
+  // cambia aquí, manda lo que él acaba de elegir.
+  useEffect(() => {
+    setSilenciados((previos) => {
+      const siguiente = { ...previos };
+      for (const grupo of groups) {
+        if (siguiente[grupo.id] === undefined) siguiente[grupo.id] = grupo.muted === true;
+      }
+      return siguiente;
+    });
+  }, [groups]);
+
+  /** Silenciar (o volver a activar) los avisos del chat de un grupo. */
+  const alternarSilencio = async (grupo: GroupItem) => {
+    const nuevo = !(silenciados[grupo.id] ?? false);
+    setSilenciados((previos) => ({ ...previos, [grupo.id]: nuevo }));
+    const guardado = await silenciarGrupo(grupo.id, nuevo);
+    if (!guardado) {
+      // Si la base no lo aceptó (por ejemplo, la 0028 sin aplicar), se deshace: nada de mentir
+      // con un interruptor que dice una cosa y el servidor hace otra.
+      setSilenciados((previos) => ({ ...previos, [grupo.id]: !nuevo }));
+      Alert.alert(
+        'No se pudo cambiar',
+        'No se pudo guardar el silencio del grupo. Comprueba tu conexión e inténtalo otra vez.'
+      );
+    }
+  };
 
   /**
    * El orden y el color de las tarjetas salen de `lib/ordenDeGrupos` (propietario →
@@ -113,6 +162,16 @@ export function MyGroupsScreen() {
           {item.name}
         </Text>
 
+        {/* El globo de sin leer, arriba a la derecha de la tarjeta (pedido del usuario,
+            19-09-2026). Sale solo cuando hay mensajes nuevos. */}
+        {(sinLeer[item.id] ?? 0) > 0 && (
+          <View style={styles.globoSinLeer}>
+            <Text style={styles.globoSinLeerTexto}>
+              {sinLeer[item.id] > 99 ? '99+' : sinLeer[item.id]}
+            </Text>
+          </View>
+        )}
+
         {/* Acciones */}
         <View style={styles.actions}>
           <TouchableOpacity
@@ -133,6 +192,21 @@ export function MyGroupsScreen() {
           >
             {/* El engranaje de grupos, en negro institucional (no el avatar de Cuenta). */}
             <Icono fuente={ICONO_GRUPOS} tamano={20} />
+          </TouchableOpacity>
+          {/* Silenciar este grupo: sin avisos de su chat. La campana tachada dice que está
+              silenciado (pedido del usuario, 19-09-2026). */}
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => void alternarSilencio(item)}
+            accessibilityLabel={
+              silenciados[item.id] ? 'Activar los avisos de este grupo' : 'Silenciar este grupo'
+            }
+          >
+            <MaterialCommunityIcons
+              name={silenciados[item.id] ? 'bell-off' : 'bell-outline'}
+              size={20}
+              color={silenciados[item.id] ? ROJO_ACCION : DARK_BG}
+            />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -184,6 +258,24 @@ export function MyGroupsScreen() {
 }
 
 const styles = StyleSheet.create({
+  /** El globo del contador: arriba a la derecha, oscuro sobre las tarjetas claras. */
+  globoSinLeer: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: DARK_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  globoSinLeerTexto: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   container: {
     flex: 1,
     backgroundColor: LIGHT_BG,

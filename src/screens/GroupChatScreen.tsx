@@ -44,6 +44,7 @@ import {
   insertMessage,
   marcarLecturaDelGrupo,
   updateGroupMessage,
+  marcarGrupoLeido,
 } from '../lib/database';
 import { describeError, esFalloDeTransporte, textoDeErrorParaElUsuario } from '../lib/errors';
 import { duracionEnTexto, Grabacion } from '../lib/grabacionDeAudio';
@@ -78,6 +79,14 @@ export function GroupChatScreen() {
   const { groupId, groupName } = route.params;
   const { session } = useAuth();
   const { members, loadGroupMembers } = useMockStore();
+
+  /**
+   * Abrir el chat del grupo lo marca como leído: el globo del contador del apartado «Mis grupos»
+   * vuelve a cero (0028, pedido del usuario del 19-09-2026).
+   */
+  useEffect(() => {
+    void marcarGrupoLeido(groupId).catch(() => undefined);
+  }, [groupId]);
 
   const userId = session?.user?.id ?? '';
 

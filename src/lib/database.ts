@@ -976,7 +976,7 @@ export async function fetchGroupsForUser(userId: string): Promise<GroupItem[]> {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase
     .from('group_members')
-    .select('group_id, role, favorite, groups(id, name, owner_id)')
+    .select('group_id, role, favorite, muted, groups(id, name, owner_id)')
     .eq('user_id', userId);
   if (error) throw error;
 
@@ -989,6 +989,9 @@ export async function fetchGroupsForUser(userId: string): Promise<GroupItem[]> {
         user_id: userId,
         role: row.role,
         favorite: row.favorite,
+        // 0028: si el usuario silenció este grupo. Sin la migración llega undefined y la app
+        // se comporta como si no estuviera silenciado (que es la verdad).
+        muted: row.muted === true,
         joined_at: '',
       });
     })
@@ -1922,4 +1925,104 @@ export async function fetchPosicionesDePostulantes(
     if (esFuncionAusente(err)) return {};
     throw err;
   }
+}
+
+// =====================================================================
+// Avisos y sin leer (migración 0028, 19-09-2026)
+// =====================================================================
+// Todo esto tolera que la 0028 no esté aplicada: si falta, la app se queda como estaba (sin
+// contador, sin silencio y sin avisos) en vez de romperse. El contador y el silencio se avisan
+// por consola para saber qué falta aplicar.
+
+/**
+ * Cuántos mensajes sin leer tiene cada grupo del usuario, por id de grupo.
+ *
+ * Sale de la función `grupos_sin_leer` (0028): cuenta lo que llegó DESPUÉS de la última vez que
+ * ese usuario abrió el chat del grupo, sin contar lo que él mismo escribió.
+ */
+export async function fetchGruposSinLeer(): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured) return {};
+  const { data, error } = await supabase.rpc('grupos_sin_leer');
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) {
+      console.warn(
+        '[database] no hay contador de sin leer: falta aplicar 0028_avisos_y_grupos_silenciados.sql'
+      );
+      return {};
+    }
+    throw error;
+  }
+  const cuenta: Record<string, number> = {};
+  for (const fila of (data ?? []) as { group_id: string; sin_leer: number | string }[]) {
+    const numero = Number(fila.sin_leer ?? 0);
+    if (fila.group_id && Number.isFinite(numero) && numero > 0) cuenta[fila.group_id] = numero;
+  }
+  return cuenta;
+}
+
+/** Marca el chat del grupo como leído (el contador vuelve a cero). */
+export async function marcarGrupoLeido(groupId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase.rpc('marcar_grupo_leido', { p_group_id: groupId });
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) return false;
+    throw error;
+  }
+  return true;
+}
+
+/** Silencia (o vuelve a activar) los avisos del chat de un grupo, solo para este usuario. */
+export async function silenciarGrupo(groupId: string, silenciado: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data, error } = await supabase.rpc('silenciar_grupo', {
+    p_group_id: groupId,
+    p_silenciado: silenciado,
+  });
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) {
+      console.warn(
+        '[database] no se pudo silenciar: falta aplicar 0028_avisos_y_grupos_silenciados.sql'
+      );
+      return false;
+    }
+    throw error;
+  }
+  return data === true;
+}
+
+/** Guarda (o actualiza) la suscripción de avisos de este navegador. */
+export async function guardarSuscripcionDeAvisos(datos: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent?: string | null;
+}): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data, error } = await supabase.rpc('guardar_suscripcion_de_avisos', {
+    p_endpoint: datos.endpoint,
+    p_p256dh: datos.p256dh,
+    p_auth: datos.auth,
+    p_user_agent: datos.user_agent ?? null,
+  });
+  if (error) {
+    if (esFuncionAusente(error) || esTablaAusente(error)) {
+      console.warn(
+        '[database] no se guardó la suscripción de avisos: falta aplicar 0028_avisos_y_grupos_silenciados.sql'
+      );
+      return false;
+    }
+    throw error;
+  }
+  return data === true;
+}
+
+/** Borra la suscripción de este navegador (cuando el usuario desactiva los avisos). */
+export async function borrarSuscripcionDeAvisos(endpoint: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { error } = await supabase.from('push_web').delete().eq('endpoint', endpoint);
+  if (error) {
+    if (esTablaAusente(error)) return false;
+    throw error;
+  }
+  return true;
 }

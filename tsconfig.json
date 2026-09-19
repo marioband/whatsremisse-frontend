@@ -4,5 +4,6 @@
     "strict": true,
     "jsx": "react-native"
   },
-  "include": ["**/*.ts", "**/*.tsx"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "supabase/functions", "web-build"]
 }

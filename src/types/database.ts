@@ -86,7 +86,8 @@ export interface DbGroupMember {
   user_id: string;
   role: 'owner' | 'admin' | 'member';
   favorite: boolean;
-  joined_at: string;
+  joined_at: string; /** Silencio de los avisos de este grupo (0028). */
+  muted?: boolean | null;
 }
 
 export interface DbMessage {

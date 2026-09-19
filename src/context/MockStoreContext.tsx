@@ -71,6 +71,8 @@ import { isVisibleAsDriver, isVisibleAsProvider } from '../lib/visibility';
 import { Application, ServiceAlert, ServiceStatus, Message, AppRole, Profile } from '../types';
 
 export interface GroupItem {
+  /** Si este usuario silenció los avisos del chat de este grupo (migración 0028). */
+  muted?: boolean;
   id: string;
   name: string;
   role: 'owner' | 'admin' | 'member';
