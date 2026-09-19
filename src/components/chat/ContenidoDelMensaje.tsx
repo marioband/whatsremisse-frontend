@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Image,
   Linking,
@@ -10,13 +10,16 @@ import {
   TouchableOpacity,
 } from 'react-native';
 
+import { VisorDeFoto } from './VisorDeFoto';
+
 /**
  * Lo que se pinta DENTRO de la burbuja, según la clase de mensaje (migración 0026).
  *
  * Vive en un solo sitio para que el chat del servicio y el del grupo se vean igual: una
- * foto se pinta como imagen (la URL viaja en `metadata.url`) y una ubicación como texto con
- * su enlace para abrir el mapa (`metadata.lat` / `metadata.lng`). Cualquier otra clase
- * —texto, nota de voz, contacto— se pinta como texto, como siempre.
+ * foto se pinta como imagen (la URL viaja en `metadata.url`) —y **se abre a pantalla
+ * completa al tocarla** (`VisorDeFoto`, 19-09-2026: antes no había forma de abrirla)— y una
+ * ubicación como texto con su enlace para abrir el mapa (`metadata.lat` / `metadata.lng`).
+ * Cualquier otra clase —texto, nota de voz, contacto— se pinta como texto, como siempre.
  */
 interface Props {
   tipo?: string | null;
@@ -35,10 +38,27 @@ export function ContenidoDelMensaje({
   estiloTexto,
   colorDelEnlace,
 }: Props) {
+  /** ¿Está la foto abierta a pantalla completa? (pedido del usuario, 19-09-2026). */
+  const [fotoAbierta, setFotoAbierta] = useState(false);
+
   if (tipo === 'PHOTO') {
     const url = (metadata?.url as string) || '';
     if (!url) return <Text style={estiloTexto}>{contenido}</Text>;
-    return <Image source={{ uri: url }} style={styles.photo} resizeMode="cover" />;
+    return (
+      <>
+        <TouchableOpacity
+          onPress={() => setFotoAbierta(true)}
+          activeOpacity={0.85}
+          accessibilityRole="imagebutton"
+          accessibilityLabel="Abrir la foto"
+        >
+          <Image source={{ uri: url }} style={styles.photo} resizeMode="cover" />
+        </TouchableOpacity>
+        {fotoAbierta && (
+          <VisorDeFoto url={url} pie={contenido} onCerrar={() => setFotoAbierta(false)} />
+        )}
+      </>
+    );
   }
 
   if (tipo === 'LOCATION') {

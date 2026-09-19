@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, FlatList, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 
 import { ContenidoDelMensaje } from './ContenidoDelMensaje';
+import { NotaDeVoz } from './NotaDeVoz';
 import { Palomas } from './Palomas';
 import { AZUL, TEXTO } from '../../lib/colors';
 import { textoDelSistema } from '../../lib/mensajes';
@@ -48,6 +49,15 @@ const COLORS_OTHER = {
   bar: 'rgba(0,0,0,0.12)',
   progress: AZUL,
 };
+
+/**
+ * Cuánto hay que MANTENER PULSADO un mensaje para que salga el menú de editar/eliminar.
+ *
+ * 0,5 s es el tiempo que usa WhatsApp (el usuario lo pidió el 19-09-2026: «la acción de
+ * eliminar chat debe activarse al mantener pulsado el texto durante 2 segundos o el tiempo que
+ * usa whatsapp»). Vale para el chat del servicio y el del grupo: es el mismo gesto.
+ */
+export const DELAY_PULSACION_LARGA_MS = 500;
 
 export function MessageList({
   messages,
@@ -97,9 +107,13 @@ export function MessageList({
       </View>
     );
 
-    // Los mensajes propios se pueden editar o eliminar: el menú se abre con una
-    // pulsación larga y, en web (donde no hay costumbre de mantener pulsado), con
-    // un clic.
+    // Los mensajes propios se pueden editar o eliminar: el menú se abre MANTENIENDO PULSADO
+    // (regla del usuario, 19-09-2026: «la acción de eliminar chat debe activarse al mantener
+    // pulsado el texto», con el tiempo de WhatsApp ≈ 0,5 s). Antes, en web se abría además con
+    // un clic suelto: eso hacía que un toque normal —querer seleccionar o copiar— sacara el menú
+    // de borrar, así que se quitó. En iPhone el sistema se comía la pulsación larga con su
+    // propio menú de texto: por eso la fila va marcada (`data-mensaje`) y el CSS de `App.tsx`
+    // apaga ahí el "callout" y la selección.
     const tocable = !!onActions && isMine;
     const abrirMenu = () => onActions?.(item);
 
@@ -108,9 +122,9 @@ export function MessageList({
         <TouchableOpacity
           style={[styles.row, isMine ? styles.rowRight : styles.rowLeft]}
           onLongPress={abrirMenu}
-          onPress={Platform.OS === 'web' ? abrirMenu : undefined}
-          delayLongPress={400}
+          delayLongPress={DELAY_PULSACION_LARGA_MS}
           activeOpacity={0.85}
+          {...(Platform.OS === 'web' ? { dataSet: { mensaje: 'tocable' } } : null)}
         >
           {burbuja}
         </TouchableOpacity>
@@ -119,19 +133,20 @@ export function MessageList({
       );
 
     if (item.type === 'VOICE') {
+      // Nota de voz de verdad (19-09-2026): se reproduce al tocarla, con su barra de avance.
+      // `metadata.url` es el audio en el almacén; `duration` los segundos que duró.
       return fila(
         <View
           style={[styles.bubble, isMine ? styles.myBubble : styles.otherBubble, styles.voiceBubble]}
         >
-          <View style={styles.voiceRow}>
-            <Text style={styles.voiceIcon}>🎤</Text>
-            <View style={[styles.voiceBar, { backgroundColor: palette.bar }]}>
-              <View style={[styles.voiceProgress, { backgroundColor: palette.progress }]} />
-            </View>
-            <Text style={[styles.voiceDuration, { color: palette.time }]}>
-              {(item.metadata?.duration as number) || 0}s
-            </Text>
-          </View>
+          <NotaDeVoz
+            url={(item.metadata?.url as string) || undefined}
+            duracionSegundos={(item.metadata?.duration as number) || 0}
+            esMio={isMine}
+            colorBarra={palette.bar}
+            colorAvance={palette.progress}
+            colorTiempo={palette.time}
+          />
           {horaYPalomas}
         </View>
       );

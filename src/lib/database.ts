@@ -1,4 +1,4 @@
-import { describeError, esColumnaAusente } from './errors';
+import { describeError, esColumnaAusente, esFalloDeTransporte } from './errors';
 import { conGrupos } from './gruposDeServicio';
 import { displayName } from './names';
 import type { LecturaDeChat } from './palomas';
@@ -588,6 +588,43 @@ async function conReintentoDeEsquema<T>(llamada: () => Promise<T>, intentos = 2)
 }
 
 /**
+ * Confirmar el pago recibido, a prueba de un fallo de transporte (19-09-2026).
+ *
+ * El usuario lo reportó así: «al intentar por primera vez hacer clic en confirmar pago salió
+ * No se pudo confirmar el pago / El backend rechazó la confirmación / No hubo respuesta del
+ * servidor». La RPC existe y responde (comprobado contra el backend: contesta su propia regla
+ * `P0001`), así que lo que falló fue la RED en ese primer toque — el caso típico de iPhone al
+ * volver del fondo, cuando Safari revive la pestaña y la petición muere.
+ *
+ * Qué se hace, en este orden:
+ *  1. Se confirma.
+ *  2. Si el fallo es de TRANSPORTE (no hay respuesta, no hay error de la base), **primero se
+ *     lee la fila**: la escritura pudo haber llegado igualmente y el pago ya estaría
+ *     confirmado. Es la regla del proyecto con los fallos de transporte (ver `lib/errors.ts`).
+ *  3. Si no llegó, se reintenta UNA vez; solo entonces se avisa del error.
+ */
+export async function confirmarPagoDelServicio(serviceId: string): Promise<ServiceAlert | null> {
+  if (!isSupabaseConfigured) return null;
+  const confirmar = () =>
+    conReintentoDeEsquema(async () => {
+      const { data: fila, error } = await supabase.rpc('confirmar_pago_recibido', {
+        p_service_id: serviceId,
+      });
+      if (error) throw error;
+      return fila;
+    });
+
+  try {
+    return aFilaDeRpc(await confirmar());
+  } catch (err) {
+    if (!esFalloDeTransporte(err)) throw err;
+    const enLaBase = await fetchServiceAlertById(serviceId).catch(() => null);
+    if (enLaBase && enLaBase.pago_estado === 'CONFIRMADO') return enLaBase;
+    return aFilaDeRpc(await confirmar());
+  }
+}
+
+/**
  * Reporte del conductor (migración 0012). El conductor no puede escribir la fila
  * de `service_alerts` (RLS: solo el proveedor), así que su avance se guarda con
  * esta función, que valida que él sea el conductor asignado y que el paso no
@@ -717,19 +754,6 @@ export async function resolverDeclaracionDePago(
     const { data: fila, error } = await supabase.rpc('resolver_declaracion_de_pago', {
       p_service_id: serviceId,
       p_aceptar: aceptar,
-    });
-    if (error) throw error;
-    return fila;
-  });
-  return aFilaDeRpc(data);
-}
-
-/** Confirma el pago recibido: solo quien recibe el dinero. */
-export async function confirmarPagoDelServicio(serviceId: string): Promise<ServiceAlert | null> {
-  if (!isSupabaseConfigured) return null;
-  const data = await conReintentoDeEsquema(async () => {
-    const { data: fila, error } = await supabase.rpc('confirmar_pago_recibido', {
-      p_service_id: serviceId,
     });
     if (error) throw error;
     return fila;

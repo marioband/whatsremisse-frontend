@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Keyboard,
+  PanResponder,
   Platform,
   Text,
   TextInput,
@@ -10,7 +11,17 @@ import {
   View,
 } from 'react-native';
 
-import { AZUL, BORDE_SUAVE, FONDO_TARJETA, TEXTO, TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
+import { Alert } from '../lib/alert';
+import {
+  AZUL,
+  BORDE_SUAVE,
+  FONDO_TARJETA,
+  ROJO_ACCION,
+  TEXTO,
+  TEXTO_SUAVE,
+  TEXTO_TENUE,
+} from '../lib/colors';
+import { duracionEnTexto, empezarAGrabar, Grabacion, Grabadora } from '../lib/grabacionDeAudio';
 import { TITULO_EDITANDO } from '../lib/mensajes';
 
 export type AttachmentType = 'photo' | 'camera' | 'location' | 'contact';
@@ -38,7 +49,11 @@ interface ChatInputBarProps {
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
-  onSendVoice: () => void;
+  /**
+   * Enviar una NOTA DE VOZ ya grabada (19-09-2026). Recibe el audio en crudo: la pantalla lo
+   * sube al almacén y manda el mensaje, igual que hace con las fotos.
+   */
+  onEnviarNotaDeVoz: (grabacion: Grabacion) => void;
   onAttachment: (type: AttachmentType) => void;
   placeholder?: string;
   /**
@@ -49,6 +64,16 @@ interface ChatInputBarProps {
   editando?: boolean;
   onCancelarEdicion?: () => void;
 }
+
+/**
+ * Cuánto hay que deslizar para bloquear la grabación (seguir sin mantener pulsado) y para
+ * cancelarla, en píxeles. Son los mismos gestos de WhatsApp: ▲ bloquea, ◀ cancela.
+ */
+const DESLIZ_BLOQUEAR = -60;
+const DESLIZ_CANCELAR = -70;
+
+/** Por debajo de esto no es una nota de voz: es un toque suelto (WhatsApp tampoco la manda). */
+const DURACION_MINIMA_MS = 900;
 
 const ATTACHMENT_OPTIONS: {
   type: AttachmentType;
@@ -65,7 +90,7 @@ export function ChatInputBar({
   value,
   onChangeText,
   onSend,
-  onSendVoice,
+  onEnviarNotaDeVoz,
   onAttachment,
   placeholder = 'Escribe un mensaje...',
   editando = false,
@@ -74,8 +99,151 @@ export function ChatInputBar({
   const [trayOpen, setTrayOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  // Con texto escrito el botón derecho envía el mensaje; vacío envía audio.
+  // Con texto escrito el botón derecho envía el mensaje; vacío graba una nota de voz.
   const hasText = value.trim().length > 0;
+
+  // ---------------------------------------------------------------- nota de voz
+  const [grabando, setGrabando] = useState(false);
+  const [bloqueada, setBloqueada] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
+  const [pausada, setPausada] = useState(false);
+  const [transcurrido, setTranscurrido] = useState(0);
+
+  const grabadoraRef = useRef<Grabadora | null>(null);
+  // Los gestos viven en el responder, que se crea UNA vez: el estado actual va en refs para
+  // que no lea valores viejos (si no, soltar después de bloquear mandaría el audio a medias).
+  const bloqueadaRef = useRef(false);
+  const cancelandoRef = useRef(false);
+  /** El responder se crea UNA vez: necesita saber si se está grabando sin leer el estado. */
+  const grabandoRef = useRef(false);
+
+  useEffect(() => {
+    if (!grabando) return;
+    const reloj = setInterval(() => {
+      setTranscurrido(grabadoraRef.current?.transcurridoMs() ?? 0);
+    }, 200);
+    return () => clearInterval(reloj);
+  }, [grabando]);
+  // El micrófono se suelta si la barra desaparece con una grabación abierta.
+  useEffect(
+    () => () => {
+      grabadoraRef.current?.cancelar();
+      grabadoraRef.current = null;
+    },
+    []
+  );
+
+  const limpiarGrabacion = () => {
+    grabandoRef.current = false;
+    grabadoraRef.current = null;
+    bloqueadaRef.current = false;
+    cancelandoRef.current = false;
+    setGrabando(false);
+    setBloqueada(false);
+    setCancelando(false);
+    setPausada(false);
+    setTranscurrido(0);
+  };
+
+  /** Mantener pulsado el micrófono: se pide el permiso y se empieza a grabar. */
+  const empezarGrabacion = async () => {
+    if (grabando) return;
+    Keyboard.dismiss();
+    setTrayOpen(false);
+    const permiso = await empezarAGrabar();
+    if (!permiso.ok) {
+      Alert.alert('Micrófono', permiso.motivo);
+      limpiarGrabacion();
+      return;
+    }
+    grabadoraRef.current = permiso.valor;
+    grabandoRef.current = true;
+    setGrabando(true);
+  };
+
+  /** Soltar: manda la nota de voz (o la cancela, si se deslizó para cancelar). */
+  const soltarGrabacion = async () => {
+    const grabadora = grabadoraRef.current;
+    if (!grabadora) {
+      limpiarGrabacion();
+      return;
+    }
+    // Bloqueada: el dedo ya no manda; seguirá grabando hasta pulsar enviar o cancelar.
+    if (bloqueadaRef.current && !cancelandoRef.current) return;
+
+    if (cancelandoRef.current) {
+      grabadora.cancelar();
+      limpiarGrabacion();
+      return;
+    }
+    const duracion = grabadora.transcurridoMs();
+    const grabacion = await grabadora.detener();
+    limpiarGrabacion();
+    if (!grabacion) return;
+    if (duracion < DURACION_MINIMA_MS) {
+      // Un toque suelto no es una nota de voz: se avisa cómo se graba.
+      Alert.alert(
+        'Nota de voz',
+        'Mantén pulsado el micrófono para grabar (o desliza hacia arriba para grabar sin mantener).'
+      );
+      return;
+    }
+    onEnviarNotaDeVoz(grabacion);
+  };
+
+  const cancelar = () => {
+    grabadoraRef.current?.cancelar();
+    limpiarGrabacion();
+  };
+
+  const alternarPausa = () => {
+    const grabadora = grabadoraRef.current;
+    if (!grabadora) return;
+    if (grabadora.enPausa()) {
+      grabadora.reanudar();
+      setPausada(false);
+      return;
+    }
+    grabadora.pausar();
+    setPausada(true);
+  };
+
+  const enviarGrabacion = async () => {
+    const grabadora = grabadoraRef.current;
+    if (!grabadora) return;
+    const grabacion = await grabadora.detener();
+    limpiarGrabacion();
+    if (grabacion) onEnviarNotaDeVoz(grabacion);
+  };
+
+  const responderDelMicrofono = useRef(
+    PanResponder.create({
+      // Solo reclama el toque cuando NO se está grabando: con la grabación bloqueada, los
+      // botones de pausar/cancelar/enviar que van DENTRO tienen que poder pulsarse.
+      onStartShouldSetPanResponder: () => !grabandoRef.current,
+      onMoveShouldSetPanResponder: () => !grabandoRef.current,
+      onPanResponderGrant: () => {
+        void empezarGrabacion();
+      },
+      onPanResponderMove: (_evento, gesto) => {
+        if (gesto.dy < DESLIZ_BLOQUEAR && !bloqueadaRef.current) {
+          bloqueadaRef.current = true;
+          setBloqueada(true);
+        }
+        const cancela = gesto.dx < DESLIZ_CANCELAR;
+        if (cancela !== cancelandoRef.current) {
+          cancelandoRef.current = cancela;
+          setCancelando(cancela);
+        }
+      },
+      onPanResponderRelease: () => {
+        void soltarGrabacion();
+      },
+      onPanResponderTerminate: () => {
+        cancelar();
+      },
+    })
+  ).current;
 
   const toggleTray = () => {
     // La bandeja de adjuntos sustituye al teclado, igual que en la referencia.
@@ -130,35 +298,109 @@ export function ChatInputBar({
           </TouchableOpacity>
         )}
 
-        <View style={styles.inputPill}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder={placeholder}
-            placeholderTextColor={TEXTO_TENUE}
-            value={value}
-            onChangeText={onChangeText}
-            onFocus={closeTray}
-            multiline
-            maxLength={1000}
-          />
-        </View>
+        {grabando ? (
+          /* Grabando: la píldora se convierte en el aviso de la grabación (tiempo + gestos). */
+          <View style={[styles.inputPill, styles.grabandoPill]}>
+            <View style={[styles.puntoRojo, pausada && styles.puntoEnPausa]} />
+            <Text style={styles.grabandoTiempo}>{duracionEnTexto(transcurrido)}</Text>
+            <Text style={styles.grabandoAyuda} numberOfLines={1}>
+              {bloqueada
+                ? pausada
+                  ? 'En pausa'
+                  : 'Grabando sin mantener'
+                : cancelando
+                  ? 'Suelta para cancelar'
+                  : '◀ cancelar · ▲ sin mantener'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.inputPill}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              placeholder={placeholder}
+              placeholderTextColor={TEXTO_TENUE}
+              value={value}
+              onChangeText={onChangeText}
+              onFocus={closeTray}
+              multiline
+              maxLength={1000}
+            />
+          </View>
+        )}
 
-        <TouchableOpacity
-          style={[styles.actionBtn, editando && !hasText && styles.actionBtnMuted]}
-          onPress={editando ? onSend : hasText ? onSend : onSendVoice}
-          disabled={editando && !hasText}
-          activeOpacity={0.7}
-          accessibilityLabel={
-            editando ? 'Guardar el mensaje editado' : hasText ? 'Enviar mensaje' : 'Enviar audio'
-          }
-        >
-          <MaterialCommunityIcons
-            name={editando ? ICONS.guardar : hasText ? ICONS.enviar : ICONS.microfono}
-            size={24}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
+        {editando || hasText ? (
+          <TouchableOpacity
+            style={[styles.actionBtn, editando && !hasText && styles.actionBtnMuted]}
+            onPress={onSend}
+            disabled={editando && !hasText}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={editando ? 'Guardar el mensaje editado' : 'Enviar mensaje'}
+          >
+            <MaterialCommunityIcons
+              name={editando ? ICONS.guardar : ICONS.enviar}
+              size={24}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        ) : (
+          /*
+           * El gesto de mantener pulsado vive en este CONTENEDOR, que no se desmonta al
+           * cambiar de "micrófono" a "pausar/cancelar/enviar": si el nodo del gesto desaparece
+           * mientras el dedo está apoyado, el sistema da el gesto por terminado y cancela la
+           * grabación (medido en el banco: al pasar a bloqueada se perdía lo grabado).
+           */
+          <View
+            style={grabando && bloqueada ? styles.accionesBloqueadas : styles.accionSuelta}
+            {...responderDelMicrofono.panHandlers}
+            {...(Platform.OS === 'web' ? { dataSet: { micro: 'tocable' } } : null)}
+          >
+            {grabando && bloqueada ? (
+              <>
+                <TouchableOpacity
+                  style={styles.roundBtn}
+                  onPress={alternarPausa}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={pausada ? 'Reanudar la grabación' : 'Pausar la grabación'}
+                >
+                  <MaterialCommunityIcons
+                    name={pausada ? 'play' : 'pause'}
+                    size={22}
+                    color={TEXTO_SUAVE}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.roundBtn, styles.roundBtnCancelar]}
+                  onPress={cancelar}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancelar la grabación"
+                >
+                  <MaterialCommunityIcons name="close" size={22} color={ROJO_ACCION} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={enviarGrabacion}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Enviar la nota de voz"
+                >
+                  <MaterialCommunityIcons name={ICONS.enviar} size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View
+                style={styles.actionBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Grabar nota de voz"
+              >
+                <MaterialCommunityIcons name={ICONS.microfono} size={24} color="#FFFFFF" />
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       {trayOpen && (
@@ -252,10 +494,50 @@ const styles = StyleSheet.create({
     backgroundColor: AZUL,
     justifyContent: 'center',
     alignItems: 'center',
+    // El micrófono se queda el gesto: sin esto, al mover el dedo el navegador cree que se
+    // desplaza la página, manda `pointercancel` y la grabación se cancelaba sola (medido).
+    ...Platform.select({ web: { touchAction: 'none' } as object }),
   },
+  /** El contenedor del gesto cuando se puede empezar a grabar (solo el micrófono). */
+  accionSuelta: { flexDirection: 'row', alignItems: 'center' },
+  /** Con la grabación bloqueada: pausar, cancelar y enviar, en fila. */
+  accionesBloqueadas: { flexDirection: 'row', alignItems: 'center' },
+  roundBtnCancelar: { marginHorizontal: 8 },
   /** Al editar sin texto no hay nada que guardar: el botón se ve apagado. */
   actionBtnMuted: {
     opacity: 0.45,
+  },
+  /**
+   * La píldora mientras se graba: punto rojo, tiempo y la ayuda de los gestos (WhatsApp).
+   * El punto se queda ámbar en pausa para que se vea de un vistazo que NO está grabando.
+   */
+  grabandoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3F3',
+    borderWidth: 1,
+    borderColor: ROJO_ACCION,
+  },
+  puntoRojo: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: ROJO_ACCION,
+    marginRight: 8,
+  },
+  puntoEnPausa: {
+    backgroundColor: '#C9A227',
+  },
+  grabandoTiempo: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: TEXTO,
+    marginRight: 8,
+  },
+  grabandoAyuda: {
+    flex: 1,
+    fontSize: 12,
+    color: TEXTO_SUAVE,
   },
   tray: {
     flexDirection: 'row',

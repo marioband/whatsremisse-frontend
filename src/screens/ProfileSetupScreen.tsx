@@ -16,6 +16,7 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore, UserProfile } from '../context/MockStoreContext';
+import { elegirFoto, fueCancelado, subirFoto, tomarFoto } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { alternarUnidad, UNIDADES, UNIDADES_GRANDES, UNIDAD_POR_DEFECTO } from '../lib/unidades';
@@ -27,7 +28,7 @@ const DARK_BG = '#2D2D2D';
 
 export function ProfileSetupScreen() {
   const navigation = useNavigation<SetupNav>();
-  const { phone, completeProfileSetup, requiresProfileSetup } = useAuth();
+  const { session, phone, completeProfileSetup, requiresProfileSetup } = useAuth();
   const { role, userProfile, persistUserProfile } = useMockStore();
 
   const [firstName, setFirstName] = useState(userProfile?.firstName || '');
@@ -43,6 +44,8 @@ export function ProfileSetupScreen() {
   const [plate, setPlate] = useState(userProfile?.plate || '');
   const [providerName, setProviderName] = useState(userProfile?.providerName || '');
   const [driverPhotoUrl, setDriverPhotoUrl] = useState(userProfile?.driverPhotoUrl || '');
+  /** ¿Qué foto se está subiendo ahora? (para avisar y no dejar pulsar dos veces) */
+  const [subiendoFoto, setSubiendoFoto] = useState<'perfil' | 'proveedor' | null>(null);
   const [providerPhotoUrl, setProviderPhotoUrl] = useState(userProfile?.providerPhotoUrl || '');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -67,31 +70,55 @@ export function ProfileSetupScreen() {
     setHydratedFields(true);
   }, [userProfile, hydratedFields]);
 
+  /**
+   * Sube una foto de verdad (pedido del usuario, 19-09-2026: «el botón para subir foto de
+   * perfil / de empresa no funciona adecuadamente»).
+   *
+   * Antes estos botones no subían nada: abrían un aviso que solo ofrecía un avatar generado,
+   * así que no había forma de poner una foto propia. Ahora se elige de la galería o se toma con
+   * la cámara (`lib/adjuntos`, el mismo camino que las fotos del chat: se recorta a 1600 px y
+   * se sube al almacén) y la URL pública se guarda en el perfil, donde ya se leía.
+   */
+  const pedirYSubirFoto = async (cual: 'perfil' | 'proveedor', origen: 'camara' | 'galeria') => {
+    const elegida = origen === 'camara' ? await tomarFoto() : await elegirFoto();
+    if (!elegida.ok) {
+      // Cancelar no es un fallo: no se avisa de nada.
+      if (!fueCancelado(elegida)) Alert.alert('No se pudo usar la foto', elegida.motivo);
+      return;
+    }
+    const userId = session?.user?.id || '';
+    if (!userId) {
+      Alert.alert('No se pudo subir la foto', 'Vuelve a entrar a tu cuenta e inténtalo de nuevo.');
+      return;
+    }
+    setSubiendoFoto(cual);
+    const subida = await subirFoto(elegida.valor, userId);
+    setSubiendoFoto(null);
+    if (!subida.ok) {
+      Alert.alert('No se pudo subir la foto', subida.motivo);
+      return;
+    }
+    if (cual === 'perfil') setDriverPhotoUrl(subida.valor);
+    else setProviderPhotoUrl(subida.valor);
+  };
+
   const handlePickDriverPhoto = () => {
-    Alert.alert('Foto de perfil', 'Selecciona una foto de perfil.', [
+    Alert.alert('Foto de perfil', '¿De dónde sacamos la foto?', [
+      { text: 'Tomar foto', onPress: () => pedirYSubirFoto('perfil', 'camara') },
+      { text: 'Elegir de la galería', onPress: () => pedirYSubirFoto('perfil', 'galeria') },
       { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Usar avatar generado',
-        onPress: () => setDriverPhotoUrl('https://api.dicebear.com/7.x/avataaars/svg?seed=driver'),
-      },
     ]);
   };
 
   const handlePickProviderPhoto = () => {
-    Alert.alert('Foto de proveedor', 'Selecciona una foto de proveedor.', [
+    Alert.alert('Foto de empresa', '¿De dónde sacamos la foto?', [
+      { text: 'Tomar foto', onPress: () => pedirYSubirFoto('proveedor', 'camara') },
+      { text: 'Elegir de la galería', onPress: () => pedirYSubirFoto('proveedor', 'galeria') },
+      {
+        text: 'Usar mi foto de perfil',
+        onPress: () => setProviderPhotoUrl(driverPhotoUrl || ''),
+      },
       { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Usar avatar generado',
-        onPress: () =>
-          setProviderPhotoUrl('https://api.dicebear.com/7.x/avataaars/svg?seed=provider'),
-      },
-      {
-        text: 'Usar foto del conductor',
-        onPress: () =>
-          setProviderPhotoUrl(
-            driverPhotoUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=driver'
-          ),
-      },
     ]);
   };
 
@@ -214,7 +241,9 @@ export function ProfileSetupScreen() {
                 <Text style={styles.avatarIcon}>📷</Text>
               </View>
             )}
-            <Text style={styles.changePhotoText}>Cambiar foto de perfil</Text>
+            <Text style={styles.changePhotoText}>
+              {subiendoFoto === 'perfil' ? 'Subiendo foto…' : 'Cambiar foto de perfil'}
+            </Text>
           </TouchableOpacity>
 
           {/* Driver data */}
@@ -312,7 +341,11 @@ export function ProfileSetupScreen() {
                 </View>
               )}
               <Text style={styles.changePhotoText}>
-                {providerPhotoUrl ? 'Cambiar foto' : 'Subir foto de proveedor'}
+                {subiendoFoto === 'proveedor'
+                  ? 'Subiendo foto…'
+                  : providerPhotoUrl
+                    ? 'Cambiar foto'
+                    : 'Subir foto de proveedor'}
               </Text>
             </TouchableOpacity>
           </View>

@@ -195,6 +195,44 @@ export async function subirFoto(foto: FotoElegida, userId: string): Promise<Resu
   }
 }
 
+/**
+ * Sube una NOTA DE VOZ al almacén y devuelve su URL pública (19-09-2026).
+ *
+ * Es el hermano de `subirFoto`: mismo bucket y misma carpeta propia (`<user_id>/…`, que es lo
+ * que exigen las políticas de la 0026). La extensión sale del contenedor que grabó el
+ * navegador, porque Safari graba `audio/mp4` y Chrome `audio/webm`: si se forzara una sola, el
+ * otro teléfono subiría un archivo que no se puede reproducir.
+ */
+export async function subirAudio(
+  grabacion: { blob: Blob; tipo: string },
+  userId: string
+): Promise<Resultado<string>> {
+  if (!isSupabaseConfigured) {
+    return { ok: false, motivo: 'La app no tiene configurado su almacén de archivos.' };
+  }
+  try {
+    const tipo = grabacion.tipo || 'audio/webm';
+    const extension = tipo.includes('mp4') ? 'm4a' : tipo.includes('ogg') ? 'ogg' : 'webm';
+    const ruta = `${userId}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.${extension}`;
+
+    const { error } = await supabase.storage
+      .from(BUCKET_DE_ADJUNTOS)
+      .upload(ruta, grabacion.blob, { contentType: tipo, upsert: false });
+
+    if (error) {
+      return { ok: false, motivo: `No se pudo subir la nota de voz: ${error.message}` };
+    }
+
+    const { data } = supabase.storage.from(BUCKET_DE_ADJUNTOS).getPublicUrl(ruta);
+    if (!data?.publicUrl) {
+      return { ok: false, motivo: 'El almacén no devolvió la dirección de la nota de voz.' };
+    }
+    return { ok: true, valor: data.publicUrl };
+  } catch (err) {
+    return { ok: false, motivo: `No se pudo preparar la nota de voz: ${mensajeDeError(err)}` };
+  }
+}
+
 /** ¿El usuario canceló el selector? (no hay que avisar de nada) */
 export function fueCancelado(resultado: Resultado<unknown>): boolean {
   return !resultado.ok && (resultado as { motivo?: string }).motivo === CANCELADO;

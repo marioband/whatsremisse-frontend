@@ -25,26 +25,11 @@ const ROLE_COLORS = {
   favorite: '#FFF59E',
 };
 
-type RoleTab = 'Conductor' | 'Proveedor' | 'Mis Grupos' | 'Ubicaciones';
-const ROLE_TABS: RoleTab[] = ['Conductor', 'Proveedor', 'Mis Grupos', 'Ubicaciones'];
-
-/**
- * Rótulo visible de cada pestaña. La clave interna 'Mis Grupos' se conserva (la comparan
- * HomeScreen y MainHeader), pero el usuario pidió que el rótulo diga «Mis grupos» (18-09-2026):
- * esta pantalla pintaba la clave cruda.
- */
-const ETIQUETA_DEL_TAB: Record<RoleTab, string> = {
-  Conductor: 'Conductor',
-  Proveedor: 'Proveedor',
-  'Mis Grupos': 'Mis grupos',
-  Ubicaciones: 'Ubicaciones',
-};
-
 export function SelectGroupsForServiceScreen() {
   const navigation = useNavigation<SelectNav>();
   const route = useRoute<SelectRoute>();
   const { draftService, serviceId } = route.params;
-  const { role, setRole, groups, addService, updateService, compartirServicio } = useMockStore();
+  const { groups, addService, updateService, compartirServicio } = useMockStore();
 
   /**
    * Los grupos en el MISMO orden que «Mis grupos» (pedido del usuario, 19-09-2026): la regla
@@ -67,23 +52,6 @@ export function SelectGroupsForServiceScreen() {
   const [estado, setEstado] = useState<EstadoDeEnvio>('listo');
   const guardandoRef = useRef(false);
   const boton = estadoDelBotonDeEnvio(estado);
-
-  const activeRoleTab: RoleTab =
-    role === 'DRIVER'
-      ? 'Conductor'
-      : role === 'PROVIDER'
-        ? 'Proveedor'
-        : role === 'GROUP_OWNER'
-          ? 'Mis Grupos'
-          : 'Ubicaciones';
-
-  const handleRoleChange = (tab: RoleTab) => {
-    if (tab === 'Conductor') setRole('DRIVER');
-    if (tab === 'Proveedor') setRole('PROVIDER');
-    if (tab === 'Mis Grupos') setRole('GROUP_OWNER');
-    if (tab === 'Ubicaciones') setRole('ADMIN');
-    navigation.navigate('Main');
-  };
 
   const toggleGroup = (id: string) => {
     setSelectedIds((prev) => {
@@ -192,51 +160,29 @@ export function SelectGroupsForServiceScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header: la pantalla no tenía título —el usuario lo pidió el 19-09-2026, «podría ser
-          Selección de grupos»— y con el título va el atrás, que devuelve AL FORMULARIO del
-          servicio para seguir editándolo: la pantalla anterior sigue montada, así que vuelve
-          con todo lo escrito (y el borrador del dispositivo es el respaldo). */}
+      {/* Header: título CENTRADO (pedido del usuario, 19-09-2026) con el atrás a la izquierda y
+          Cuenta a la derecha. Los dos extremos miden lo mismo para que el título quede en el
+          centro exacto, no "centrado dentro de lo que sobra". */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Volver a editar el servicio"
-          >
-            <Text style={styles.backArrow}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Selección de grupos
-          </Text>
-        </View>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Text style={styles.icon}>👤</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => navigation.navigate('Settings')}
-            accessibilityLabel="Cuenta"
-          >
-            <Icono fuente={ICONO_AJUSTES} tamano={22} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Role tabs */}
-      <View style={styles.roleBar}>
-        {ROLE_TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.roleTab, activeRoleTab === tab && styles.roleTabActive]}
-            onPress={() => handleRoleChange(tab)}
-          >
-            <Text style={[styles.roleTabText, activeRoleTab === tab && styles.roleTabTextActive]}>
-              {ETIQUETA_DEL_TAB[tab]}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerLado}
+          accessibilityRole="button"
+          accessibilityLabel="Volver a editar el servicio"
+        >
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Selección de grupos
+        </Text>
+        <TouchableOpacity
+          style={[styles.headerLado, styles.headerLadoDerecho]}
+          onPress={() => navigation.navigate('Settings')}
+          accessibilityRole="button"
+          accessibilityLabel="Cuenta"
+        >
+          <Icono fuente={ICONO_AJUSTES} tamano={22} />
+        </TouchableOpacity>
       </View>
 
       {/* Group list */}
@@ -278,14 +224,16 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
+  /**
+   * Los dos extremos miden lo MISMO (44 px) para que el título quede en el centro exacto de la
+   * pantalla, no centrado dentro de lo que sobra a los lados (el atrás es más ancho que el icono).
+   */
+  headerLado: {
+    width: 44,
+    justifyContent: 'center',
   },
-  backBtn: {
-    paddingRight: 10,
-    paddingVertical: 4,
+  headerLadoDerecho: {
+    alignItems: 'flex-end',
   },
   backArrow: {
     color: '#fff',
@@ -296,42 +244,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    flexShrink: 1,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-  },
-  iconBtn: {
-    marginLeft: 16,
-    padding: 4,
-  },
-  icon: {
-    color: '#fff',
-    fontSize: 20,
-  },
-  roleBar: {
-    flexDirection: 'row',
-    backgroundColor: DARK_BG,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-  },
-  roleTab: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  roleTabActive: {
-    backgroundColor: BLUE,
-  },
-  roleTabText: {
-    color: '#ccc',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  roleTabTextActive: {
-    color: '#fff',
+    textAlign: 'center',
   },
   list: {
     padding: 16,

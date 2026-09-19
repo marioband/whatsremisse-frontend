@@ -29,6 +29,12 @@ export const ALTURA_VISIBLE = '--altura-visible';
 /** Cuánto tiene que encoger el viewport para considerarlo el teclado (la barra de Safari ~60). */
 export const UMBRAL_TECLADO_PX = 120;
 
+/**
+ * Un cambio de alto MENOR que esto no se aplica: son los temblores de 1-2 px que el navegador
+ * reporta mientras el teclado se mueve (y que antes movían la app entera a saltos).
+ */
+export const UMBRAL_CAMBIO_PX = 40;
+
 export interface EstadoDeAltura {
   /** Alto visible ahora mismo, en píxeles. */
   alto: number;
@@ -84,31 +90,72 @@ export function instalarAlturaVisible(): () => void {
   if (!vv) return () => {};
 
   const raiz = document.documentElement;
+  /** El último alto que se aplicó de verdad (para no reaplicar cambios de 1-2 px). */
+  let ultimoAplicado = 0;
+  let temporizador: ReturnType<typeof setTimeout> | null = null;
 
-  const medir = () => {
-    const alto = Math.round(vv.height);
-    const base = Math.max(estado.base, alto);
-    const teclado = base - alto > UMBRAL_TECLADO_PX;
-    publicar({ alto, base, teclado });
+  /**
+   * Aplica el alto UNA vez, cuando la cosa se queda quieta.
+   *
+   * Antes se aplicaba en CADA evento (`resize`/`scroll` del viewport visible), y en iPhone la
+   * animación del teclado dispara decenas: la app se redimensionaba a saltos mientras el
+   * navegador también movía la página. Eso era «hay unos movimientos extraños cuando uno está
+   * usando el teclado» (reporte del usuario, 19-09-2026). Ahora se espera a que termine la
+   * animación (`RETARDO_DE_ASENTAMIENTO_MS`) y se aplica el valor final de una sola vez; los
+   * cambios pequeños (menos de `UMBRAL_CAMBIO_PX`) se ignoran directamente.
+   */
+  const aplicar = (alto: number, teclado: boolean) => {
+    ultimoAplicado = alto;
     // La altura de la app es SIEMPRE lo que se ve de verdad. En iOS hace falta incluso sin
     // teclado: el 100 % es el viewport de maquetación (el de las barras plegadas), así que sin
     // esto el fondo de la app —y la barra de escribir— quedan detrás de la barra de Safari.
     // En Android y en escritorio coincide con la ventana y no cambia nada.
     raiz.style.setProperty(ALTURA_VISIBLE, `${alto}px`);
     if (teclado) {
-      // Safari desplaza el documento al enfocar el campo; con la app ya ajustada, sobra.
+      // Safari desplaza el documento al enfocar el campo; con la app ya ajustada, ese
+      // desplazamiento es el que dejaba un hueco entre la barra de escribir y el teclado.
       window.scrollTo(0, 0);
     }
   };
+
+  const medir = () => {
+    const alto = Math.round(vv.height);
+    const base = Math.max(estado.base, alto);
+    const teclado = base - alto > UMBRAL_TECLADO_PX;
+    const cambioDeTeclado = teclado !== estado.teclado;
+    publicar({ alto, base, teclado });
+
+    const cambioGrande = Math.abs(alto - ultimoAplicado) > UMBRAL_CAMBIO_PX;
+    if (!cambioDeTeclado && !cambioGrande && ultimoAplicado !== 0) return;
+
+    if (temporizador) clearTimeout(temporizador);
+    // Con el teclado hay animación (iOS ~250 ms): se espera a que acabe. Sin él, basta un
+    // suspiro para no perder el último ajuste de un giro.
+    temporizador = setTimeout(
+      () => {
+        temporizador = null;
+        aplicar(Math.round(vv.height), teclado);
+      },
+      cambioDeTeclado ? 260 : 60
+    );
+  };
+
+  /** Al enfocar/desenfocar un campo el teclado aparece o se va: se vuelve a medir. */
+  const alEnfocar = () => medir();
 
   medir();
   vv.addEventListener('resize', medir);
   vv.addEventListener('scroll', medir);
   window.addEventListener('orientationchange', medir);
+  document.addEventListener('focusin', alEnfocar);
+  document.addEventListener('focusout', alEnfocar);
   return () => {
+    if (temporizador) clearTimeout(temporizador);
     vv.removeEventListener('resize', medir);
     vv.removeEventListener('scroll', medir);
     window.removeEventListener('orientationchange', medir);
+    document.removeEventListener('focusin', alEnfocar);
+    document.removeEventListener('focusout', alEnfocar);
     raiz.style.removeProperty(ALTURA_VISIBLE);
   };
 }

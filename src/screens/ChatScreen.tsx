@@ -39,6 +39,7 @@ import {
   textoDeUbicacion,
   tomarFoto,
   ubicacionParaAdjuntar,
+  subirAudio,
 } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
 import { marcarAvisoPropio } from '../lib/avisos';
@@ -60,6 +61,7 @@ import {
   updateServiceMessage,
 } from '../lib/database';
 import { describeError, esFalloDeTransporte, textoDeErrorParaElUsuario } from '../lib/errors';
+import { duracionEnTexto, Grabacion } from '../lib/grabacionDeAudio';
 import { IniciosDelViaje, leerIniciosDelViaje, yaInicio } from '../lib/inicioDelViaje';
 import { estadoEfectivoDeMiPostulacion, filaDeMiPostulacion } from '../lib/listaDelConductor';
 import {
@@ -855,8 +857,9 @@ export function ChatScreen() {
       startProviderChat(serviceId, effectiveDriverId);
     }
 
-    const metadata: Record<string, unknown> =
-      type === 'VOICE' ? { duration: 3 } : { ...datosDelAdjunto };
+    // La metadata la manda quien envía: en una nota de voz lleva la URL del audio y lo que
+    // dura de verdad (antes se forzaba `{ duration: 3 }` porque la nota de voz era inventada).
+    const metadata: Record<string, unknown> = { ...datosDelAdjunto };
     const local: ServiceMessage = {
       id: `msg-${Date.now()}`,
       service_id: serviceId,
@@ -875,11 +878,27 @@ export function ChatScreen() {
     persistir(local, metadata);
   };
 
-  const handleSendVoice = () => {
-    setTimeout(() => {
-      handleSend('🎤 Nota de voz (0:03)', 'VOICE');
-      Alert.alert('Nota de voz', 'Enviada nota de voz de 3 segundos.');
-    }, 800);
+  /**
+   * Nota de voz grabada (19-09-2026). Antes esto era un simulacro: mandaba el texto
+   * «🎤 Nota de voz (0:03)» y un aviso diciendo que se había enviado. Ahora el audio que grabó
+   * la barra se sube al almacén y el mensaje viaja como URL, igual que las fotos.
+   */
+  const handleEnviarNotaDeVoz = async (grabacion: Grabacion) => {
+    if (!mySenderId) {
+      Alert.alert('No se pudo enviar la nota de voz', 'Vuelve a entrar a tu cuenta e inténtalo.');
+      return;
+    }
+    const subida = await subirAudio(grabacion, mySenderId);
+    if (!subida.ok) {
+      Alert.alert('No se pudo enviar la nota de voz', subida.motivo);
+      return;
+    }
+    const segundos = Math.max(1, Math.round(grabacion.duracionMs / 1000));
+    handleSend(`🎤 Nota de voz (${duracionEnTexto(grabacion.duracionMs)})`, 'VOICE', {
+      url: subida.valor,
+      duration: segundos,
+      tipo: grabacion.tipo,
+    });
   };
 
   /**
@@ -1318,7 +1337,7 @@ export function ChatScreen() {
               value={input}
               onChangeText={setInput}
               onSend={mensajeEnEdicion ? handleGuardarEdicion : () => handleSend(input)}
-              onSendVoice={handleSendVoice}
+              onEnviarNotaDeVoz={handleEnviarNotaDeVoz}
               onAttachment={handleAttachment}
               editando={!!mensajeEnEdicion}
               onCancelarEdicion={handleCancelarEdicion}

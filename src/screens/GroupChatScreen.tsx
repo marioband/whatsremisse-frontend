@@ -16,6 +16,7 @@ import {
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
 import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { ContenidoDelMensaje } from '../components/chat/ContenidoDelMensaje';
+import { DELAY_PULSACION_LARGA_MS } from '../components/chat/MessageList';
 import { Palomas } from '../components/chat/Palomas';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
@@ -29,6 +30,7 @@ import {
   textoDeUbicacion,
   tomarFoto,
   ubicacionParaAdjuntar,
+  subirAudio,
 } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
@@ -56,6 +58,7 @@ import {
   mensajeYaGuardado,
   PLACEHOLDER_EDICION,
 } from '../lib/mensajes';
+import { duracionEnTexto, Grabacion } from '../lib/grabacionDeAudio';
 import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { displayName } from '../lib/names';
 import { AVISO_MIGRACION_0020, LecturaDeChat, estadoDePalomas } from '../lib/palomas';
@@ -314,13 +317,33 @@ export function GroupChatScreen() {
     setMessages((prev) => [...prev, msg]);
   };
 
-  const handleSendVoice = async () => {
-    if (!userId) return;
-    const content = '🎤 Nota de voz (0:03)';
-    const msg = await guardarMensaje(content, 'VOICE');
+  /**
+   * Nota de voz grabada (19-09-2026): antes se mandaba el texto «🎤 Nota de voz (0:03)» con un
+   * aviso diciendo que se había enviado. Ahora el audio grabado se sube al almacén y viaja como
+   * URL, igual que las fotos del grupo.
+   */
+  const handleEnviarNotaDeVoz = async (grabacion: Grabacion) => {
+    if (!userId) {
+      Alert.alert('No se pudo enviar la nota de voz', 'Vuelve a entrar a tu cuenta e inténtalo.');
+      return;
+    }
+    const subida = await subirAudio(grabacion, userId);
+    if (!subida.ok) {
+      Alert.alert('No se pudo enviar la nota de voz', subida.motivo);
+      return;
+    }
+    const segundos = Math.max(1, Math.round(grabacion.duracionMs / 1000));
+    const msg = await guardarMensaje(
+      `🎤 Nota de voz (${duracionEnTexto(grabacion.duracionMs)})`,
+      'VOICE',
+      {
+        url: subida.valor,
+        duration: segundos,
+        tipo: grabacion.tipo,
+      }
+    );
     if (!msg) return;
     setMessages((prev) => [...prev, msg]);
-    Alert.alert('Nota de voz', 'Enviada nota de voz de 3 segundos.');
   };
 
   /**
@@ -544,16 +567,19 @@ export function GroupChatScreen() {
       </>
     );
 
-    // Los mensajes propios se pueden editar o eliminar: pulsación larga y, en web
-    // (donde no hay costumbre de mantener pulsado), un clic.
+    // Los mensajes propios se pueden editar o eliminar MANTENIENDO PULSADO, con el mismo
+    // tiempo que en el chat del servicio (regla del usuario, 19-09-2026). El clic suelto que
+    // había en web se quitó: sacaba el menú de borrar cuando solo se quería tocar el mensaje.
+    // La marca `data-mensaje` es la que apaga en iPhone el menú de texto del sistema, que se
+    // comía la pulsación larga (ver el CSS de `App.tsx`).
     if (isMe) {
       return (
         <TouchableOpacity
           style={[styles.bubbleRow, styles.rowRight]}
           onLongPress={() => handleAccionesDeMensaje(item)}
-          onPress={Platform.OS === 'web' ? () => handleAccionesDeMensaje(item) : undefined}
-          delayLongPress={400}
+          delayLongPress={DELAY_PULSACION_LARGA_MS}
           activeOpacity={0.85}
+          {...(Platform.OS === 'web' ? { dataSet: { mensaje: 'tocable' } } : null)}
         >
           {contenido}
         </TouchableOpacity>
@@ -621,7 +647,7 @@ export function GroupChatScreen() {
             value={input}
             onChangeText={setInput}
             onSend={mensajeEnEdicion ? handleGuardarEdicion : handleSend}
-            onSendVoice={handleSendVoice}
+            onEnviarNotaDeVoz={handleEnviarNotaDeVoz}
             onAttachment={handleAttachment}
             editando={!!mensajeEnEdicion}
             onCancelarEdicion={handleCancelarEdicion}
