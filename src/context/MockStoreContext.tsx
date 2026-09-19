@@ -66,6 +66,7 @@ import {
   pasoDelSiguienteHito,
 } from '../lib/serviciosSincronizados';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { unidadesDeMiPerfil } from '../lib/unidades';
 import { isVisibleAsDriver, isVisibleAsProvider } from '../lib/visibility';
 import { Application, ServiceAlert, ServiceStatus, Message, AppRole, Profile } from '../types';
 
@@ -136,7 +137,12 @@ export interface UserProfile {
   lastName: string;
   dni: string;
   phone: string;
-  vehicleType: string;
+  /**
+   * Las unidades del conductor (19-09-2026: puede tener VARIAS; antes era `vehicleType`,
+   * un solo texto). Se guardan en `vehicle_data.vehicle_type` y el inicio del conductor
+   * muestra la alerta si comparte alguna unidad con lo que pide el servicio.
+   */
+  vehicleTypes: string[];
   brand: string;
   model: string;
   year: string;
@@ -647,7 +653,7 @@ function userProfileFromAuthProfile(profile: Profile): UserProfile {
     lastName: text(vehicle.last_name) || restTokens.join(' '),
     dni: text(vehicle.dni),
     phone: profile.phone || '',
-    vehicleType: text(vehicle.vehicle_type) || 'Auto',
+    vehicleTypes: unidadesDeMiPerfil(vehicle.vehicle_type),
     brand: text(vehicle.brand),
     model: text(vehicle.model),
     year: vehicle.year !== undefined && vehicle.year !== null ? String(vehicle.year) : '',
@@ -670,7 +676,7 @@ function userProfileToPatch(profile: UserProfile): ProfilePatch {
     full_name: `${profile.firstName} ${profile.lastName}`.trim() || null,
     phone: profile.phone || null,
     vehicle_data: {
-      vehicle_type: profile.vehicleType,
+      vehicle_type: profile.vehicleTypes,
       brand: profile.brand,
       model: profile.model,
       year: Number.isNaN(year) ? undefined : year,

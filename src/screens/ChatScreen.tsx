@@ -18,7 +18,13 @@ import { BotonDeNavegacion } from '../components/BotonDeNavegacion';
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
 import { ServiceCard } from '../components/ServiceCard';
 import { SwipeStatusButton } from '../components/SwipeStatusButton';
-import { ChatHeader, MessageList, PagoDelServicio, ProviderStatusBar } from '../components/chat';
+import {
+  ChatHeader,
+  EvaluationBar,
+  MessageList,
+  PagoDelServicio,
+  ProviderStatusBar,
+} from '../components/chat';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
@@ -123,6 +129,8 @@ export function ChatScreen() {
     services,
     applications,
     startProviderChat,
+    approveApplication,
+    rejectApplicationFrom,
     markDriverSeenChat,
     advanceDriverProgress,
     declararPago,
@@ -196,6 +204,32 @@ export function ChatScreen() {
     (isProvider && !!service?.assigned_driver_id);
   const isEvaluationMode =
     isProvider && service && !isAssigned && service.status !== 'STATUS_COMPLETED';
+
+  /**
+   * La postulación de ESTE conductor en este servicio (la conversación es con él).
+   */
+  const postulacionDelConductor = service
+    ? filaDeMiPostulacion(applications, service.id, effectiveDriverId)
+    : undefined;
+
+  /**
+   * ¿Toca pintar los botones Aceptar/Rechazar del chat del proveedor? (pedido del usuario,
+   * 19-09-2026: «en este chat siempre han habido 2 botones, rechazar y aceptar, actualmente
+   * esos botones no están»).
+   *
+   * Estuvieron hasta el 17-09 y se quitaron porque aparecían un instante al abrir el chat
+   * —la asignación todavía no había llegado al estado local— y se iban solos. Por eso la
+   * condición es exigente: hay algo que decidir (su postulación sigue PENDIENTE), el
+   * proveedor mira su propio servicio y los datos ya cargaron (`!cargando`). Con eso, si se
+   * pintan es porque hay una decisión pendiente de verdad, y no parpadean.
+   */
+  const decisionPendiente =
+    isProvider &&
+    !!service &&
+    !cargando &&
+    !isAssigned &&
+    service.status !== 'STATUS_COMPLETED' &&
+    postulacionDelConductor?.status === 'PENDING';
 
   /**
    * El proveedor rechazó a este conductor: la conversación se cierra (aviso con
@@ -717,9 +751,26 @@ export function ChatScreen() {
     }
   };
 
-  // En esta pantalla NO se acepta ni se rechaza a un postulante: esa decisión se toma
-  // desde la tarjeta del servicio. La franja verde con el hito del viaje
-  // (`ProviderStatusBar`) es lo único que va arriba del chat del proveedor.
+  // Los botones Aceptar/Rechazar de la barra de arriba (regla del usuario, 19-09-2026). El
+  // proveedor decide aquí al postulante con el que está conversando; la franja verde con el
+  // hito del viaje (`ProviderStatusBar`) sale en su lugar cuando el servicio ya está asignado.
+  const handleAccept = () => {
+    if (!service) return;
+    // El aviso al conductor lo manda la base al aceptar (el proveedor no se avisa a sí mismo).
+    approveApplication(service.id, effectiveDriverId);
+    addSystemMessage('Conductor aceptado. Servicio asignado.');
+    Alert.alert('Conductor aceptado', 'El servicio ha sido asignado.');
+  };
+
+  const handleReject = () => {
+    if (!service) return;
+    // Solo a ESTE conductor: `rejectApplication` (sin conductor) descarta todas las
+    // postulaciones del servicio, que no es lo que el proveedor quiere aquí.
+    rejectApplicationFrom(service.id, effectiveDriverId);
+    addSystemMessage('Postulación rechazada.');
+    Alert.alert('Postulación rechazada', 'El conductor ha sido descartado.');
+    navigation.goBack();
+  };
 
   const handleStepAdvance = async () => {
     if (!service || isAdvancingRef.current) return;
@@ -1166,6 +1217,8 @@ export function ChatScreen() {
           }}
           resultCount={messagesVisibles.length}
         />
+
+        {decisionPendiente && <EvaluationBar onAccept={handleAccept} onReject={handleReject} />}
 
         {showSlider ? (
           <SwipeStatusButton progressIndex={progressIndex} onAdvance={handleStepAdvance} />

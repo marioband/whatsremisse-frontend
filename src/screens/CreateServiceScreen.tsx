@@ -48,6 +48,16 @@ import { nombreDelProveedorDesdeElPerfil, PROVEEDOR_SIN_NOMBRE } from '../lib/no
 import { FilaPerfilConVehicleData } from '../lib/perfilPublico';
 import { hayApiDeDirecciones } from '../lib/places';
 import { esPremium } from '../lib/premium';
+import {
+  alternarUnidad,
+  guardarUnidadesPreferidas,
+  leerUnidadesPreferidas,
+  textoDeUnidades,
+  UNIDADES,
+  UNIDADES_GRANDES,
+  UNIDADES_POR_DEFECTO,
+  unidadesDeLaAlerta,
+} from '../lib/unidades';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert, ServiceStatus } from '../types';
 
@@ -65,7 +75,6 @@ const ROJO_ACCION = '#C2333F';
 
 const PAYMENT_TYPES = ['BCP', 'Yape', 'Plin', 'Efectivo', 'Otro'];
 const PAYMENT_DATES = ['Al término', 'Durante el día', 'Mañana', 'Escribir'];
-const UNIT_TYPES = ['Todos', 'Auto compacto', 'Auto', 'Camioneta', 'Camioneta 3 filas'];
 /** Momento del servicio: "Al momento" es el default; la hora específica abre el reloj. */
 const MOMENTOS_DEL_SERVICIO = ['Al momento', 'Hora específica'];
 
@@ -108,7 +117,38 @@ export function CreateServiceScreen() {
   const [otherPayment, setOtherPayment] = useState('');
   const [paymentDate, setPaymentDate] = useState(editingService?.payment_term || 'Al término');
   const [customPaymentDate, setCustomPaymentDate] = useState('');
-  const [unitType, setUnitType] = useState(editingService?.vehicle_type || 'Todos');
+  /**
+   * Las unidades que sirven para este servicio (regla del usuario, 19-09-2026).
+   *
+   * Antes era UN solo tipo y el botón «Todos». Ahora el proveedor marca las que sirven
+   * (puede marcar varias, y la tarjeta las muestra separadas por comas) y el servicio se
+   * muestra a los conductores que tengan cualquiera de ellas. Al editar una tarjeta manda
+   * lo que tiene guardado; en una nueva arranca con la última selección del proveedor —vive
+   * en su dispositivo, «se mantiene hasta ser modificada»— o con las tres de defecto.
+   */
+  const [unidades, setUnidades] = useState<string[]>(() =>
+    editingService ? unidadesDeLaAlerta(editingService) : [...UNIDADES_POR_DEFECTO]
+  );
+  /**
+   * El desplegable «Unidades grandes»: abierto si la tarjeta que se edita ya tiene alguna
+   * marcada (el proveedor la ve donde la dejó).
+   */
+  const [grandesAbierto, setGrandesAbierto] = useState(
+    () =>
+      !!editingService &&
+      unidadesDeLaAlerta(editingService).some((unidad) => UNIDADES_GRANDES.includes(unidad))
+  );
+
+  /**
+   * Marca o desmarca una unidad y guarda la elección en el dispositivo: es la que verá la
+   * próxima vez. `alternarUnidad` impide quedarse sin ninguna marcada (sin unidades, el
+   * servicio no se le mostraría a nadie).
+   */
+  const cambiarUnidad = (unidad: string) => {
+    const siguientes = alternarUnidad(unidades, unidad);
+    setUnidades(siguientes);
+    guardarUnidadesPreferidas(siguientes);
+  };
   const [observation, setObservation] = useState(editingService?.observations?.join(', ') || '');
   const [fechaServicio, setFechaServicio] = useState<Date>(initialDateTime.fecha);
   const [horaServicio, setHoraServicio] = useState<Date>(initialDateTime.hora);
@@ -136,8 +176,15 @@ export function CreateServiceScreen() {
   useEffect(() => {
     if (isEditing) return;
     let vigente = true;
-    leerBorradorDeServicio().then((borrador) => {
-      if (!vigente || !borrador) return;
+    leerBorradorDeServicio().then(async (borrador) => {
+      if (!vigente) return;
+      if (!borrador) {
+        // Sin nada a medias: el formulario arranca con la ÚLTIMA selección de unidades del
+        // proveedor (regla del usuario: se mantiene hasta que la modifique).
+        const preferidas = await leerUnidadesPreferidas();
+        if (vigente && preferidas) setUnidades(preferidas);
+        return;
+      }
       setOrigin(borrador.origin);
       setDestinations(borrador.destinations.length > 0 ? borrador.destinations : ['']);
       setCoordsOrigen(borrador.coordsOrigen);
@@ -147,7 +194,7 @@ export function CreateServiceScreen() {
       setOtherPayment(borrador.otherPayment);
       setPaymentDate(borrador.paymentDate);
       setCustomPaymentDate(borrador.customPaymentDate);
-      setUnitType(borrador.unitType);
+      setUnidades(borrador.unidades);
       setObservation(borrador.observation);
       setFechaServicio(new Date(borrador.fechaServicio));
       setHoraServicio(new Date(borrador.horaServicio));
@@ -172,7 +219,7 @@ export function CreateServiceScreen() {
       otherPayment,
       paymentDate,
       customPaymentDate,
-      unitType,
+      unidades,
       observation,
       fechaServicio: fechaServicio.toISOString(),
       horaServicio: horaServicio.toISOString(),
@@ -191,7 +238,7 @@ export function CreateServiceScreen() {
     otherPayment,
     paymentDate,
     customPaymentDate,
-    unitType,
+    unidades,
     observation,
     fechaServicio,
     horaServicio,
@@ -281,6 +328,17 @@ export function CreateServiceScreen() {
       return null;
     }
 
+    // Sin ninguna unidad marcada el servicio no se le mostraría a ningún conductor. La
+    // interfaz ya lo impide (`alternarUnidad` conserva la última), esto es la red de
+    // seguridad por si el estado llegara vacío desde un borrador viejo.
+    if (unidades.length === 0) {
+      Alert.alert(
+        'Falta el tipo de unidad',
+        'Marca al menos una unidad para que los conductores puedan ver el servicio.'
+      );
+      return null;
+    }
+
     const programada = combinarFechaYHora(fechaServicio, horaServicio);
     // Coherencia solo con hora específica: un servicio "al momento" se publica ya.
     // (Por si la pantalla quedó abierta y el momento elegido ya pasó: se ajusta la
@@ -336,7 +394,7 @@ export function CreateServiceScreen() {
       destination_address: '',
       destination_lat: 0,
       destination_lng: 0,
-      vehicle_requirements: { vehicle_type: unitType },
+      vehicle_requirements: { vehicle_type: unidades },
       fare: 0,
       status: 'STATUS_OPEN',
       assigned_driver_id: null,
@@ -356,15 +414,19 @@ export function CreateServiceScreen() {
     return {
       ...base,
       title: `${origin} -> ${mainDestination}`,
-      description: `Unidad: ${unitType}${observation ? ` • ${observation}` : ''}`,
+      // La descripción es el resumen que viaja en la tarjeta: las unidades marcadas, con
+      // varias separadas por comas (regla del usuario, 19-09-2026).
+      description: `Unidad: ${textoDeUnidades(unidades)}${observation ? ` • ${observation}` : ''}`,
       origin_address: origin,
       origin_lat: coordsOrigen?.lat ?? base.origin_lat ?? 0,
       origin_lng: coordsOrigen?.lng ?? base.origin_lng ?? 0,
       destination_address: mainDestination,
       destination_lat: coordsPrincipal?.lat ?? base.destination_lat ?? 0,
       destination_lng: coordsPrincipal?.lng ?? base.destination_lng ?? 0,
-      vehicle_requirements: { vehicle_type: unitType },
-      vehicle_type: unitType,
+      vehicle_requirements: { vehicle_type: unidades },
+      // La columna TEXT de la 0024 guarda el texto («Auto, Camioneta»): la tarjeta y los
+      // perfiles viejos siguen leyendo ahí, y también sirve para mirar la base a mano.
+      vehicle_type: textoDeUnidades(unidades),
       fare: parseFloat(fare) || 0,
       scheduled_at: scheduledAt,
       observations: observationsList.length > 0 ? observationsList : undefined,
@@ -491,7 +553,7 @@ export function CreateServiceScreen() {
 
       <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
         {/* Origen */}
-        <Text style={styles.label}>Distrito de origen</Text>
+        <Text style={styles.label}>Dirección de origen</Text>
         <View
           style={[
             styles.campoConSugerencias,
@@ -500,7 +562,7 @@ export function CreateServiceScreen() {
         >
           <AddressInput
             valor={origin}
-            placeholder="Distrito de origen"
+            placeholder="Dirección de origen"
             premium={premium}
             onChangeText={setOrigin}
             onConfirmar={confirmarOrigen}
@@ -521,7 +583,7 @@ export function CreateServiceScreen() {
         )}
 
         {/* Destinos */}
-        <Text style={styles.label}>Distrito de destino</Text>
+        <Text style={styles.label}>Dirección de destino</Text>
         {destinations.map((dest, index) => (
           <View
             key={index}
@@ -620,21 +682,74 @@ export function CreateServiceScreen() {
           />
         )}
 
-        {/* Tipo de unidad */}
+        {/* Tipo de unidad (regla del usuario, 19-09-2026): se marcan VARIAS —las que sirven
+            para este servicio—, sin el viejo botón «Todos». El servicio se muestra a los
+            conductores que tengan cualquiera de las marcadas, y la tarjeta las pinta
+            separadas por comas. No se puede quedar sin ninguna: la última marcada se queda
+            (`alternarUnidad`). */}
         <Text style={styles.label}>Tipo de unidad</Text>
+        <Text style={styles.unitHint}>
+          Marca todas las unidades que sirvan: verás el servicio con los conductores que tengan
+          cualquiera de ellas.
+        </Text>
         <View style={styles.unitGrid}>
-          {UNIT_TYPES.map((unit) => (
-            <TouchableOpacity
-              key={unit}
-              style={[styles.unitChip, unitType === unit && styles.unitChipActive]}
-              onPress={() => setUnitType(unit)}
-            >
-              <Text style={[styles.unitChipText, unitType === unit && styles.unitChipTextActive]}>
-                {unit}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {UNIDADES.map((unidad) => {
+            const marcada = unidades.includes(unidad);
+            return (
+              <TouchableOpacity
+                key={unidad}
+                style={[styles.unitChip, marcada && styles.unitChipActive]}
+                onPress={() => cambiarUnidad(unidad)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: marcada }}
+                accessibilityLabel={`Unidad ${unidad}`}
+              >
+                <Text style={[styles.unitChipText, marcada && styles.unitChipTextActive]}>
+                  {unidad}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        {/* Unidades grandes: el desplegable va DEBAJO de los cuatro tipos y se suma a ellos
+            (un servicio puede pedir «Camioneta» y «Minibús» a la vez). La cabecera dice lo
+            marcado para poder leerlo sin abrirlo. */}
+        <TouchableOpacity
+          style={[styles.grandesBarra, grandesAbierto && styles.grandesBarraAbierta]}
+          onPress={() => setGrandesAbierto((abierto) => !abierto)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: grandesAbierto }}
+          accessibilityLabel="Unidades grandes"
+        >
+          <Text style={styles.grandesTitulo}>Unidades grandes</Text>
+          <Text style={styles.grandesValor}>
+            {textoDeUnidades(unidades.filter((unidad) => UNIDADES_GRANDES.includes(unidad))) ||
+              'Ninguna'}
+          </Text>
+          <Text style={styles.grandesFlecha}>{grandesAbierto ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {grandesAbierto && (
+          <View style={styles.unitGrid}>
+            {UNIDADES_GRANDES.map((unidad) => {
+              const marcada = unidades.includes(unidad);
+              return (
+                <TouchableOpacity
+                  key={unidad}
+                  style={[styles.unitChip, marcada && styles.unitChipActive]}
+                  onPress={() => cambiarUnidad(unidad)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: marcada }}
+                  accessibilityLabel={`Unidad ${unidad}`}
+                >
+                  <Text style={[styles.unitChipText, marcada && styles.unitChipTextActive]}>
+                    {unidad}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Momento del servicio: "Al momento" por defecto (regla del usuario). Solo
             al elegir "Hora específica" se abren el calendario y el reloj. */}
@@ -926,6 +1041,42 @@ const styles = StyleSheet.create({
   unitGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+  },
+  unitHint: {
+    fontSize: 12,
+    color: '#777',
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  grandesBarra: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  grandesBarraAbierta: {
+    borderColor: BLUE,
+  },
+  grandesTitulo: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 8,
+  },
+  grandesValor: {
+    flex: 1,
+    fontSize: 13,
+    color: '#666',
+  },
+  grandesFlecha: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
   },
   unitChip: {
     width: '30%',

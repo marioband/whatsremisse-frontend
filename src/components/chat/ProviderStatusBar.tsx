@@ -13,8 +13,11 @@ interface ProviderStatusBarProps {
  * conductor. Los textos van con mayúscula inicial (el usuario lo pidió: antes decía
  * "en camino" en minúscula).
  *
- * Aquí NO va la barra de Aceptar / Rechazar: la decisión sobre un postulante se toma
- * desde la tarjeta del servicio, nunca en la pantalla de mensajes.
+ * La barra de **Aceptar / Rechazar** del postulante va aparte (`EvaluationBar`) y aquí no
+ * se pinta: las dos son la zona de arriba del chat y nunca coinciden — esta solo sale con
+ * el servicio ya ASIGNADO y en curso, y aquella solo con una postulación PENDIENTE. El
+ * 17-09-2026 la decisión se tomaba únicamente desde la tarjeta; el usuario la devolvió al
+ * chat el 19-09-2026 (ver `EvaluationBar`).
  */
 export function ProviderStatusBar({ service }: ProviderStatusBarProps) {
   const step = service.driver_progress_step ?? 0;

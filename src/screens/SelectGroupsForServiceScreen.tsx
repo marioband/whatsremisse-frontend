@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { Icono, ICONO_AJUSTES } from '../components/Icono';
@@ -9,6 +9,7 @@ import { Alert } from '../lib/alert';
 import { limpiarBorradorDeServicio } from '../lib/borradorDeServicio';
 import { EstadoDeEnvio, estadoDelBotonDeEnvio, opacidadDelBotonDeEnvio } from '../lib/envioUnico';
 import { gruposDeServicio } from '../lib/gruposDeServicio';
+import { ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SelectNav = StackNavigationProp<RootStackParamList, 'SelectGroupsForService' | 'Settings'>;
@@ -44,6 +45,14 @@ export function SelectGroupsForServiceScreen() {
   const route = useRoute<SelectRoute>();
   const { draftService, serviceId } = route.params;
   const { role, setRole, groups, addService, updateService, compartirServicio } = useMockStore();
+
+  /**
+   * Los grupos en el MISMO orden que «Mis grupos» (pedido del usuario, 19-09-2026): la regla
+   * vive en `lib/ordenDeGrupos` (propietario → administrador → favorito → integrante, y dentro
+   * de cada uno por nombre). La pantalla no decide el orden por su cuenta, y así el grupo que
+   * el usuario ve arriba en Mis grupos es el mismo que ve arriba aquí.
+   */
+  const gruposComoEnMisGrupos = useMemo(() => ordenarGrupos(groups), [groups]);
 
   // Si la tarjeta ya está compartida, sus grupos vienen marcados: el "Enviar" vuelve
   // a dejar el conjunto completo (quitar uno lo descomparte de ese grupo).
@@ -183,9 +192,24 @@ export function SelectGroupsForServiceScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* Header: la pantalla no tenía título —el usuario lo pidió el 19-09-2026, «podría ser
+          Selección de grupos»— y con el título va el atrás, que devuelve AL FORMULARIO del
+          servicio para seguir editándolo: la pantalla anterior sigue montada, así que vuelve
+          con todo lo escrito (y el borrador del dispositivo es el respaldo). */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>WhatsRemisse</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Volver a editar el servicio"
+          >
+            <Text style={styles.backArrow}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            Selección de grupos
+          </Text>
+        </View>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.iconBtn}>
             <Text style={styles.icon}>👤</Text>
@@ -217,7 +241,7 @@ export function SelectGroupsForServiceScreen() {
 
       {/* Group list */}
       <FlatList
-        data={groups}
+        data={gruposComoEnMisGrupos}
         keyExtractor={(item) => item.id}
         renderItem={renderGroup}
         contentContainerStyle={styles.list}
@@ -254,10 +278,25 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  backBtn: {
+    paddingRight: 10,
+    paddingVertical: 4,
+  },
+  backArrow: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '600',
+  },
   headerTitle: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    flexShrink: 1,
   },
   headerIcons: {
     flexDirection: 'row',

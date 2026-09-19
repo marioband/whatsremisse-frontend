@@ -3,6 +3,7 @@ import { estaEnProcesoDelConductor } from './apartadosDelInicio';
 import { estaPagadoYCerrado } from './estadoServicio';
 import { huellaDeLaAlerta } from './marcaDePostulacion';
 import { EstadoDeMiPostulacion } from './miPostulacion';
+import { coincideConLaUnidad } from './unidades';
 import { isVisibleAsDriver } from './visibility';
 
 /**
@@ -97,11 +98,18 @@ export function estaDisponibleParaPostular(
   );
 }
 
-/** El vehículo del conductor sirve para esta alerta (requisito vacío = sirve). */
-export function coincideConElVehiculo(service: ServiceAlert, tipoDeVehiculo: string): boolean {
-  const requerido = service.vehicle_requirements?.vehicle_type;
-  if (!requerido || requerido === 'Todos') return true;
-  return requerido === tipoDeVehiculo;
+/**
+ * El vehículo del conductor sirve para esta alerta.
+ *
+ * Desde el 19-09-2026 el requisito y el conductor pueden traer VARIAS unidades: basta con que
+ * coincida una. La regla vive en `lib/unidades.ts` (aquí solo se deja el nombre viejo, que es
+ * el que consultan el inicio del conductor y los bancos de prueba).
+ */
+export function coincideConElVehiculo(
+  service: ServiceAlert,
+  misUnidades: string | readonly string[]
+): boolean {
+  return coincideConLaUnidad(service, misUnidades);
 }
 
 /**
@@ -228,7 +236,11 @@ export function planDelToqueDelConductor(datos: {
 export interface OpcionesDelInicioDelConductor {
   userId: string;
   groupIds: readonly string[];
-  tipoDeVehiculo: string;
+  /**
+   * Las unidades del conductor (19-09-2026: puede tener VARIAS). Antes era `tipoDeVehiculo`,
+   * un solo texto; la alerta se le muestra si comparten alguna unidad.
+   */
+  tiposDeVehiculo: readonly string[];
   mostrarArchivados?: boolean;
   /** Ventana de 3 segundos del rechazo recién llegado (la gestiona la pantalla). */
   rechazoReciente?: (serviceId: string) => boolean;
@@ -257,7 +269,7 @@ export function listaBaseDelConductor(
   applications: Application[],
   opciones: OpcionesDelInicioDelConductor
 ): ServiceAlert[] {
-  const { userId, groupIds, tipoDeVehiculo, mostrarArchivados, rechazoReciente } = opciones;
+  const { userId, groupIds, tiposDeVehiculo, mostrarArchivados, rechazoReciente } = opciones;
   const reciente = rechazoReciente ?? nuncaReciente;
   const huellaAlPostular = opciones.huellaAlPostular ?? nuncaPostulado;
   const vistos = new Set<string>();
@@ -283,7 +295,7 @@ export function listaBaseDelConductor(
     const fila = filaDeMiPostulacion(applications, s.id, userId);
     if (rechazoVigente(s, fila, huellaAlPostular(s.id)) && !recienRechazado) return false;
 
-    if (!coincideConElVehiculo(s, tipoDeVehiculo)) return false;
+    if (!coincideConElVehiculo(s, tiposDeVehiculo)) return false;
     return true;
   });
 }

@@ -9,6 +9,7 @@ import { textoProgramado } from '../lib/datetime';
 import { planDelDeslizamiento } from '../lib/deslizamientoDeLaTarjeta';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { tarjetaBloqueadaDelConductor } from '../lib/listaDelConductor';
+import { textoDeLasUnidadesDeLaAlerta } from '../lib/unidades';
 import { ServiceAlert } from '../types';
 
 interface Props {
@@ -67,6 +68,9 @@ export function ServiceCard({
   const nombreDelProveedor = useNombreDelProveedor(service);
 
   const cardBackground = COLORS.cardNew;
+
+  /** Las unidades de la alerta, ya en texto («Auto, Camioneta»). */
+  const unidadesDelServicio = textoDeLasUnidadesDeLaAlerta(service);
 
   /**
    * Qué dice y qué hace el deslizamiento: lo decide `lib/deslizamientoDeLaTarjeta.ts`, que es
@@ -157,6 +161,17 @@ export function ServiceCard({
             <Text style={styles.dispatchType}>{textoProgramado(service)}</Text>
             {isReservation && <Text style={styles.reservaLabel}> (Reserva)</Text>}
           </View>
+
+          {/* Las unidades que pide este servicio (regla del usuario, 19-09-2026): con varias
+              marcadas había que saber PARA CUÁL es la alerta. Van pegadas al momento del
+              servicio —la otra cosa que se decide antes de salir— y con más de una se
+              separan por comas, en el orden de la pantalla. */}
+          {unidadesDelServicio !== '' && (
+            <View style={styles.unitRow}>
+              <Text style={styles.unitLabel}>Unidad</Text>
+              <Text style={styles.unitValue}>{unidadesDelServicio}</Text>
+            </View>
+          )}
 
           <View style={styles.locationRow}>
             <View style={styles.dotOrigin} />
@@ -315,6 +330,24 @@ const styles = StyleSheet.create({
     // dos cajas comparten línea base: es lo que pidió el usuario.
     alignItems: 'baseline',
     marginBottom: 8,
+  },
+  unitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  unitLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#3F51B5',
+    marginRight: 6,
+  },
+  unitValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    flexShrink: 1,
   },
   reservaLabel: {
     fontSize: 12,

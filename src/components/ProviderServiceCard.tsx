@@ -4,6 +4,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 
 import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
+import { textoDeLasUnidadesDeLaAlerta } from '../lib/unidades';
 import { ServiceAlert } from '../types';
 
 interface Props {
@@ -16,6 +17,8 @@ const BLUE = '#3F51B5';
 
 export function ProviderServiceCard({ service, onArchive }: Props) {
   const nombreDelProveedor = useNombreDelProveedor(service);
+  /** Las unidades que pide la tarjeta, ya en texto («Auto, Camioneta»). */
+  const unidadesDelServicio = textoDeLasUnidadesDeLaAlerta(service);
 
   const renderRightActions = () => (
     <TouchableOpacity style={styles.archiveAction} onPress={onArchive}>
@@ -39,6 +42,15 @@ export function ProviderServiceCard({ service, onArchive }: Props) {
         {/* Columna central */}
         <View style={styles.centerColumn}>
           <Text style={styles.dispatchType}>{textoProgramado(service)}</Text>
+
+          {/* Las unidades que pide la tarjeta (19-09-2026): con varias marcadas hay que poder
+              verlas de un vistazo también desde la lista del proveedor. */}
+          {unidadesDelServicio !== '' && (
+            <View style={styles.unitRow}>
+              <Text style={styles.unitLabel}>Unidad</Text>
+              <Text style={styles.unitValue}>{unidadesDelServicio}</Text>
+            </View>
+          )}
 
           <View style={styles.locationRow}>
             <View style={styles.dotOrigin} />
@@ -129,6 +141,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 5,
+  },
+  unitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    flexWrap: 'wrap',
+  },
+  unitLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BLUE,
+    marginRight: 6,
+  },
+  unitValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    flexShrink: 1,
   },
   dotOrigin: {
     width: 8,

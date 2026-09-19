@@ -18,7 +18,12 @@ export interface VehicleData {
   plate?: string;
   max_weight?: number;
   cargo_volume?: number;
-  vehicle_type?: string;
+  /**
+   * Las unidades. En `profiles.vehicle_data` (JSONB) es la lista de unidades del conductor
+   * y en `service_alerts.vehicle_requirements` la lista que pide el servicio (19-09-2026).
+   * Se acepta el texto viejo («Auto», «Todos») para no romper los datos ya guardados.
+   */
+  vehicle_type?: string | string[];
   brand?: string;
   model?: string;
   year?: number;

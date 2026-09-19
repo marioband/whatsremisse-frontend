@@ -303,7 +303,7 @@ export function DriverHomeScreen() {
    */
   const rechazoReciente = (serviceId: string) => (rechazosVisibles[serviceId] ?? 0) > Date.now();
 
-  const driverVehicleType = userProfile?.vehicleType || 'Auto';
+  const driverVehicleTypes = userProfile?.vehicleTypes ?? [];
 
   const groupIdList = useMemo(() => groups.map((g) => g.id), [groups]);
 
@@ -316,7 +316,7 @@ export function DriverHomeScreen() {
     () => ({
       userId: currentDriverId,
       groupIds: groupIdList,
-      tipoDeVehiculo: driverVehicleType,
+      tiposDeVehiculo: driverVehicleTypes,
       mostrarArchivados: showArchived,
       rechazoReciente,
       inicioCumplido,
@@ -325,7 +325,7 @@ export function DriverHomeScreen() {
     [
       currentDriverId,
       groupIdList,
-      driverVehicleType,
+      driverVehicleTypes,
       showArchived,
       rechazosVisibles,
       inicios,

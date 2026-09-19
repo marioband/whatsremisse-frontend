@@ -16,6 +16,7 @@
  */
 
 import { borrarDeCache, guardarCache, leerCache } from './cache';
+import { normalizarUnidades } from './unidades';
 
 export interface PuntoDelBorrador {
   lat: number;
@@ -33,7 +34,11 @@ export interface BorradorDeServicio {
   otherPayment: string;
   paymentDate: string;
   customPaymentDate: string;
-  unitType: string;
+  /**
+   * Las unidades marcadas (19-09-2026: el proveedor marca VARIAS). Un borrador viejo traía
+   * `unitType` con un solo texto y se sigue leyendo (`leerBorradorDeServicio`).
+   */
+  unidades: string[];
   observation: string;
   /** Las fechas van en ISO: un `Date` no se puede guardar tal cual. */
   fechaServicio: string;
@@ -67,9 +72,18 @@ export function borradorTieneDatos(borrador: BorradorDeServicio | null | undefin
 
 /** Lo guardado en el dispositivo (null si no hay nada o no tiene datos). */
 export async function leerBorradorDeServicio(): Promise<BorradorDeServicio | null> {
-  const guardado = await leerCache<BorradorDeServicio>(CLAVE_BORRADOR, SIN_TTL);
+  const guardado = await leerCache<BorradorDeServicio & { unitType?: unknown }>(
+    CLAVE_BORRADOR,
+    SIN_TTL
+  );
   if (!guardado || !Array.isArray(guardado.destinations)) return null;
-  return borradorTieneDatos(guardado) ? guardado : null;
+  // Un borrador guardado antes del 19-09-2026 traía UN solo tipo en `unitType`: se lee
+  // igual, así el proveedor que estaba a medias no pierde lo que había marcado.
+  const normalizado: BorradorDeServicio = {
+    ...guardado,
+    unidades: normalizarUnidades(guardado.unidades ?? guardado.unitType),
+  };
+  return borradorTieneDatos(normalizado) ? normalizado : null;
 }
 
 export async function guardarBorradorDeServicio(borrador: BorradorDeServicio): Promise<void> {

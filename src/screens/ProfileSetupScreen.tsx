@@ -18,12 +18,12 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore, UserProfile } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
+import { alternarUnidad, UNIDADES, UNIDADES_GRANDES, UNIDAD_POR_DEFECTO } from '../lib/unidades';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SetupNav = StackNavigationProp<RootStackParamList, 'ProfileSetup'>;
 
 const DARK_BG = '#2D2D2D';
-const VEHICLE_TYPES = ['Auto compacto', 'Auto', 'Camioneta', 'Camioneta 3 filas'];
 
 export function ProfileSetupScreen() {
   const navigation = useNavigation<SetupNav>();
@@ -33,7 +33,9 @@ export function ProfileSetupScreen() {
   const [firstName, setFirstName] = useState(userProfile?.firstName || '');
   const [lastName, setLastName] = useState(userProfile?.lastName || '');
   const [dni, setDni] = useState(userProfile?.dni || '');
-  const [vehicleType, setVehicleType] = useState(userProfile?.vehicleType || 'Auto');
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>(
+    () => userProfile?.vehicleTypes ?? [UNIDAD_POR_DEFECTO]
+  );
   const [brand, setBrand] = useState(userProfile?.brand || '');
   const [model, setModel] = useState(userProfile?.model || '');
   const [year, setYear] = useState(userProfile?.year || '');
@@ -53,7 +55,7 @@ export function ProfileSetupScreen() {
     setFirstName(userProfile.firstName);
     setLastName(userProfile.lastName);
     setDni(userProfile.dni);
-    setVehicleType(userProfile.vehicleType || 'Auto');
+    setVehicleTypes(userProfile.vehicleTypes ?? [UNIDAD_POR_DEFECTO]);
     setBrand(userProfile.brand);
     setModel(userProfile.model);
     setYear(userProfile.year);
@@ -117,7 +119,7 @@ export function ProfileSetupScreen() {
         lastName,
         dni,
         phone: phone || userProfile?.phone || '',
-        vehicleType,
+        vehicleTypes,
         brand,
         model,
         year,
@@ -137,7 +139,7 @@ export function ProfileSetupScreen() {
         await completeProfileSetup({
           full_name: `${firstName} ${lastName}`.trim() || null,
           role,
-          vehicle_data: { vehicle_type: vehicleType, brand, model, plate },
+          vehicle_data: { vehicle_type: vehicleTypes, brand, model, plate },
         });
       }
 
@@ -230,25 +232,51 @@ export function ProfileSetupScreen() {
 
             <View style={styles.row}>
               <Text style={styles.label}>Tipo de unidad</Text>
-              <View style={styles.vehicleTypeRow}>
-                {VEHICLE_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.vehicleTypeChip,
-                      vehicleType === type && styles.vehicleTypeChipActive,
-                    ]}
-                    onPress={() => setVehicleType(type)}
-                  >
-                    <Text
-                      style={[
-                        styles.vehicleTypeText,
-                        vehicleType === type && styles.vehicleTypeTextActive,
-                      ]}
-                    >
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
+              {/*
+                El conductor también marca VARIAS unidades (regla del usuario, 19-09-2026):
+                le llegan los servicios que pidan cualquiera de las que tenga. Las grandes
+                van aparte, como en «Nuevo servicio». `alternarUnidad` nunca deja la lista
+                vacía (sin ninguna unidad no le llegaría ningún servicio).
+              */}
+              <View style={styles.unitsColumn}>
+                {[
+                  { titulo: '', lista: UNIDADES },
+                  { titulo: 'Unidades grandes', lista: UNIDADES_GRANDES },
+                ].map((grupo) => (
+                  <View key={grupo.titulo || 'unidades'}>
+                    {grupo.titulo ? (
+                      <Text style={styles.unitGroupTitle}>{grupo.titulo}</Text>
+                    ) : null}
+                    <View style={styles.vehicleTypeRow}>
+                      {grupo.lista.map((type) => {
+                        const marcada = vehicleTypes.includes(type);
+                        return (
+                          <TouchableOpacity
+                            key={type}
+                            style={[
+                              styles.vehicleTypeChip,
+                              marcada && styles.vehicleTypeChipActive,
+                            ]}
+                            onPress={() =>
+                              setVehicleTypes((actual) => alternarUnidad(actual, type))
+                            }
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: marcada }}
+                            accessibilityLabel={`Unidad ${type}`}
+                          >
+                            <Text
+                              style={[
+                                styles.vehicleTypeText,
+                                marcada && styles.vehicleTypeTextActive,
+                              ]}
+                            >
+                              {type}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
                 ))}
               </View>
             </View>
@@ -418,9 +446,18 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   vehicleTypeRow: {
-    width: '65%',
+    width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
+  },
+  unitsColumn: {
+    width: '65%',
+  },
+  unitGroupTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 6,
   },
   vehicleTypeChip: {
     backgroundColor: '#F2F2F2',

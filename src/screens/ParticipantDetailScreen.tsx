@@ -22,6 +22,7 @@ import {
   memberRoleLabel,
   roleLabel,
 } from '../lib/names';
+import { textoDeUnidades } from '../lib/unidades';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type DetailNav = StackNavigationProp<RootStackParamList, 'ParticipantDetail'>;
@@ -103,7 +104,7 @@ export function ParticipantDetailScreen() {
 
   const vehicle = (profile?.vehicle_data || member?.vehicleData || {}) as Record<string, unknown>;
   const vehicleRows: [string, string][] = [
-    ['Tipo', textOf(vehicle.vehicle_type)],
+    ['Tipo', textoDeUnidades(vehicle.vehicle_type)],
     ['Marca', textOf(vehicle.brand)],
     ['Modelo', textOf(vehicle.model)],
     ['Año', textOf(vehicle.year)],
