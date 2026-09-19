@@ -20,7 +20,7 @@ import { guardarSuscripcionDeAvisos, borrarSuscripcionDeAvisos } from './databas
  * misma pareja.
  */
 export const CLAVE_PUBLICA_VAPID =
-  'BHze1PEvlbaD7A9Cz_nUPR8Zuz5trJEavAHu5jwpMV-FxuoMlvnBNlWDcm8wjSquN42ICa4zgTKC_QXDQ3h1mAc';
+  'BAVz47a0DBIqewccGSDjuk5ya8FYFQKK-OTSCh6PhLVO-xo3ig6t70pQunZ_U53VypJN1rFbzRYT9oIy4XBxIdo';
 
 /** El archivo del service worker (solo avisos, sin caché). */
 export const RUTA_DEL_SERVICE_WORKER = '/sw-avisos.js';
