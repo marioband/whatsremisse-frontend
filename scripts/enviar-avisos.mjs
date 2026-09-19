@@ -39,6 +39,13 @@ function leerEnv() {
         valor = valor.slice(1, -1);
       }
       if (!env[clave]) env[clave] = valor;
+      else if (env[clave] !== valor) {
+        // Una clave REPETIDA (o vacía) fue justo lo que estuvo a punto de colarse al pegar las
+        // claves VAPID el 19-09-2026. Si no se avisa, el aviso no sale y nadie sabe por qué: la
+        // última manda y queda dicho.
+        console.warn(`[avisos] OJO: ${clave} aparece más de una vez en el .env; se usa la última`);
+        env[clave] = valor;
+      }
     }
   } catch {
     // Sin .env se usan las variables del entorno.
