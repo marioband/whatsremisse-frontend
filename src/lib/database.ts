@@ -42,6 +42,9 @@ export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
     origin_lat: row.origin_lat ?? 0,
     origin_lng: row.origin_lng ?? 0,
     destination_address: row.destination_address,
+    destinations: Array.isArray(row.destinations)
+      ? row.destinations.map((parada) => String(parada))
+      : undefined,
     destination_lat: row.destination_lat ?? 0,
     destination_lng: row.destination_lng ?? 0,
     vehicle_requirements: (row.vehicle_requirements as ServiceAlert['vehicle_requirements']) || {},
@@ -106,6 +109,9 @@ export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbS
   if (service.destination_address !== undefined)
     mapped.destination_address = service.destination_address;
   if (service.destination_lat !== undefined) mapped.destination_lat = service.destination_lat;
+  // Las paradas (0027). Sin la migración aplicada el INSERT/UPDATE falla por esta columna y se
+  // reintenta sin ella (abajo): el servicio se guarda igual, sin las paradas.
+  if (service.destinations !== undefined) mapped.destinations = service.destinations;
   if (service.destination_lng !== undefined) mapped.destination_lng = service.destination_lng;
   if (service.vehicle_requirements !== undefined)
     mapped.vehicle_requirements = service.vehicle_requirements;
@@ -135,6 +141,13 @@ export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbS
   return mapped;
 }
 
+/** La columna que añade la 0027, para poder reintentar sin ella. */
+function sinCamposDeLa0027(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
+  const copia = { ...mapped };
+  delete copia.destinations;
+  return copia;
+}
+
 /** Las columnas que añade la 0024, para poder reintentar sin ellas. */
 function sinCamposDeLa0024(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
   const copia = { ...mapped };
@@ -155,14 +168,28 @@ export async function insertServiceAlert(service: Partial<ServiceAlert>): Promis
   // ellas para que el proveedor no se quede sin publicar (la tarjeta mostrará los
   // respaldos «BCP»/«Al término») y se avisa por consola de qué migración falta.
   if (!esColumnaAusente(error)) throw error;
-  const reintento = await supabase
+  // Primero se prueba quitando solo las paradas (0027) y, si tampoco está la 0024, quitando las
+  // dos familias de columnas: siempre queda guardado el servicio.
+  let reintento = await supabase
     .from('service_alerts')
-    .insert(sinCamposDeLa0024(mapped))
+    .insert(sinCamposDeLa0027(mapped))
     .select()
     .single();
+  if (reintento.error && esColumnaAusente(reintento.error)) {
+    reintento = await supabase
+      .from('service_alerts')
+      .insert(sinCamposDeLa0024(sinCamposDeLa0027(mapped)))
+      .select()
+      .single();
+    if (reintento.error) throw reintento.error;
+    console.warn(
+      '[database] el servicio se publicó sin pago, observaciones, unidad ni paradas: falta aplicar 0024_pago_y_observaciones_del_servicio.sql y 0027_paradas_del_servicio.sql'
+    );
+    return mapServiceAlertFromDb(reintento.data);
+  }
   if (reintento.error) throw reintento.error;
   console.warn(
-    '[database] el servicio se publicó sin pago, observaciones ni unidad: falta aplicar 0024_pago_y_observaciones_del_servicio.sql'
+    '[database] el servicio se publicó sin las paradas: falta aplicar 0027_paradas_del_servicio.sql'
   );
   return mapServiceAlertFromDb(reintento.data);
 }
@@ -543,11 +570,18 @@ export async function updateServiceAlert(
   // Igual que al publicar: sin la 0024 aplicada el UPDATE falla por las columnas que no
   // existen, así que se reintenta sin ellas (el resto del cambio sí se guarda).
   if (error && esColumnaAusente(error)) {
-    const reintento = await supabase
+    let reintento = await supabase
       .from('service_alerts')
-      .update(sinCamposDeLa0024(mapped))
+      .update(sinCamposDeLa0027(mapped))
       .eq('id', serviceId)
       .select();
+    if (reintento.error && esColumnaAusente(reintento.error)) {
+      reintento = await supabase
+        .from('service_alerts')
+        .update(sinCamposDeLa0024(sinCamposDeLa0027(mapped)))
+        .eq('id', serviceId)
+        .select();
+    }
     data = reintento.data;
     error = reintento.error;
   }

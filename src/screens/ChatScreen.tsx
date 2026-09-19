@@ -30,6 +30,13 @@ import { useMockStore } from '../context/MockStoreContext';
 import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
+import {
+  etiquetaDelPaso,
+  hayVariasParadas,
+  paradaDelPaso,
+  paradasDelServicio,
+  totalDePasos,
+} from '../lib/paradasDelServicio';
 import { useTecladoAbierto } from '../hooks/useTecladoAbierto';
 import {
   elegirFoto,
@@ -70,6 +77,7 @@ import {
   leerHuellasDePostulacion,
 } from '../lib/marcaDePostulacion';
 import {
+  avisoDeParada,
   AVISO_MENSAJE_ENVIANDO,
   AVISO_MIGRACION_0019,
   AVISO_SIN_CAMBIOS,
@@ -184,7 +192,13 @@ export function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const service = useMemo(() => services.find((s) => s.id === serviceId), [services, serviceId]);
-  const { currentStep, progressIndex } = useServiceProgress(service);
+  /**
+   * El viaje puede tener varias paradas (el proveedor añade puntos al pedir el servicio): con N
+   * paradas el reporte del conductor tiene N+1 pasos («Ir a destino 1» … «Finalizado») en vez de
+   * los 3 de siempre. Ver `lib/paradasDelServicio.ts`.
+   */
+  const ultimoPaso = useMemo(() => totalDePasos(service), [service]);
+  const { currentStep, progressIndex } = useServiceProgress(service, ultimoPaso);
 
   const userId = session?.user?.id ?? '';
   const mySenderId = userId;
@@ -776,7 +790,7 @@ export function ChatScreen() {
 
   const handleStepAdvance = async () => {
     if (!service || isAdvancingRef.current) return;
-    if ((service.driver_progress_step ?? 0) >= ULTIMO_HITO_VIAJE) {
+    if ((service.driver_progress_step ?? 0) >= ultimoPaso) {
       // El viaje ya está reportado como finalizado: sigue el pago, no el reporte.
       Alert.alert('Viaje ya reportado', 'El servicio ya figura como finalizado.');
       return;
@@ -786,7 +800,7 @@ export function ChatScreen() {
       isAdvancingRef.current = false;
     }, 700);
 
-    if (progressIndex < 0 || progressIndex > 2) return;
+    if (progressIndex < 0 || progressIndex >= ultimoPaso) return;
 
     // Primero se guarda en la base (el conductor con la RPC de la 0012) y solo
     // entonces se anuncia el hito: así el proceso no se queda en bucle ni
@@ -798,7 +812,13 @@ export function ChatScreen() {
     // cuáles llevan la hora al pintarse).
     // El aviso del hito lo recibe el OTRO lado (llega por tiempo real al chat
     // compartido): este dispositivo no se avisa a sí mismo.
-    addSystemMessage(avisoDelHito(paso));
+    // Con varias paradas el aviso dice a cuál va («destino 2 de 3»), para que el proveedor
+    // sepa por dónde va el conductor y no un genérico «viaje iniciado».
+    addSystemMessage(
+      hayVariasParadas(service)
+        ? avisoDeParada(paso, paradasDelServicio(service).length, paradaDelPaso(service, paso))
+        : avisoDelHito(paso)
+    );
   };
 
   // ------------------------------------------------------------------- pago
@@ -1240,7 +1260,11 @@ export function ChatScreen() {
         {decisionPendiente && <EvaluationBar onAccept={handleAccept} onReject={handleReject} />}
 
         {showSlider ? (
-          <SwipeStatusButton progressIndex={progressIndex} onAdvance={handleStepAdvance} />
+          <SwipeStatusButton
+            progressIndex={progressIndex}
+            etiqueta={etiquetaDelPaso(service, progressIndex + 1)}
+            onAdvance={handleStepAdvance}
+          />
         ) : isProvider && isAssigned && currentStep === 'IN_PROGRESS' && service ? (
           <ProviderStatusBar service={service} />
         ) : null}

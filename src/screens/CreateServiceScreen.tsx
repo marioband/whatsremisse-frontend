@@ -421,6 +421,9 @@ export function CreateServiceScreen() {
       origin_lat: coordsOrigen?.lat ?? base.origin_lat ?? 0,
       origin_lng: coordsOrigen?.lng ?? base.origin_lng ?? 0,
       destination_address: mainDestination,
+      // Las paradas en orden (0027): los puntos intermedios y, al final, el destino principal.
+      // Con más de una, el conductor reporta «Ir a destino 1», «Ir a destino 2»…
+      destinations: destinations.map((parada) => parada.trim()).filter(Boolean),
       destination_lat: coordsPrincipal?.lat ?? base.destination_lat ?? 0,
       destination_lng: coordsPrincipal?.lng ?? base.destination_lng ?? 0,
       vehicle_requirements: { vehicle_type: unidades },

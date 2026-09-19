@@ -67,9 +67,28 @@ export function avisoDelHito(paso: number): string {
   return AVISOS_DEL_HITO[indice];
 }
 
-/** ¿Este texto es uno de los tres avisos del hito del viaje? */
+/**
+ * Los avisos del viaje cuando hay VARIAS paradas: el conductor reporta parada por parada
+ * («camino al destino 2»), no los tres hitos de siempre. Pedido del usuario el 19-09-2026.
+ */
+export const AVISO_DE_PARADA = /^Sistema: Conductor camino al destino (\d+)( \(.+\))?\.$/;
+
+/**
+ * El aviso del paso `paso` en un viaje de `paradas` paradas (el último paso cierra el viaje).
+ * `destino` es el nombre de la parada; si no se conoce, el aviso sale sin él.
+ */
+export function avisoDeParada(paso: number, paradas: number, destino?: string): string {
+  const total = paradas + 1;
+  const numero = Math.min(Math.max(Math.trunc(paso), 1), total);
+  if (numero >= total) return AVISOS_DEL_HITO[2];
+  const nombre = (destino || '').trim();
+  return `Sistema: Conductor camino al destino ${numero}${nombre ? ` (${nombre})` : ''}.`;
+}
+
+/** ¿Este texto es un aviso del viaje (los tres de siempre o los de las paradas)? */
 export function esAvisoDelHito(content: string): boolean {
-  return AVISOS_DEL_HITO.includes((content || '').trim());
+  const texto = (content || '').trim();
+  return AVISOS_DEL_HITO.includes(texto) || AVISO_DE_PARADA.test(texto);
 }
 
 /**

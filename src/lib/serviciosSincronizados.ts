@@ -1,4 +1,5 @@
 import { ServiceAlert } from '../types';
+import { totalDePasos } from './paradasDelServicio';
 
 /**
  * Sincronización de una fila de `service_alerts`.
@@ -109,7 +110,8 @@ export function fusionarLista(actuales: ServiceAlert[], entrantes: ServiceAlert[
  * viaje antes de tiempo (era el cuadre que "aparecía al deslizar").
  */
 export function pasoDelSiguienteHito(servicio: ServiceAlert | undefined): number {
-  return Math.min((servicio?.driver_progress_step ?? 0) + 1, 3);
+  // El tope no es 3: un servicio con varias paradas tiene N+1 pasos (ver paradasDelServicio).
+  return Math.min((servicio?.driver_progress_step ?? 0) + 1, totalDePasos(servicio));
 }
 
 /**

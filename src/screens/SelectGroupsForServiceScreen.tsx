@@ -3,13 +3,12 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
-import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import { limpiarBorradorDeServicio } from '../lib/borradorDeServicio';
 import { EstadoDeEnvio, estadoDelBotonDeEnvio, opacidadDelBotonDeEnvio } from '../lib/envioUnico';
 import { gruposDeServicio } from '../lib/gruposDeServicio';
-import { ordenarGrupos } from '../lib/ordenDeGrupos';
+import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type SelectNav = StackNavigationProp<RootStackParamList, 'SelectGroupsForService' | 'Settings'>;
@@ -17,13 +16,8 @@ type SelectRoute = RouteProp<RootStackParamList, 'SelectGroupsForService'>;
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
-
-const ROLE_COLORS = {
-  owner: '#C0C7E8',
-  admin: '#B2E3BF',
-  member: '#F2F2F2',
-  favorite: '#FFF59E',
-};
+/** El negro institucional de la app: el check de selección (era el azul del botón). */
+const NEGRO_INSTITUCIONAL = '#2D2D2D';
 
 export function SelectGroupsForServiceScreen() {
   const navigation = useNavigation<SelectNav>();
@@ -60,11 +54,6 @@ export function SelectGroupsForServiceScreen() {
       else next.add(id);
       return next;
     });
-  };
-
-  const getCardColor = (group: { role: 'owner' | 'admin' | 'member'; favorite: boolean }) => {
-    if (group.favorite) return ROLE_COLORS.favorite;
-    return ROLE_COLORS[group.role];
   };
 
   const handleSend = async () => {
@@ -138,7 +127,7 @@ export function SelectGroupsForServiceScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: getCardColor(item) }]}
+        style={[styles.card, { backgroundColor: colorDeLaTarjeta(item) }]}
         onPress={() => toggleGroup(item.id)}
         activeOpacity={0.8}
       >
@@ -175,14 +164,10 @@ export function SelectGroupsForServiceScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           Selección de grupos
         </Text>
-        <TouchableOpacity
-          style={[styles.headerLado, styles.headerLadoDerecho]}
-          onPress={() => navigation.navigate('Settings')}
-          accessibilityRole="button"
-          accessibilityLabel="Cuenta"
-        >
-          <Icono fuente={ICONO_AJUSTES} tamano={22} />
-        </TouchableOpacity>
+        {/* A la derecha no va nada: el engrane de Cuenta y el corazón de favorito son de
+            «Mis grupos», no de aquí (pedido del usuario, 19-09-2026). El hueco se conserva
+            para que el título siga centrado. */}
+        <View style={styles.headerLado} />
       </View>
 
       {/* Group list */}
@@ -297,8 +282,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectorActive: {
-    backgroundColor: BLUE,
-    borderColor: BLUE,
+    backgroundColor: NEGRO_INSTITUCIONAL,
+    borderColor: NEGRO_INSTITUCIONAL,
   },
   check: {
     color: '#fff',

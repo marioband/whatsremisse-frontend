@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import { VERDE_ACCION } from '../../lib/colors';
+import { paradaDelPaso, paradasDelServicio, totalDePasos } from '../../lib/paradasDelServicio';
 import { ServiceAlert } from '../../types';
 
 interface ProviderStatusBarProps {
@@ -18,11 +19,25 @@ interface ProviderStatusBarProps {
  * el servicio ya ASIGNADO y en curso, y aquella solo con una postulación PENDIENTE. El
  * 17-09-2026 la decisión se tomaba únicamente desde la tarjeta; el usuario la devolvió al
  * chat el 19-09-2026 (ver `EvaluationBar`).
+ *
+ * Cuando el servicio tiene varias paradas, el conductor reporta parada por parada y aquí se ve
+ * cuál y por cuántas va («Destino 2 de 3») en vez de «En proceso» (pedido del usuario,
+ * 19-09-2026).
  */
 export function ProviderStatusBar({ service }: ProviderStatusBarProps) {
   const step = service.driver_progress_step ?? 0;
+  const paradas = paradasDelServicio(service);
   let text = 'En camino';
-  if (step === 1) text = 'Ubicado';
+
+  if (paradas.length > 1) {
+    const total = totalDePasos(service);
+    if (step <= 0) text = 'En camino';
+    else if (step >= total) text = 'Finalizado';
+    else {
+      const destino = paradaDelPaso(service, step);
+      text = `Destino ${step} de ${paradas.length}${destino ? ` · ${destino}` : ''}`;
+    }
+  } else if (step === 1) text = 'Ubicado';
   else if (step === 2) text = 'En proceso';
   else if (step >= 3) text = 'Finalizado';
 

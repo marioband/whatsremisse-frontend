@@ -30,6 +30,7 @@
 import { esProgramado } from './datetime';
 import { caducoNadieLaTomo, estaPagadoYCerrado } from './estadoServicio';
 import { ServiceAlert } from '../types';
+import { viajeTerminado } from './paradasDelServicio';
 
 /** Cuánto antes de su hora una reserva adelanta a los pagos pendientes. */
 export const MINUTOS_DE_ANTICIPO_DE_LA_RESERVA = 30;
@@ -52,7 +53,7 @@ export function arrancoElViaje(service: ServiceAlert, toqueEnEsteDispositivo = f
 /** El viaje terminó (el conductor lo cerró) y el proceso de pago sigue abierto. */
 export function tienePagoPendiente(service: ServiceAlert): boolean {
   if (service.status === 'STATUS_CANCELLED') return false;
-  const terminado = service.status === 'STATUS_COMPLETED' || pasoDelViaje(service) >= 3;
+  const terminado = viajeTerminado(service);
   return terminado && !estaPagadoYCerrado(service);
 }
 

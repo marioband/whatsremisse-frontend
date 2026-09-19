@@ -3,6 +3,7 @@ import { esProgramado } from './datetime';
 import { estaCompartido } from './gruposDeServicio';
 import { EstadoDeMiPostulacion } from './miPostulacion';
 import { ServiceAlert } from '../types';
+import { viajeTerminado } from './paradasDelServicio';
 
 export interface EstadoServicio {
   /**
@@ -94,7 +95,7 @@ export function estadoDeServicio(
     return { etiqueta: 'Servicio anulado', color: ROJO_ACCION, compartido };
   }
 
-  if (service.status === 'STATUS_COMPLETED' || paso >= 3) {
+  if (viajeTerminado(service)) {
     // El viaje terminó: lo que falta es el pago entre conductor y proveedor.
     if (estaPagadoYCerrado(service)) {
       return { etiqueta: 'Pagado y cerrado', color: VERDE_ACCION, compartido };

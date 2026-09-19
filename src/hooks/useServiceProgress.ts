@@ -28,17 +28,27 @@ export const ULTIMO_HITO_VIAJE = 3;
  * El cierre del viaje llega por dos señales equivalentes (0012 escribe las dos:
  * `driver_progress_step = 3` y `status = STATUS_COMPLETED`); basta con una.
  */
-export function etapaDelServicio(service: ServiceAlert | undefined): EtapaDelServicio {
+export function etapaDelServicio(
+  service: ServiceAlert | undefined,
+  /**
+   * El paso que CIERRA el viaje: 3 en el servicio de un solo destino; con varias paradas es N+1
+   * (los pasos «Ir a destino k» y el final). Ver `lib/paradasDelServicio.ts`.
+   */
+  ultimoHito: number = ULTIMO_HITO_VIAJE
+): EtapaDelServicio {
   if (!service) return { currentStep: 'IN_PROGRESS', progressIndex: 0 };
 
   const paso = service.driver_progress_step ?? 0;
-  if (paso >= ULTIMO_HITO_VIAJE || service.status === 'STATUS_COMPLETED') {
+  if (paso >= ultimoHito || service.status === 'STATUS_COMPLETED') {
     return { currentStep: 'PAGO', progressIndex: 2 };
   }
 
   return { currentStep: 'IN_PROGRESS', progressIndex: paso };
 }
 
-export function useServiceProgress(service: ServiceAlert | undefined): EtapaDelServicio {
-  return useMemo(() => etapaDelServicio(service), [service]);
+export function useServiceProgress(
+  service: ServiceAlert | undefined,
+  ultimoHito: number = ULTIMO_HITO_VIAJE
+): EtapaDelServicio {
+  return useMemo(() => etapaDelServicio(service, ultimoHito), [service, ultimoHito]);
 }

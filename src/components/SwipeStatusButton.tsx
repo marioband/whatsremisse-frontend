@@ -77,6 +77,11 @@ function PalomitaDentro() {
 interface Props {
   /** Hito que se reporta al deslizar: 0 = Ubicado, 1 = En proceso, 2 = Finalizado. */
   progressIndex: number;
+  /**
+   * Texto que se pinta en el centro, cuando el servicio no usa las etapas de siempre (varias
+   * paradas: «Ir a destino 2»). Sin él, el texto sale del hito.
+   */
+  etiqueta?: string;
   onAdvance: () => void;
 }
 
@@ -100,7 +105,7 @@ interface Props {
  * soltar pasado el umbral, el pulgar viaja al extremo (fotograma "completado": barra
  * llena y sin texto) y recién entonces se reporta el hito.
  */
-export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
+export function SwipeStatusButton({ progressIndex, etiqueta, onAdvance }: Props) {
   const [dragging, setDragging] = useState(false);
   const [listo, setListo] = useState(false);
   const [volando, setVolando] = useState(false);
@@ -137,7 +142,13 @@ export function SwipeStatusButton({ progressIndex, onAdvance }: Props) {
   const anchoDeBarra = () => anchoRef.current || trackWidth || 0;
   const recorridoMaximo = () => desplazamientoMaximo(anchoDeBarra(), THUMB_SIZE, MARGEN);
 
-  const fotograma = fotogramaDeBarra({ progressIndex, arrastrando: dragging, listo, volando });
+  const fotograma = fotogramaDeBarra({
+    progressIndex,
+    arrastrando: dragging,
+    listo,
+    volando,
+    etiqueta,
+  });
 
   /** Deja el pulgar y el relleno en reposo. Devuelve si el relleno quedó bien colocado. */
   const resetThumb = (): boolean => {

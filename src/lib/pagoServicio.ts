@@ -1,4 +1,5 @@
 import { ServiceAlert } from '../types';
+import { viajeTerminado } from './paradasDelServicio';
 
 export type DireccionPago = 'DRIVER_PAYS_PROVIDER' | 'PROVIDER_PAYS_DRIVER';
 export type EstadoPago = 'SIN_DECLARAR' | 'DECLARADO' | 'RECHAZADO' | 'ACEPTADO' | 'CONFIRMADO';
@@ -73,7 +74,8 @@ export function resumenDePago(service: ServiceAlert): ResumenPago {
 
 /** El conductor declara (y corrige tras un rechazo). */
 export function puedeDeclarar(service: ServiceAlert, rol: RolPago): boolean {
-  return rol === 'CONDUCTOR' && (service.driver_progress_step ?? 0) >= 3;
+  // El viaje termina en su ÚLTIMO paso, no en el 3: con paradas el 3 es un destino intermedio.
+  return rol === 'CONDUCTOR' && viajeTerminado(service);
 }
 
 /** El proveedor acepta o rechaza el monto declarado. */

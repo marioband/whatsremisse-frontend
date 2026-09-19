@@ -84,6 +84,13 @@ export interface ServiceAlert {
   destination_address: string;
   destination_lat: number;
   destination_lng: number;
+  /**
+   * Las paradas del servicio, en orden; la última es el destino final (migración 0027).
+   * Con más de una parada, el conductor reporta el avance parada por parada («Ir a destino 1»)
+   * en vez de «Ubicado / En proceso / Finalizado». Si falta, se leen del texto «Paradas: …»
+   * que quedó en las observaciones (ver `lib/paradasDelServicio.ts`).
+   */
+  destinations?: string[];
   vehicle_requirements: VehicleData;
   fare: number;
   status: ServiceStatus;

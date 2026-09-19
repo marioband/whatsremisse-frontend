@@ -116,6 +116,15 @@ export function ChatInputBar({
   const cancelandoRef = useRef(false);
   /** El responder se crea UNA vez: necesita saber si se está grabando sin leer el estado. */
   const grabandoRef = useRef(false);
+  /**
+   * El permiso del micrófono se pide al PRIMER toque, y el navegador tarda en preguntarlo: si el
+   * usuario ya soltó cuando la grabadora está lista, hay que cancelarla en el acto. Sin esto
+   * quedaba una grabación HUÉRFANA sin dedo encima y sin forma de pararla (reporte del usuario,
+   * 19-09-2026: «presioné una vez y comenzó a grabar, pero los demás gestos no funcionaron, no
+   * pude cancelar la grabación»).
+   */
+  const esperandoGrabadoraRef = useRef(false);
+  const soltadoDuranteLaEsperaRef = useRef(false);
 
   useEffect(() => {
     if (!grabando) return;
@@ -150,22 +159,39 @@ export function ChatInputBar({
     if (grabando) return;
     Keyboard.dismiss();
     setTrayOpen(false);
+    esperandoGrabadoraRef.current = true;
+    soltadoDuranteLaEsperaRef.current = false;
     const permiso = await empezarAGrabar();
+    esperandoGrabadoraRef.current = false;
     if (!permiso.ok) {
-      Alert.alert('Micrófono', permiso.motivo);
+      Alert.alert(
+        'Micrófono',
+        'motivo' in permiso ? permiso.motivo : 'No se pudo usar el micrófono.'
+      );
       limpiarGrabacion();
       return;
     }
     grabadoraRef.current = permiso.valor;
     grabandoRef.current = true;
     setGrabando(true);
+    // El dedo ya se había levantado mientras se pedía el permiso (o el navegador tardó): no se
+    // deja la grabación suelta, se cancela y se explica cómo se graba.
+    if (soltadoDuranteLaEsperaRef.current && !bloqueadaRef.current) {
+      soltadoDuranteLaEsperaRef.current = false;
+      cancelar();
+      Alert.alert(
+        'Nota de voz',
+        'Mantén pulsado el micrófono mientras hablas (o desliza hacia arriba para grabar sin mantener).'
+      );
+    }
   };
 
   /** Soltar: manda la nota de voz (o la cancela, si se deslizó para cancelar). */
   const soltarGrabacion = async () => {
     const grabadora = grabadoraRef.current;
     if (!grabadora) {
-      limpiarGrabacion();
+      // Todavía se está pidiendo el permiso: se apunta para que, cuando llegue, se cancele.
+      if (esperandoGrabadoraRef.current) soltadoDuranteLaEsperaRef.current = true;
       return;
     }
     // Bloqueada: el dedo ya no manda; seguirá grabando hasta pulsar enviar o cancelar.
@@ -312,6 +338,16 @@ export function ChatInputBar({
                   ? 'Suelta para cancelar'
                   : '◀ cancelar · ▲ sin mantener'}
             </Text>
+            {/* Salida a mano: con la grabación en marcha siempre se puede cancelar, aunque el
+                gesto no sea el esperado (el usuario se quedó sin poder cancelar, 19-09-2026). */}
+            <TouchableOpacity
+              onPress={cancelar}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancelar la grabación"
+            >
+              <MaterialCommunityIcons name="close" size={18} color={ROJO_ACCION} />
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.inputPill}>

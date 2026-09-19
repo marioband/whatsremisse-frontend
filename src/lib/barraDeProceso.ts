@@ -57,10 +57,16 @@ export function fotogramaDeBarra(datos: {
   arrastrando: boolean;
   listo: boolean;
   volando: boolean;
+  /**
+   * Texto propio del paso que toca: los servicios con varias paradas dicen «Ir a destino 2» en
+   * vez de «En proceso». Sin él se usan las etapas de siempre.
+   */
+  etiqueta?: string;
 }): FotogramaDeBarra {
   if (datos.volando) return { etiqueta: '', icono: 'arrow-right-bold' };
   if (datos.arrastrando && datos.listo) return { etiqueta: AVISO_SOLTAR, icono: 'check-bold' };
-  return { etiqueta: etiquetaDelHito(datos.progressIndex), icono: 'arrow-right-bold' };
+  const propia = (datos.etiqueta ?? '').trim();
+  return { etiqueta: propia || etiquetaDelHito(datos.progressIndex), icono: 'arrow-right-bold' };
 }
 
 /**

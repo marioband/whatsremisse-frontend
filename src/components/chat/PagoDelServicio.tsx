@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 import { BankDetailsRow } from './BankDetailsRow';
 import {
@@ -80,6 +87,19 @@ export function PagoDelServicio({
 }: Props) {
   const resumen = resumenDePago(service);
   const [direccion, setDireccion] = useState<DireccionPago | null>(null);
+  /**
+   * Qué acción está en curso (`declarar` | `aceptar` | `rechazar` | `confirmar`).
+   *
+   * El usuario reportó (19-09-2026) que al pulsar «Declarar que me deben» o «Confirmar pago
+   * recibido» el botón se quedaba presionado 5-8 segundos sin ninguna señal, y parecía que la
+   * app se había colgado. El tiempo es del servidor (la escritura tarda lo que tarde), así que
+   * aquí se dice QUE se está guardando: el botón pulsado muestra su señal de carga.
+   */
+  const [accionEnCurso, setAccionEnCurso] = useState<string | null>(null);
+  useEffect(() => {
+    // Al terminar (el padre quita `ocupado`) se apaga la señal.
+    if (!ocupado) setAccionEnCurso(null);
+  }, [ocupado]);
   const [monto, setMonto] = useState('');
   const [errorMonto, setErrorMonto] = useState('');
 
@@ -189,6 +209,7 @@ export function PagoDelServicio({
   const fila = filaDeEstado();
 
   const enviarDeclaracion = () => {
+    setAccionEnCurso('declarar');
     const valor = Number(monto.replace(',', '.'));
     if (!direccion) {
       setErrorMonto('Elige "Yo pago" o "Me deben".');
@@ -258,11 +279,18 @@ export function PagoDelServicio({
                     accessibilityLabel="Declarar el monto"
                     disabled={ocupado}
                   >
-                    <Text style={styles.botonTexto}>
-                      {direccion === 'DRIVER_PAYS_PROVIDER'
-                        ? 'Declarar que pago'
-                        : 'Declarar que me deben'}
-                    </Text>
+                    {accionEnCurso === 'declarar' ? (
+                      <View style={styles.filaCargando}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <Text style={styles.botonTexto}>Enviando…</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.botonTexto}>
+                        {direccion === 'DRIVER_PAYS_PROVIDER'
+                          ? 'Declarar que pago'
+                          : 'Declarar que me deben'}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity
@@ -298,12 +326,22 @@ export function PagoDelServicio({
                       styles.botonVerde,
                       ocupado && styles.botonApagado,
                     ]}
-                    onPress={() => onResolver(true)}
+                    onPress={() => {
+                      setAccionEnCurso('aceptar');
+                      onResolver(true);
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel="Aceptar monto"
                     disabled={ocupado}
                   >
-                    <Text style={styles.botonTexto}>Aceptar monto</Text>
+                    {accionEnCurso === 'aceptar' ? (
+                      <View style={styles.filaCargando}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <Text style={styles.botonTexto}>Aceptando…</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.botonTexto}>Aceptar monto</Text>
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -311,12 +349,22 @@ export function PagoDelServicio({
                       styles.botonRojo,
                       ocupado && styles.botonApagado,
                     ]}
-                    onPress={() => onResolver(false)}
+                    onPress={() => {
+                      setAccionEnCurso('rechazar');
+                      onResolver(false);
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel="Rechazar monto"
                     disabled={ocupado}
                   >
-                    <Text style={styles.botonTexto}>Rechazar</Text>
+                    {accionEnCurso === 'rechazar' ? (
+                      <View style={styles.filaCargando}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <Text style={styles.botonTexto}>Rechazando…</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.botonTexto}>Rechazar</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </>
@@ -346,12 +394,22 @@ export function PagoDelServicio({
             {puedeConfirmar(service, rol) && (
               <TouchableOpacity
                 style={[styles.botonConfirmar, ocupado && styles.botonApagado]}
-                onPress={onConfirmar}
+                onPress={() => {
+                  setAccionEnCurso('confirmar');
+                  onConfirmar();
+                }}
                 accessibilityRole="button"
                 accessibilityLabel="Confirmar pago recibido"
                 disabled={ocupado}
               >
-                <Text style={styles.botonTexto}>Confirmar pago recibido</Text>
+                {accionEnCurso === 'confirmar' ? (
+                  <View style={styles.filaCargando}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={styles.botonTexto}>Confirmando…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.botonTexto}>Confirmar pago recibido</Text>
+                )}
               </TouchableOpacity>
             )}
           </>
@@ -387,6 +445,13 @@ export function PagoDelServicio({
 }
 
 const styles = StyleSheet.create({
+  /** La fila con la señal de carga: el spinner y el texto, centrados. */
+  filaCargando: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
   panel: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 0.5,

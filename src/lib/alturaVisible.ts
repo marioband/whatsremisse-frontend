@@ -35,6 +35,14 @@ export const UMBRAL_TECLADO_PX = 120;
  */
 export const UMBRAL_CAMBIO_PX = 40;
 
+/**
+ * Cuánto se espera para volver a aplicar el alto después del último evento.
+ *
+ * Es solo la corrección final (el valor definitivo): el ajuste que se ve mientras el teclado
+ * se anima se aplica al instante, para no darle tiempo al navegador a desplazar la página.
+ */
+export const RETARDO_DE_ASENTAMIENTO_MS = 140;
+
 export interface EstadoDeAltura {
   /** Alto visible ahora mismo, en píxeles. */
   alto: number;
@@ -126,18 +134,20 @@ export function instalarAlturaVisible(): () => void {
     publicar({ alto, base, teclado });
 
     const cambioGrande = Math.abs(alto - ultimoAplicado) > UMBRAL_CAMBIO_PX;
-    if (!cambioDeTeclado && !cambioGrande && ultimoAplicado !== 0) return;
+    // Se aplica YA cuando el cambio es grande (el teclado entrando o saliendo): si la app
+    // esperara, el navegador desplazaría la página para enseñar el campo y después habría que
+    // deshacer ese desplazamiento — eso era el «sube más de lo que ocupa el teclado y luego
+    // regresa» que reportó el usuario (19-09-2026). Siguiendo al teclado paso a paso, el campo
+    // nunca se sale de lo visible y no hay nada que desplazar.
+    if (cambioDeTeclado || cambioGrande || ultimoAplicado === 0) aplicar(alto, teclado);
 
+    // Y siempre se deja puesto el valor DEFINITIVO (los temblores de pocos píxeles no se
+    // persiguen uno a uno, pero el último número es el que queda).
     if (temporizador) clearTimeout(temporizador);
-    // Con el teclado hay animación (iOS ~250 ms): se espera a que acabe. Sin él, basta un
-    // suspiro para no perder el último ajuste de un giro.
-    temporizador = setTimeout(
-      () => {
-        temporizador = null;
-        aplicar(Math.round(vv.height), teclado);
-      },
-      cambioDeTeclado ? 260 : 60
-    );
+    temporizador = setTimeout(() => {
+      temporizador = null;
+      aplicar(Math.round(vv.height), estado.teclado);
+    }, RETARDO_DE_ASENTAMIENTO_MS);
   };
 
   /** Al enfocar/desenfocar un campo el teclado aparece o se va: se vuelve a medir. */

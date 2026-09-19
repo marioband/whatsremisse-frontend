@@ -26,6 +26,8 @@ export interface DbServiceAlert {
   destination_address: string;
   destination_lat: number | null;
   destination_lng: number | null;
+  /** Paradas en orden (0027). Puede no existir si la migración no está aplicada. */
+  destinations?: string[] | null;
   vehicle_requirements: unknown | null;
   fare: number;
   status: string;
