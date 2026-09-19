@@ -37,6 +37,7 @@
     "expo-image-manipulator": "~11.3.0"
   },
   "devDependencies": {
+    "web-push": "^3.6.7",
     "@babel/core": "^7.20.0",
     "@types/react": "~18.2.14",
     "babel-plugin-inline-dotenv": "^1.7.0",

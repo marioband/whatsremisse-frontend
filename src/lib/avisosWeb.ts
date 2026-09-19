@@ -19,7 +19,8 @@ import { guardarSuscripcionDeAvisos, borrarSuscripcionDeAvisos } from './databas
  * Se puede sustituir por otra sin tocar nada más: la app y el servidor solo tienen que usar la
  * misma pareja.
  */
-export const CLAVE_PUBLICA_VAPID = 'PENDIENTE_DE_CLAVE';
+export const CLAVE_PUBLICA_VAPID =
+  'BHze1PEvlbaD7A9Cz_nUPR8Zuz5trJEavAHu5jwpMV-FxuoMlvnBNlWDcm8wjSquN42ICa4zgTKC_QXDQ3h1mAc';
 
 /** El archivo del service worker (solo avisos, sin caché). */
 export const RUTA_DEL_SERVICE_WORKER = '/sw-avisos.js';
@@ -84,7 +85,7 @@ export async function activarAvisos(): Promise<{
   if (!soporteDeAvisos()) {
     return { ok: false, estado: 'no-soportado', motivo: 'Este navegador no puede recibir avisos.' };
   }
-  if (!CLAVE_PUBLICA_VAPID || CLAVE_PUBLICA_VAPID === 'PENDIENTE_DE_CLAVE') {
+  if (!CLAVE_PUBLICA_VAPID) {
     return { ok: false, estado: 'falta-permiso', motivo: 'Falta la clave pública de los avisos.' };
   }
 

@@ -17,29 +17,30 @@
 -- Sin (c) los disparadores no avisan a nadie (y no se rompe nada: queda anotado en la tabla).
 
 -- ============================================
--- 0) La extensión que manda la petición
+-- La cola de avisos
 -- ============================================
--- `pg_net` es la que hace la llamada HTTP a la función desde la base. En Supabase ya viene.
--- Si esta línea diera error, se activa en Supabase → Database → Extensions → `pg_net`.
-create extension if not exists pg_net;
-
--- ============================================
--- La dirección y la llave con la que se llama a la función
--- ============================================
-create table if not exists public.avisos_config (
-  id boolean primary key default true check (id),
-  url text,
-  clave text,
-  actualizado_at timestamptz not null default now()
+-- Cada aviso que hay que mandar queda aquí apuntado, y un pequeño programa que corre en el VPS
+-- (cada minuto) los recoge y los manda al teléfono. Así NO hace falta el CLI de Supabase ni
+-- desplegar funciones: todo vive en el servidor del usuario, que es donde ya despliega la app.
+create table if not exists public.avisos_cola (
+  id bigserial primary key,
+  creado_at timestamptz not null default now(),
+  enviado_at timestamptz,
+  intentos smallint not null default 0,
+  ultimo_error text,
+  destinatarios uuid[] not null,
+  titulo text not null,
+  cuerpo text not null,
+  url text not null default '/',
+  etiqueta text
 );
 
-comment on table public.avisos_config is
-  'Una sola fila: la dirección de la función enviar-aviso y la clave de servicio para llamarla.';
-comment on column public.avisos_config.clave is
-  'Clave de servicio de Supabase (secreta). Se rellena desde el terminal, no se versiona.';
+-- Lo que el programa busca en cada vuelta: lo pendiente, de lo más viejo a lo más nuevo.
+create index if not exists idx_avisos_cola_pendientes on public.avisos_cola(enviado_at, id);
 
-alter table public.avisos_config enable row level security;
--- Sin políticas: solo el servidor (que ignora RLS) puede leerla. Es a propósito.
+alter table public.avisos_cola enable row level security;
+-- Sin políticas: los avisos los escribe y los lee el servidor (que ignora RLS). Un usuario normal
+-- no puede ver ni tocar la cola.
 
 -- ============================================
 -- El envío, en un solo sitio
@@ -50,39 +51,23 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  config public.avisos_config;
 begin
-  -- Nada de avisos sin destinatarios, sin título o sin dirección configurada.
+  -- Nada de avisos sin destinatarios ni sin texto.
   if p_destinatarios is null or array_length(p_destinatarios, 1) is null then
     return;
   end if;
-
-  select * into config from public.avisos_config limit 1;
-  if config.url is null or config.clave is null then
+  if coalesce(p_titulo, '') = '' or coalesce(p_cuerpo, '') = '' then
     return;
   end if;
 
-  -- `pg_net` manda la petición en segundo plano: el chat no espera a que salga el aviso.
-  perform net.http_post(
-    url := config.url,
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || config.clave
-    ),
-    body := jsonb_build_object(
-      'destinatarios', to_jsonb(p_destinatarios),
-      'titulo', p_titulo,
-      'cuerpo', p_cuerpo,
-      'url', p_url,
-      'etiqueta', p_etiqueta
-    ),
-    timeout_milliseconds := 5000
-  );
+  -- El aviso se APUNTA y se sigue: escribir en la cola es rápido y no puede fallar por la red.
+  -- El programa del VPS lo recoge un momento después (ver scripts/enviar-avisos.mjs).
+  insert into public.avisos_cola (destinatarios, titulo, cuerpo, url, etiqueta)
+  values (p_destinatarios, p_titulo, p_cuerpo, coalesce(p_url, '/'), p_etiqueta);
 exception
   when others then
-    -- Un aviso que no sale nunca puede romper un mensaje: se anota y se sigue.
-    raise warning 'No se pudo avisar: %', sqlerrm;
+    -- Un aviso que no se puede apuntar nunca puede romper un mensaje: se anota y se sigue.
+    raise warning 'No se pudo apuntar el aviso: %', sqlerrm;
 end;
 $$;
 
@@ -244,12 +229,14 @@ after update on public.service_alerts
 for each row execute function public.avisar_hito_del_viaje();
 
 -- ============================================
--- 6) Lo que falta rellenar (una vez, desde el terminal)
+-- 6) Lo que queda por hacer (una vez, en el VPS)
 -- ============================================
--- Rellena `url` con la dirección de tu función y `clave` con la clave de servicio:
---
---   insert into public.avisos_config (url, clave)
---   values ('https://<tu-proyecto>.supabase.co/functions/v1/enviar-aviso', '<clave-de-servicio>')
---   on conflict (id) do update set url = excluded.url, clave = excluded.clave, actualizado_at = now();
---
--- Mientras eso esté vacío, los disparadores no mandan nada (y no rompen nada).
+-- 1) `npm install` en el frontend (trae `web-push`, el que firma los avisos).
+-- 2) Poner en el `.env` del frontend (ese archivo NO se versiona):
+--      VAPID_PUBLICA=<publicKey>
+--      VAPID_PRIVADA=<privateKey>
+--      AVISOS_CONTACTO=mailto:tu-correo@whatsremisse.tech
+--      SUPABASE_SERVICE_ROLE_KEY=<clave de servicio de Supabase>
+-- 3) Probar una vuelta a mano:  node scripts/enviar-avisos.mjs
+-- 4) Dejarlo corriendo cada minuto: la línea de crontab que está en el propio script.
+-- Sin esto, los avisos se quedan apuntados en la cola (y ningún mensaje se rompe).
