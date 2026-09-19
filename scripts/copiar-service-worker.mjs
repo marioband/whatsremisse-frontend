@@ -13,8 +13,11 @@ const origen = join(raiz, 'public', 'sw-avisos.js');
 const destino = join(raiz, 'web-build', 'sw-avisos.js');
 
 if (!existsSync(origen)) {
-  console.error('[service-worker] falta public/sw-avisos.js');
-  process.exit(1);
+  // Aviso, NO error: un despliegue no puede quedarse a medias por una pieza opcional. Si esto
+  // sale, los avisos no se podrán activar (el navegador no encontrará `/sw-avisos.js`), pero la
+  // app funciona igual. Antes cortaba el build entero y tumbaba el despliegue (19-09-2026).
+  console.warn('[service-worker] ATENCIÓN: falta public/sw-avisos.js — los avisos no se podrán activar');
+  process.exit(0);
 }
 mkdirSync(dirname(destino), { recursive: true });
 copyFileSync(origen, destino);
