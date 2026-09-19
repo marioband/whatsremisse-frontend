@@ -29,14 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
-import { ULTIMO_HITO_VIAJE, useServiceProgress } from '../hooks/useServiceProgress';
-import {
-  etiquetaDelPaso,
-  hayVariasParadas,
-  paradaDelPaso,
-  paradasDelServicio,
-  totalDePasos,
-} from '../lib/paradasDelServicio';
+import { useServiceProgress } from '../hooks/useServiceProgress';
 import { useTecladoAbierto } from '../hooks/useTecladoAbierto';
 import {
   elegirFoto,
@@ -95,6 +88,13 @@ import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { AVISO_DE_RECHAZO, chatCerradoParaElConductor } from '../lib/miPostulacion';
 import { DireccionPago, montoEnTexto, resumenDePago } from '../lib/pagoServicio';
 import { AVISO_MIGRACION_0020, LecturaDeChat } from '../lib/palomas';
+import {
+  etiquetaDelPaso,
+  hayVariasParadas,
+  paradaDelPaso,
+  paradasDelServicio,
+  totalDePasos,
+} from '../lib/paradasDelServicio';
 import { textoParaCopiar, DatosPublicos, datosDesdePerfilPublico } from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
@@ -1204,6 +1204,26 @@ export function ChatScreen() {
 
   // Con el teclado abierto, la barra de escribir no lleva hueco inferior: va pegada a él.
   const tecladoAbierto = useTecladoAbierto();
+
+  /**
+   * Con el teclado abierto, lo que queda pegado a la barra de escritura tiene que ser el FINAL
+   * del chat: el conductor tiene que poder leer lo que le escriben mientras escribe.
+   *
+   * Dos cosas lo movían de sitio: la app se redimensiona al alto visible y el navegador (iOS)
+   * desplaza la página para enseñar el campo enfocado. Al volver a medir, el desplazamiento se
+   * anula y —si la lista no se recoloca— la vista se queda en el INICIO de la conversación,
+   * mostrando la tarjeta del servicio (reporte del usuario, 19-09-2026, tercera corrección).
+   *
+   * Se baja al final dos veces: en el acto (cuando cambia el alto) y un suspiro después, porque
+   * el desplazamiento del navegador llega un poco más tarde que el cambio de tamaño.
+   */
+  useEffect(() => {
+    if (!tecladoAbierto) return;
+    const bajar = () => flatListRef.current?.scrollToEnd({ animated: false });
+    bajar();
+    const tardio = setTimeout(bajar, 300);
+    return () => clearTimeout(tardio);
+  }, [tecladoAbierto]);
 
   if (!service) {
     return (

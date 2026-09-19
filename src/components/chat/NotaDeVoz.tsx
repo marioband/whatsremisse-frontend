@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -96,9 +97,14 @@ export function NotaDeVoz({
         accessibilityRole="button"
         accessibilityLabel={reproduciendo ? 'Pausar la nota de voz' : 'Reproducir la nota de voz'}
       >
-        <Text style={[styles.icono, { color: esMio ? '#FFFFFF' : colorTiempo }]}>
-          {reproduciendo ? '⏸' : '▶'}
-        </Text>
+        {/* El mismo icono para los dos estados: antes eran dos glifos de texto (⏸ y ▶) y se
+            veían de formatos distintos (el usuario lo reportó el 19-09-2026). Ahora los dos
+            salen de la familia de iconos de la app, con el mismo cuerpo. */}
+        <MaterialCommunityIcons
+          name={reproduciendo ? 'pause' : 'play'}
+          size={18}
+          color={esMio ? '#FFFFFF' : colorTiempo}
+        />
       </TouchableOpacity>
       <View style={[styles.barra, { backgroundColor: colorBarra }]}>
         <View

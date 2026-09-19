@@ -46,6 +46,7 @@ import {
   updateGroupMessage,
 } from '../lib/database';
 import { describeError, esFalloDeTransporte, textoDeErrorParaElUsuario } from '../lib/errors';
+import { duracionEnTexto, Grabacion } from '../lib/grabacionDeAudio';
 import {
   AVISO_MIGRACION_0019,
   AVISO_SIN_CAMBIOS,
@@ -58,7 +59,6 @@ import {
   mensajeYaGuardado,
   PLACEHOLDER_EDICION,
 } from '../lib/mensajes';
-import { duracionEnTexto, Grabacion } from '../lib/grabacionDeAudio';
 import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { displayName } from '../lib/names';
 import { AVISO_MIGRACION_0020, LecturaDeChat, estadoDePalomas } from '../lib/palomas';

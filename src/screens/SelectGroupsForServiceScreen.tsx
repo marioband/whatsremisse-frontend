@@ -276,8 +276,12 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#bbb',
-    backgroundColor: 'transparent',
+    // El círculo SIN marcar tiene que verse sobre el color de la tarjeta. Antes era un borde
+    // gris claro sobre fondo transparente y en las tarjetas del propietario (#B8BED8) y del
+    // administrador (#B8B8B8) desaparecía (lo reportó el usuario el 19-09-2026): ahora es blanco
+    // con borde oscuro, que contrasta con los cuatro colores.
+    borderColor: NEGRO_INSTITUCIONAL,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },

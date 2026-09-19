@@ -26,6 +26,16 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const PHONE_KEY = '@whatsremisse_phone';
+/**
+ * El perfil guardado en el dispositivo.
+ *
+ * Por qué: al volver de Waze (o de cualquier app), iOS puede descartar la pestaña y recargarla.
+ * El arranque esperaba a `getSession()` Y a la consulta del perfil para quitar el logo de carga,
+ * así que con la red fría el usuario veía 15 segundos de pantalla de carga (reporte del
+ * 19-09-2026). Con el perfil guardado, la app PINTA ENSEGUIDA lo que ya sabía y refresca por
+ * detrás; el perfil de verdad llega un momento después y manda.
+ */
+const PERFIL_KEY = '@whatsremisse_perfil';
 
 const requireSmsVerification = process.env.EXPO_PUBLIC_REQUIRE_SMS_VERIFICATION !== 'false';
 
@@ -66,14 +76,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initSession = async () => {
       try {
-        const savedPhone = await AsyncStorage.getItem(PHONE_KEY);
+        const [savedPhone, perfilGuardado] = await Promise.all([
+          AsyncStorage.getItem(PHONE_KEY),
+          AsyncStorage.getItem(PERFIL_KEY),
+        ]);
         if (savedPhone && mounted) setPhone(savedPhone);
+
+        // Lo que ya sabemos del perfil se pinta ENSEGUIDA: el usuario no espera a la red para
+        // ver su app (antes, con la red fría, esto eran ~15 s de logo).
+        if (perfilGuardado && mounted) {
+          try {
+            const guardado = JSON.parse(perfilGuardado);
+            setProfile(guardado);
+            setRequiresProfileSetup(
+              !(guardado?.role && guardado?.full_name && guardado?.vehicle_data)
+            );
+          } catch {
+            // Caché ilegible: se sigue con la consulta de verdad.
+          }
+        }
 
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
 
         if (mounted && data.session) {
           setSession(data.session);
+          // El refresco del perfil NO bloquea el arranque: si la red tarda, la app ya está
+          // pintada con lo guardado.
+          setLoading(false);
           await loadProfile(data.session.user.id);
         }
       } catch (err) {
@@ -111,6 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data) {
         const mapped = mapProfile(data);
         setProfile(mapped);
+        // Se guarda para el próximo arranque (el de la vuelta de Waze).
+        void AsyncStorage.setItem(PERFIL_KEY, JSON.stringify(mapped)).catch(() => undefined);
         const isProfileComplete = Boolean(mapped.role && mapped.full_name && mapped.vehicle_data);
         // eslint-disable-next-line no-console
         console.log('[Auth] Perfil cargado:', mapped, 'isProfileComplete:', isProfileComplete);
@@ -280,6 +312,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await AsyncStorage.removeItem(PHONE_KEY);
+    await AsyncStorage.removeItem(PERFIL_KEY);
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);

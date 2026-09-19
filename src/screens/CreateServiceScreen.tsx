@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AddressInput, DireccionConfirmada } from '../components/AddressInput';
 import { CalendarMonthPicker } from '../components/CalendarMonthPicker';
@@ -79,6 +80,7 @@ const PAYMENT_DATES = ['Al término', 'Durante el día', 'Mañana', 'Escribir'];
 const MOMENTOS_DEL_SERVICIO = ['Al momento', 'Hora específica'];
 
 export function CreateServiceScreen() {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<CreateNav>();
   const route = useRoute<CreateRoute>();
   const { addService, updateService, deleteService } = useMockStore();
@@ -833,7 +835,10 @@ export function CreateServiceScreen() {
       </ScrollView>
 
       {/* Pie: Anular · Guardar · Elegir grupos (antes "Siguiente") */}
-      <View style={styles.footer}>
+      {/* Los botones llevan el hueco del borde inferior del iPhone: antes quedaban pegados al
+          borde (reporte del usuario, 19-09-2026) y en los iPhone con barra de gestos el dedo
+          caía fuera de la pantalla. */}
+      <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>
         <TouchableOpacity style={[styles.footerBtn, styles.anularBtn]} onPress={handleAnular}>
           <Text style={styles.anularText}>Anular</Text>
         </TouchableOpacity>
