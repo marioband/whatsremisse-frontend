@@ -4,6 +4,7 @@ import { View, StyleSheet } from 'react-native';
 import { DriverHomeScreen } from './DriverHomeScreen';
 import { MyGroupsScreen } from './MyGroupsScreen';
 import { ProviderHomeScreen } from './ProviderHomeScreen';
+import { InvitacionAvisos } from '../components/InvitacionAvisos';
 import { MainHeader, MainTab } from '../components/MainHeader';
 import { useMockStore } from '../context/MockStoreContext';
 
@@ -42,6 +43,8 @@ export function HomeScreen() {
   return (
     <View style={styles.container}>
       <MainHeader activeTab={activeTab} onTabChange={handleTabChange} />
+      {/* La primera vez pregunta si quiere avisos (pedido del usuario, 19-09-2026). */}
+      <InvitacionAvisos />
       <View style={styles.content}>{renderContent()}</View>
     </View>
   );

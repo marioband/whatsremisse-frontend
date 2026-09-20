@@ -142,12 +142,16 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   button: {
+    // La MISMA forma que los botones de la app (los de Guardar/Aceptar): ancho completo dentro de
+    // su contenedor, esquinas de 12, 16 de alto el texto y el azul de marca. Antes era un botón
+    // pequeño pegado abajo que no se parecía a nada (reporte del usuario, 19-09-2026).
     backgroundColor: BRAND_BLUE,
-    borderRadius: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 28,
-    minWidth: 112,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
   },
   buttonDisabled: {
     opacity: 0.7,

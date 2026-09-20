@@ -23,7 +23,8 @@ export function BankDetailsRow({ label, value, onCopy }: BankDetailsRowProps) {
         onPress={() => onCopy(value)}
         accessibilityLabel={`Copiar ${label}`}
       >
-        <Icono fuente={ICONO_COPIAR} tamano={16} />
+        {/* Negro institucional, sin fondo: el icono manda (pedido del usuario, 19-09-2026). */}
+        <Icono fuente={ICONO_COPIAR} tamano={16} color="#2D2D2D" />
       </TouchableOpacity>
     </View>
   );
@@ -43,10 +44,10 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, color: '#888', marginBottom: 2 },
   value: { fontSize: 14, color: '#111', fontWeight: '600' },
   copyButton: {
-    backgroundColor: BLUE,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    // Sin fondo ni relleno: el botón es solo el icono (el usuario pidió quitar el fondo azul el
+    // 19-09-2026). El color va en el componente (`color`), no en el estilo.
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     marginLeft: 8,
   },
 });

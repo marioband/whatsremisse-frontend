@@ -8,7 +8,9 @@
  * con la clave VAPID y se mandan al navegador (en el iPhone, a Apple).
  *
  * Uso:      node scripts/enviar-avisos.mjs [--limite 50] [--seco]
- * Cada minuto (crontab -e):  * * * * * cd /opt/data/whatsremisse/frontend && node scripts/enviar-avisos.mjs >> /tmp/avisos.log 2>&1
+ * Normalmente NO se llama a mano: lo repite `scripts/enviar-avisos-en-bucle.sh`, que instala el
+ * servicio `deploy/whatsremisse-avisos.service` y pasa cada 5 segundos (así los avisos llegan al
+ * momento y no esperan a la ronda del minuto que hacía el cron).
  *
  * Necesita en el `.env` del frontend (ese archivo NO se versiona):
  *   VAPID_PUBLICA, VAPID_PRIVADA, AVISOS_CONTACTO y SUPABASE_SERVICE_ROLE_KEY

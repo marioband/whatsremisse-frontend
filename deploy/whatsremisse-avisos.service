@@ -1,0 +1,17 @@
+[Unit]
+Description=WhatsRemisse: envía los avisos del teléfono en cuanto ocurren
+Documentation=https://github.com/marioband/whatsremisse-frontend
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/data/whatsremisse/frontend
+ExecStart=/bin/bash /opt/data/whatsremisse/frontend/scripts/enviar-avisos-en-bucle.sh
+# Si algo lo tumba, systemd lo levanta otra vez a los 5 segundos.
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/whatsremisse-avisos.log
+StandardError=append:/var/log/whatsremisse-avisos.log
+
+[Install]
+WantedBy=multi-user.target
