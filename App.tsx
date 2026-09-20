@@ -1,5 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import { StatusBar } from 'expo-status-bar';
+
+import { OSCURO } from './src/lib/colors';
 import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -103,7 +105,13 @@ export default function App() {
             <RootNavigator />
           </MockStoreProvider>
         </AuthProvider>
-        <StatusBar style="auto" />
+        <StatusBar
+          // En Android el color de la barra de estado lo pinta la app: con `auto` no siempre
+          // coincide con el negro institucional de la cabecera (reporte del usuario, 19-09-2026).
+          // `light` = iconos blancos, que es lo que pide un fondo oscuro.
+          style="light"
+          backgroundColor={OSCURO}
+        />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

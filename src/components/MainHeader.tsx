@@ -97,8 +97,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: DARK_BG,
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
+    // Más aire arriba: separa el logo y el avatar del borde del teléfono (pedido del usuario,
+    // 19-09-2026). Ojo: en el iPhone instalado la franja del notch ocupa parte de ese hueco.
+    paddingTop: 26,
+    // Y más aire abajo: separa el logo de la fila de botones (Conductor/Proveedor/Mis grupos).
+    paddingBottom: 26,
   },
   headerTitle: {
     color: '#fff',
