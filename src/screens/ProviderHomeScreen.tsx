@@ -1,7 +1,15 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  SafeAreaView,
+  Animated,
+} from 'react-native';
 
 import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { EstadoServicioBar } from '../components/EstadoServicioBar';
@@ -9,6 +17,7 @@ import { Fab } from '../components/Fab';
 import { ProviderServiceCard } from '../components/ProviderServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { useFilasDeslizantes } from '../hooks/useFilasDeslizantes';
 import { destinoDeLaTarjetaDelProveedor } from '../lib/accionDeLaTarjeta';
 import {
   estaEnProcesoDelProveedor,
@@ -28,6 +37,8 @@ type HomeNav = StackNavigationProp<
 >;
 
 const DARK_BG = '#2D2D2D';
+/** Separación entre tarjetas de servicio: el `marginBottom` de `cardWrapper` (12). */
+const MARGEN_ENTRE_TARJETAS = 12;
 const BLUE = '#3F51B5';
 const LIGHT_BG = '#FFFFFF';
 
@@ -156,25 +167,41 @@ export function ProviderHomeScreen() {
     archiveService(serviceId);
   };
 
-  const renderProviderCard = ({ item }: { item: ServiceAlert }) => {
+  /**
+   * Las tarjetas de servicio que se deslizan al cambiar de sitio (pedido del usuario,
+   * 20-09-2026): el mismo efecto que el de Mis grupos, para cuando una tarjeta entra o sale del
+   * apartado y las demás cierran el hueco.
+   */
+  const { valorDe, medirLaFila } = useFilasDeslizantes(
+    useMemo(() => filteredServices.map((s) => s.id), [filteredServices]),
+    MARGEN_ENTRE_TARJETAS
+  );
+
+  const renderProviderCard = ({ item, index }: { item: ServiceAlert; index: number }) => {
     const applicantCount = applications.filter(
       (a) => a.serviceId === item.id && a.status === 'PENDING'
     ).length;
 
     return (
-      <TouchableOpacity
-        style={styles.cardWrapper}
-        onPress={() => handleCardPress(item)}
-        activeOpacity={0.95}
+      /* La capa que se desliza: arranca en la distancia hasta su hueco viejo y vuelve a 0. */
+      <Animated.View
+        style={{ transform: [{ translateY: valorDe(item.id) }] }}
+        onLayout={medirLaFila(index)}
       >
-        <ProviderServiceCard service={item} onArchive={() => handleArchive(item.id)} />
+        <TouchableOpacity
+          style={styles.cardWrapper}
+          onPress={() => handleCardPress(item)}
+          activeOpacity={0.95}
+        >
+          <ProviderServiceCard service={item} onArchive={() => handleArchive(item.id)} />
 
-        {/* Franja de estado: una sola señal, la que devuelve estadoDeServicio. Ya no
+          {/* Franja de estado: una sola señal, la que devuelve estadoDeServicio. Ya no
             lleva la cuenta atrás de la gracia de 24 h: esa gracia se eliminó. */}
-        <View style={styles.cardFooter}>
-          <EstadoServicioBar service={item} postulantes={applicantCount} radius={16} />
-        </View>
-      </TouchableOpacity>
+          <View style={styles.cardFooter}>
+            <EstadoServicioBar service={item} postulantes={applicantCount} radius={16} />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
@@ -282,8 +309,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#ddd',
+    // 20-09-2026: fuera la línea fina de abajo (divisor entre los botones y «Archivados»).
   },
   statusPills: {
     flexDirection: 'row',
@@ -350,8 +376,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: '#fff',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#eee',
+    // 20-09-2026: y fuera la línea de abajo (entre «Archivados» y las tarjetas).
   },
   archivedText: {
     color: BLUE,

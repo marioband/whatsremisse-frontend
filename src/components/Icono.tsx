@@ -26,8 +26,11 @@ import { Image, ImageSourcePropType, StyleProp, ImageStyle } from 'react-native'
 import iconoAjustes from '../iconos/icono-ajustes.png';
 import iconoBuscar from '../iconos/icono-buscar.png';
 import iconoCopiar from '../iconos/icono-copiar.png';
+import iconoCorazonBordeAzul from '../iconos/icono-corazon-borde-azul.png';
 import iconoCorazonBorde from '../iconos/icono-corazon-borde.png';
+import iconoCorazonLlenoAzul from '../iconos/icono-corazon-lleno-azul.png';
 import iconoCorazonLleno from '../iconos/icono-corazon-lleno.png';
+import iconoGruposAzul from '../iconos/icono-grupos-azul.png';
 import iconoGrupos from '../iconos/icono-grupos.png';
 
 export const ICONO_BUSCAR: ImageSourcePropType = iconoBuscar;
@@ -50,6 +53,19 @@ export const ICONO_GRUPOS: ImageSourcePropType = iconoGrupos;
  */
 export const ICONO_CORAZON_BORDE: ImageSourcePropType = iconoCorazonBorde;
 export const ICONO_CORAZON_LLENO: ImageSourcePropType = iconoCorazonLleno;
+
+/**
+ * El corazón y el engranaje del **chat del grupo** (20-09-2026), en el **azul institucional**
+ * (`#3F51B5`).
+ *
+ * POR QUÉ AZUL: estos dos botones se mudaron de la tarjeta de Mis grupos (fondo claro, donde
+ * iban en negro) a la **cabecera del chat del grupo**, que es oscura (`#2D2D2D`): en negro se
+ * perdían. Es el MISMO dibujo del usuario, solo cambiado el color —los archivos `…-azul.png`
+ * son copias de los suyos con la tinta al azul—, así que se pintan SIN `color`.
+ */
+export const ICONO_CORAZON_BORDE_AZUL: ImageSourcePropType = iconoCorazonBordeAzul;
+export const ICONO_CORAZON_LLENO_AZUL: ImageSourcePropType = iconoCorazonLlenoAzul;
+export const ICONO_GRUPOS_AZUL: ImageSourcePropType = iconoGruposAzul;
 
 interface IconoProps {
   fuente: ImageSourcePropType;

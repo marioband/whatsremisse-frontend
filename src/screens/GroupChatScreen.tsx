@@ -14,7 +14,12 @@ import {
 } from 'react-native';
 
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
-import { Icono, ICONO_AJUSTES } from '../components/Icono';
+import {
+  Icono,
+  ICONO_CORAZON_BORDE_AZUL,
+  ICONO_CORAZON_LLENO_AZUL,
+  ICONO_GRUPOS_AZUL,
+} from '../components/Icono';
 import { ContenidoDelMensaje } from '../components/chat/ContenidoDelMensaje';
 import { DELAY_PULSACION_LARGA_MS } from '../components/chat/MessageList';
 import { Palomas } from '../components/chat/Palomas';
@@ -67,7 +72,10 @@ import { displayName } from '../lib/names';
 import { AVISO_MIGRACION_0020, LecturaDeChat, estadoDePalomas } from '../lib/palomas';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
-type GroupChatNav = StackNavigationProp<RootStackParamList, 'GroupChat' | 'Settings'>;
+type GroupChatNav = StackNavigationProp<
+  RootStackParamList,
+  'GroupChat' | 'Settings' | 'GroupMembers'
+>;
 type GroupChatRoute = RouteProp<RootStackParamList, 'GroupChat'>;
 
 const DARK_BG = '#2D2D2D';
@@ -84,7 +92,16 @@ export function GroupChatScreen() {
   // ya se está leyendo; al minimizar la app la marca se borra y el aviso vuelve.
   useConversacionVista(urlDeLaConversacion('grupo', groupId));
   const { session } = useAuth();
-  const { members, loadGroupMembers } = useMockStore();
+  const { members, loadGroupMembers, groups, toggleFavoriteGroup } = useMockStore();
+
+  /**
+   * ¿Este grupo es favorito mío? El corazón de la cabecera lo enciende y lo apaga (venía de la
+   * tarjeta de Mis grupos; el usuario lo mudó aquí el 20-09-2026).
+   */
+  const esFavorito = useMemo(
+    () => groups.find((g) => g.id === groupId)?.favorite === true,
+    [groups, groupId]
+  );
 
   /**
    * Abrir el chat del grupo lo marca como leído: el globo del contador del apartado «Mis grupos»
@@ -622,12 +639,30 @@ export function GroupChatScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>
             {groupName}
           </Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Settings')}
-            accessibilityLabel="Cuenta"
-          >
-            <Icono fuente={ICONO_AJUSTES} tamano={20} />
-          </TouchableOpacity>
+          {/* El corazón (favorito) y el engrane (ajustes del grupo: integrantes y el silenciar
+              de los avisos) se mudaron aquí desde la tarjeta de Mis grupos (20-09-2026); antes
+              este hueco lo ocupaba el avatar de Cuenta, que el usuario mandó retirar.
+              Van en AZUL porque la cabecera es oscura: el negro institucional con el que venían
+              se perdía en el fondo. */}
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={() => toggleFavoriteGroup(groupId)}
+              style={styles.headerBtn}
+              accessibilityLabel={esFavorito ? 'Quitar de favoritos' : 'Marcar como favorito'}
+            >
+              <Icono
+                fuente={esFavorito ? ICONO_CORAZON_LLENO_AZUL : ICONO_CORAZON_BORDE_AZUL}
+                tamano={22}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('GroupMembers', { groupId, groupName })}
+              style={styles.headerBtn}
+              accessibilityLabel="Ajustes del grupo"
+            >
+              <Icono fuente={ICONO_GRUPOS_AZUL} tamano={22} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loading ? (
@@ -709,6 +744,15 @@ const styles = StyleSheet.create({
   headerArrow: {
     color: '#fff',
     fontSize: 24,
+  },
+  /** Los dos botones de la derecha: corazón y engrane, del mismo cuerpo (22). */
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBtn: {
+    padding: 6,
+    marginLeft: 4,
   },
   headerTitle: {
     color: '#fff',

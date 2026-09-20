@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,14 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Animated,
-  LayoutChangeEvent,
-  Platform,
 } from 'react-native';
 
 import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { Fab } from '../components/Fab';
-import { Icono, ICONO_CORAZON_BORDE, ICONO_CORAZON_LLENO, ICONO_GRUPOS } from '../components/Icono';
+import { useAuth } from '../context/AuthContext';
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
-import { useArrastreDeReordenamiento } from '../hooks/useArrastreDeReordenamiento';
+import { useFilasDeslizantes } from '../hooks/useFilasDeslizantes';
+import { useRealtimeMisGrupos } from '../hooks/useRealtimeMisGrupos';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
 import { TEXTO_SUAVE } from '../lib/colors';
 import { fetchGruposSinLeer, fetchUltimoMensajePorGrupo } from '../lib/database';
@@ -36,7 +35,9 @@ const MARGEN_ENTRE_TARJETAS = 12;
 
 export function MyGroupsScreen() {
   const navigation = useNavigation<GroupsNav>();
-  const { groups, toggleFavoriteGroup } = useMockStore();
+  const { groups } = useMockStore();
+  const { session } = useAuth();
+  const miId = session?.user?.id ?? null;
 
   /**
    * La lupa de Mis grupos (18-09-2026): busca por el nombre del grupo —lo que se ve en la
@@ -73,8 +74,16 @@ export function MyGroupsScreen() {
 
   useFocusEffect(cargarDatosDeLosGrupos);
 
-  // El botón de silenciar vivía aquí, en la tarjeta; el usuario pidió moverlo a los ajustes del
-  // grupo (el engrane → Miembros del grupo) el 20-09-2026.
+  // Y EN VIVO (20-09-2026): con la pantalla abierta, un mensaje nuevo tiene que mover el grupo de
+  // sitio y encender el globo SIN salir y volver (antes solo se veía al regresar).
+  useRealtimeMisGrupos(
+    useMemo(() => groups.map((g) => g.id), [groups]),
+    miId,
+    cargarDatosDeLosGrupos
+  );
+
+  // El corazón, el engrane y el botón de silenciar vivían aquí, en la tarjeta; el usuario los
+  // mudó al CHAT DEL GRUPO y a sus ajustes (20-09-2026).
 
   /**
    * El orden y el color de las tarjetas salen de `lib/ordenDeGrupos` (propietario →
@@ -93,41 +102,15 @@ export function MyGroupsScreen() {
   );
 
   /**
-   * El arrastre al reordenar (18-09-2026): al marcar un favorito, el grupo cambia de
-   * categoría y sube o baja de sitio. En vez de aparecer de golpe en su hueco nuevo, se
-   * desliza desde donde estaba (`lib/reordenar.ts` + `useArrastreDeReordenamiento`).
-   *
-   * El alto de una fila se mide de la primera tarjeta que se pinta: con él, el
-   * desplazamiento inicial es exactamente la distancia entre los dos huecos.
+   * El arrastre al reordenar: al cambiar de sitio —por marcar un favorito (18-09-2026) o porque
+   * el grupo acaba de recibir un mensaje (20-09-2026)— la tarjeta se desliza desde donde estaba
+   * en vez de aparecer de golpe. La animación y la medición del alto de fila viven en
+   * `hooks/useFilasDeslizantes` (las mismas que ahora usan las tarjetas de servicios).
    */
-  const [altoDeFila, setAltoDeFila] = useState(0);
-  const { valorDe } = useArrastreDeReordenamiento(
+  const { valorDe, medirLaFila } = useFilasDeslizantes(
     useMemo(() => gruposVisibles.map((g) => g.id), [gruposVisibles]),
-    altoDeFila
+    MARGEN_ENTRE_TARJETAS
   );
-
-  /**
-   * El alto de una fila (tarjeta + separación), que es lo que se desliza al reordenar.
-   * Se mide de la tarjeta que se pinta, con dos fuentes porque ninguna sirve sola:
-   *
-   *   - La distancia entre dos `layout.y` consecutivos es la medida exacta… pero en web
-   *     el `layout.y` de las filas de un `FlatList` llega **0 en todas** (`react-native-web`
-   *     no lo rellena), así que por sí sola deja el alto en 0 y el arrastre no se vería.
-   *   - El `layout.height` de la fila sí llega bien, pero su significado cambia según la
-   *     plataforma: en web ya trae dentro el `marginBottom` de la tarjeta (86) y en nativo
-   *     no (74), de ahí el `+ MARGEN_ENTRE_TARJETAS` fuera de web.
-   */
-  const posicionesDeLasFilas = useRef<Record<number, number>>({});
-
-  const medirLaFila = (indice: number) => (evento: LayoutChangeEvent) => {
-    const { y, height } = evento.nativeEvent.layout;
-    posicionesDeLasFilas.current[indice] = y;
-    const siguiente = posicionesDeLasFilas.current[indice + 1];
-    const distancia = siguiente === undefined ? 0 : Math.abs(siguiente - y);
-    const alto =
-      distancia > 0 ? distancia : Platform.OS === 'web' ? height : height + MARGEN_ENTRE_TARJETAS;
-    if (alto > 0 && Math.abs(alto - altoDeFila) > 0.5) setAltoDeFila(alto);
-  };
 
   const renderGroupCard = ({ item, index }: { item: GroupItem; index: number }) => (
     /* La capa que se desliza al reordenar: su `translateY` arranca en la distancia hasta
@@ -151,38 +134,16 @@ export function MyGroupsScreen() {
           {item.name}
         </Text>
 
-        {/* El globo de sin leer, arriba a la derecha de la tarjeta (pedido del usuario,
-            19-09-2026). Sale solo cuando hay mensajes nuevos. */}
-        {(sinLeer[item.id] ?? 0) > 0 && (
-          <View style={styles.globoSinLeer}>
-            <Text style={styles.globoSinLeerTexto}>
-              {sinLeer[item.id] > 99 ? '99+' : sinLeer[item.id]}
-            </Text>
-          </View>
-        )}
-
-        {/* Acciones */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            onPress={() => toggleFavoriteGroup(item.id)}
-            style={styles.actionBtn}
-            accessibilityLabel={item.favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
-          >
-            {/* Los dos corazones son los PNG del usuario (18-09-2026), en #333333 y del
-              mismo tamaño que el engranaje de al lado. */}
-            <Icono fuente={item.favorite ? ICONO_CORAZON_LLENO : ICONO_CORAZON_BORDE} tamano={20} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() =>
-              navigation.navigate('GroupMembers', { groupId: item.id, groupName: item.name })
-            }
-            accessibilityLabel="Ajustes del grupo"
-          >
-            {/* El engranaje de grupos, en negro institucional (no el avatar de Cuenta). Abre los
-                ajustes del grupo: integrantes y el botón de silenciar (20-09-2026). */}
-            <Icono fuente={ICONO_GRUPOS} tamano={20} />
-          </TouchableOpacity>
+        {/* El globo del contador de sin leer, en el hueco que dejaron el corazón y el engrane
+            (que se mudaron al chat del grupo, 20-09-2026). Sale solo cuando hay mensajes nuevos. */}
+        <View style={styles.globoSlot}>
+          {(sinLeer[item.id] ?? 0) > 0 && (
+            <View style={styles.globoSinLeer}>
+              <Text style={styles.globoSinLeerTexto}>
+                {sinLeer[item.id] > 99 ? '99+' : sinLeer[item.id]}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -233,11 +194,14 @@ export function MyGroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  /** El globo del contador: arriba a la derecha, oscuro sobre las tarjetas claras. */
+  /** El hueco del globo: el MISMO sitio donde estaban el corazón y el engrane (20-09-2026). */
+  globoSlot: {
+    width: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  /** El globo del contador: oscuro sobre las tarjetas claras. */
   globoSinLeer: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
     minWidth: 22,
     height: 22,
     borderRadius: 11,
@@ -310,14 +274,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111',
     marginHorizontal: 12,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionBtn: {
-    padding: 8,
-    marginLeft: 4,
   },
   emptyText: {
     textAlign: 'center',

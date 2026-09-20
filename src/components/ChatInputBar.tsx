@@ -485,13 +485,16 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    // Intercambio de colores pedido por el usuario (19-09-2026): la franja va BLANCA y los dos
-    // recuadros (escribir y «+») se quedan con el gris claro que antes era el fondo.
-    backgroundColor: '#FFFFFF',
+    /**
+     * Franja TRANSPARENTE y SIN línea de arriba (pedido del usuario, 20-09-2026): «hace poco
+     * cambiamos el fondo a blanco, pero mejor hazlo transparente totalmente», y esa línea fina
+     * que se veía entre el chat y la barra era el `borderTop` de aquí. Los dos recuadros —el de
+     * escribir y el «+»— siguen en el gris claro, que es lo que los hace legibles sobre
+     * cualquier fondo.
+     */
+    backgroundColor: 'transparent',
     paddingHorizontal: 8,
     paddingVertical: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: BORDE_SUAVE,
   },
   roundBtn: {
     width: 40,

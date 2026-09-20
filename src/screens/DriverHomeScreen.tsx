@@ -1,7 +1,15 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  SafeAreaView,
+  Animated,
+} from 'react-native';
 
 import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
 import { Fab } from '../components/Fab';
@@ -9,6 +17,7 @@ import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
+import { useFilasDeslizantes } from '../hooks/useFilasDeslizantes';
 import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { ordenarEnProceso } from '../lib/apartadosDelInicio';
@@ -62,6 +71,8 @@ const VISTA_DE_RECHAZO_MS = 3000;
 type StatusFilter = 'Disponibles' | 'En proceso';
 
 const STATUS_FILTERS: StatusFilter[] = ['Disponibles', 'En proceso'];
+/** Separación entre tarjetas de servicio: el `marginBottom` de `ServiceCard` (12). */
+const MARGEN_ENTRE_TARJETAS = 12;
 
 export function DriverHomeScreen() {
   const navigation = useNavigation<HomeNav>();
@@ -536,6 +547,16 @@ export function DriverHomeScreen() {
     premium && hayApiDeRutas()
   );
 
+  /**
+   * Las tarjetas de servicio que se deslizan al cambiar de sitio (pedido del usuario,
+   * 20-09-2026): el mismo efecto que el de Mis grupos. Pasa cuando una tarjeta entra o sale de
+   * un apartado —al aceptarte, al archivarla— y su hueco se cierra con las demás.
+   */
+  const { valorDe, medirLaFila } = useFilasDeslizantes(
+    useMemo(() => displayServices.map((s) => s.id), [displayServices]),
+    MARGEN_ENTRE_TARJETAS
+  );
+
   const renderBadge = (count: number) => {
     if (count <= 0) return null;
     return (
@@ -628,7 +649,7 @@ export function DriverHomeScreen() {
       <FlatList
         data={displayServices}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const application = getApplication(item.id);
           const accepted = esAceptadoMio(item);
           const inEnProceso = activeStatus === 'En proceso';
@@ -639,24 +660,31 @@ export function DriverHomeScreen() {
           const displayGroupName = getDisplayGroupName(item.id);
 
           return (
-            <ServiceCard
-              service={{
-                ...item,
-                origin_estimate: estimaciones[item.id]?.origen || item.origin_estimate,
-                destination_estimate: estimaciones[item.id]?.destino || item.destination_estimate,
-              }}
-              onPress={() => handleCardPress(item)}
-              onArchive={() => handleArchive(item.id)}
-              onUnarchive={() => handleUnarchive(item.id)}
-              onCancelarPostulacion={() => handleCancelarPostulacion(item.id)}
-              showArchived={showArchived}
-              disableSwipe={inEnProceso || accepted}
-              showReservaIndicator={esReserva}
-              isApplied={!!application}
-              miPostulacion={miPostulacionDe(item)}
-              notificationCount={notificationCount}
-              groupName={displayGroupName}
-            />
+            /* La capa que se desliza: su `translateY` arranca en la distancia hasta su hueco
+               viejo y vuelve a 0 (donde le toca ahora). */
+            <Animated.View
+              style={{ transform: [{ translateY: valorDe(item.id) }] }}
+              onLayout={medirLaFila(index)}
+            >
+              <ServiceCard
+                service={{
+                  ...item,
+                  origin_estimate: estimaciones[item.id]?.origen || item.origin_estimate,
+                  destination_estimate: estimaciones[item.id]?.destino || item.destination_estimate,
+                }}
+                onPress={() => handleCardPress(item)}
+                onArchive={() => handleArchive(item.id)}
+                onUnarchive={() => handleUnarchive(item.id)}
+                onCancelarPostulacion={() => handleCancelarPostulacion(item.id)}
+                showArchived={showArchived}
+                disableSwipe={inEnProceso || accepted}
+                showReservaIndicator={esReserva}
+                isApplied={!!application}
+                miPostulacion={miPostulacionDe(item)}
+                notificationCount={notificationCount}
+                groupName={displayGroupName}
+              />
+            </Animated.View>
           );
         }}
         contentContainerStyle={styles.list}
@@ -704,8 +732,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#ddd',
+    // 20-09-2026: fuera la línea fina de abajo (el usuario la veía como un divisor entre los
+    // botones de disponibles/en proceso y el apartado de archivados).
   },
   statusPills: {
     flexDirection: 'row',
@@ -772,8 +800,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: '#fff',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#eee',
+    // 20-09-2026: y fuera la línea de abajo (entre «Archivados» y las tarjetas).
   },
   archivedText: {
     color: BLUE,
