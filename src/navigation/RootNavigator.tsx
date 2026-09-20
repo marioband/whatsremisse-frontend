@@ -75,6 +75,34 @@ export type RootStackParamList = {
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+/**
+ * Las direcciones de la app.
+ *
+ * POR QUÉ EXISTE: sin esto, TODAS las pantallas viven en la misma dirección, así que un aviso del
+ * teléfono no puede llevar a ninguna parte concreta: tocaba y abría el inicio, obligando a buscar
+ * el servicio a mano. Lo pidió el usuario el 19-09-2026: «al seleccionar la alerta, ¿me lleva al
+ * chat donde se declaró finalizado?» — la respuesta era no, porque no había a dónde apuntar.
+ *
+ * Con esto la app entiende /chat/<servicio>, /grupo/<grupo> y /mis-servicios, y los nueve avisos
+ * llevan a su pantalla. En el iPhone instalado la barra de dirección no se ve (modo app): esto no
+ * cambia cómo se ve la app, solo le enseña a leer una dirección.
+ *
+ * El servidor ya sirve la app para cualquier ruta (`try_files … /index.html`): no hay que tocar
+ * nginx.
+ */
+const ENLACES = {
+  prefixes: ['https://whatsremisse.tech', 'whatsremisse://'],
+  config: {
+    screens: {
+      Main: 'inicio',
+      Chat: 'chat/:serviceId',
+      GroupChat: 'grupo/:groupId',
+      MyServices: 'mis-servicios',
+      Splash: '',
+    },
+  },
+};
+
 export function RootNavigator() {
   const { session, loading, requiresProfileSetup } = useAuth();
 
@@ -84,7 +112,7 @@ export function RootNavigator() {
 
   return (
     <>
-      <NavigationContainer>
+      <NavigationContainer linking={ENLACES}>
         {/* `cardStyle` es el estilo que @react-navigation/stack le pone a la "card" de
             cada pantalla (`contentStyle`), y sin él la card se queda con `flex: 0 0 auto`:
             su alto es el de su CONTENIDO, no el de la ventana. En el chat de una
