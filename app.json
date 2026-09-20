@@ -8,7 +8,7 @@
     "splash": {
       "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#333333"
+      "backgroundColor": "#2D2D2D"
     },
     "ios": {
       "supportsTablet": true,
@@ -55,8 +55,8 @@
       "startUrl": "/",
       "display": "standalone",
       "orientation": "portrait",
-      "themeColor": "#333333",
-      "backgroundColor": "#333333",
+      "themeColor": "#2D2D2D",
+      "backgroundColor": "#2D2D2D",
       "preferRelatedApplications": false,
       "meta": {
         "apple": {

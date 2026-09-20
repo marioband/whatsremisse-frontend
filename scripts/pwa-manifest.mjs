@@ -53,8 +53,12 @@ const FIJO = {
   scope: '/',
   display: 'standalone',
   orientation: 'portrait',
-  background_color: '#333333',
-  theme_color: '#333333',
+  // El MISMO oscuro institucional que la cabecera (`OSCURO`, `#2D2D2D`). Estaba en `#333333`, un
+  // tono más claro, y pegados se veia como un degradado en la zona del notch: el usuario lo
+  // reporto el 19-09-2026 («aun es visible ese degradado pero en un minimo»), despues de la
+  // correccion del notch de dias atras. Si se cambia uno, cambiar el otro: `MainHeader.header`.
+  background_color: '#2D2D2D',
+  theme_color: '#2D2D2D',
   // Sin esto Android manda a la tienda de aplicaciones en vez de instalar la web.
   prefer_related_applications: false,
 };
