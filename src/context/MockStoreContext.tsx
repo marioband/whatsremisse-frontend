@@ -161,6 +161,10 @@ export interface UserProfile {
   yapeNumber?: string;
   bcpAccount?: string;
   bcpCci?: string;
+  /** 0039: billetera elegida (YAPE, PLIN, BIM, OTRO), su nombre si es OTRO, y el banco. */
+  billeteraTipo?: string;
+  billeteraNombre?: string;
+  bancoNombre?: string;
 }
 
 interface MockState {
@@ -670,6 +674,10 @@ function userProfileFromAuthProfile(profile: Profile): UserProfile {
     yapeNumber: profile.yape_number || undefined,
     bcpAccount: profile.bcp_account || undefined,
     bcpCci: profile.bcp_cci || undefined,
+    // 0039: sin la migración estas columnas no vienen y quedan en undefined (etiquetas genéricas).
+    billeteraTipo: profile.billetera_tipo || undefined,
+    billeteraNombre: profile.billetera_nombre || undefined,
+    bancoNombre: profile.banco_nombre || undefined,
   };
 }
 
@@ -697,6 +705,9 @@ function userProfileToPatch(profile: UserProfile): ProfilePatch {
     yape_number: profile.yapeNumber || null,
     bcp_account: profile.bcpAccount || null,
     bcp_cci: profile.bcpCci || null,
+    billetera_tipo: profile.billeteraTipo || null,
+    billetera_nombre: profile.billeteraNombre || null,
+    banco_nombre: profile.bancoNombre || null,
   };
 }
 

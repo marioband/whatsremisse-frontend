@@ -32,14 +32,37 @@ import {
   RolPago,
 } from '../../lib/pagoServicio';
 import { ServiceAlert } from '../../types';
+import {
+  etiquetaDeLaBilletera,
+  etiquetaDeLaCuenta,
+  etiquetaDelCci,
+} from '../../lib/billeterasYBancos';
 
 interface Props {
   service: ServiceAlert;
   rol: RolPago;
-  /** Datos de pago del usuario que está mirando (su perfil). */
-  misDatos: { yapeNumber?: string; bcpAccount?: string; bcpCci?: string };
+  /**
+   * Datos de pago del usuario que está mirando (su perfil). Desde la 0039 llevan también el tipo de
+   * billetera y el banco, para que el rótulo diga el nombre de verdad («Número Plin», «Cuenta
+   * Interbank») en vez del genérico.
+   */
+  misDatos: {
+    yapeNumber?: string;
+    bcpAccount?: string;
+    bcpCci?: string;
+    billeteraTipo?: string;
+    billeteraNombre?: string;
+    bancoNombre?: string;
+  };
   /** Datos de pago del conductor (el proveedor los trae por función autorizada). */
-  datosDelConductor: { yape?: string; bcpAccount?: string; bcpCci?: string } | null;
+  datosDelConductor: {
+    yape?: string;
+    bcpAccount?: string;
+    bcpCci?: string;
+    billeteraTipo?: string;
+    billeteraNombre?: string;
+    bancoNombre?: string;
+  } | null;
   /**
    * Datos de pago del proveedor (el conductor los trae por función autorizada):
    * en el caso A el conductor es quien transfiere, así que los necesita dentro
@@ -49,6 +72,9 @@ interface Props {
     yape?: string;
     bcpAccount?: string;
     bcpCci?: string;
+    billeteraTipo?: string;
+    billeteraNombre?: string;
+    bancoNombre?: string;
     nombre?: string;
   } | null;
   onDeclarar: (direccion: DireccionPago, monto: number) => void;
@@ -143,6 +169,9 @@ export function PagoDelServicio({
         yape: datosDelProveedor?.yape || service.provider_yape,
         cuenta: datosDelProveedor?.bcpAccount || service.provider_bcp_account,
         cci: datosDelProveedor?.bcpCci || service.provider_bcp_cci,
+        billeteraTipo: datosDelProveedor?.billeteraTipo,
+        billeteraNombre: datosDelProveedor?.billeteraNombre,
+        bancoNombre: datosDelProveedor?.bancoNombre,
       };
     }
     return {
@@ -154,6 +183,9 @@ export function PagoDelServicio({
       yape: datosDelConductor?.yape || misDatos.yapeNumber,
       cuenta: datosDelConductor?.bcpAccount || misDatos.bcpAccount,
       cci: datosDelConductor?.bcpCci || misDatos.bcpCci,
+      billeteraTipo: datosDelConductor?.billeteraTipo || misDatos.billeteraTipo,
+      billeteraNombre: datosDelConductor?.billeteraNombre || misDatos.billeteraNombre,
+      bancoNombre: datosDelConductor?.bancoNombre || misDatos.bancoNombre,
     };
   };
 
@@ -164,25 +196,47 @@ export function PagoDelServicio({
     yape?: string;
     cuenta?: string;
     cci?: string;
+    billeteraTipo?: string;
+    billeteraNombre?: string;
+    bancoNombre?: string;
   }) => (
     <View style={styles.datosPago}>
       <Text style={styles.datosTitulo}>{d.titulo}</Text>
       <Text style={styles.datosNota}>{d.nota}</Text>
       {!!d.yape && (
         <BankDetailsRow
-          label="Yape / Plin"
+          // «Yape», «Plin», «Bim» o el nombre escrito con «Otro»; si no se sabe, el rótulo de antes.
+          label={etiquetaDeLaBilletera({
+            billeteraTipo: d.billeteraTipo,
+            billeteraNombre: d.billeteraNombre,
+          })}
           value={d.yape}
-          onCopy={(v) => onCopiar('Yape / Plin', v)}
+          onCopy={(v) =>
+            onCopiar(
+              etiquetaDeLaBilletera({
+                billeteraTipo: d.billeteraTipo,
+                billeteraNombre: d.billeteraNombre,
+              }),
+              v
+            )
+          }
         />
       )}
       {!!d.cuenta && (
         <BankDetailsRow
-          label="Cuenta bancaria"
+          // «Cuenta Interbank» / «Cuenta bancaria» cuando el banco no está registrado.
+          label={etiquetaDeLaCuenta(d.bancoNombre)}
           value={d.cuenta}
-          onCopy={(v) => onCopiar('Cuenta bancaria', v)}
+          onCopy={(v) => onCopiar(etiquetaDeLaCuenta(d.bancoNombre), v)}
         />
       )}
-      {!!d.cci && <BankDetailsRow label="CCI" value={d.cci} onCopy={(v) => onCopiar('CCI', v)} />}
+      {!!d.cci && (
+        <BankDetailsRow
+          label={etiquetaDelCci(d.bancoNombre)}
+          value={d.cci}
+          onCopy={(v) => onCopiar(etiquetaDelCci(d.bancoNombre), v)}
+        />
+      )}
       {!d.yape && !d.cuenta && !d.cci && (
         <Text style={styles.espera}>
           No hay medios de pago registrados en el perfil de quien debe recibir.

@@ -59,6 +59,11 @@ export interface Profile {
   yape_number?: string | null;
   bcp_account?: string | null;
   bcp_cci?: string | null;
+  /** 0039: tipo de billetera (YAPE, PLIN, BIM, OTRO) y su nombre si es OTRO. */
+  billetera_tipo?: string | null;
+  billetera_nombre?: string | null;
+  /** 0039: banco de los datos de pago (BCP, Interbank, Scotiabank o el nombre escrito). */
+  banco_nombre?: string | null;
   created_at: string;
   updated_at: string;
 }

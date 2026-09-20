@@ -10,6 +10,12 @@ export interface DbProfile {
   yape_number: string | null;
   bcp_account: string | null;
   bcp_cci: string | null;
+  /** Tipo de billetera de los datos de pago (0039): YAPE, PLIN, BIM u OTRO. */
+  billetera_tipo?: string | null;
+  /** Nombre escrito cuando la billetera es OTRO (0039). */
+  billetera_nombre?: string | null;
+  /** Banco de los datos de pago (0039): BCP, Interbank, Scotiabank o el nombre escrito. */
+  banco_nombre?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -797,7 +797,10 @@ export async function resolverDeclaracionDePago(
 
 /** Datos de pago del conductor: solo el proveedor del servicio y solo en el caso B. */
 export async function datosDePagoDelConductor(serviceId: string): Promise<{
+  billeteraTipo?: string;
+  billeteraNombre?: string;
   yape?: string;
+  bancoNombre?: string;
   bcpAccount?: string;
   bcpCci?: string;
 } | null> {
@@ -810,12 +813,23 @@ export async function datosDePagoDelConductor(serviceId: string): Promise<{
     return filas;
   });
   const fila = (Array.isArray(data) ? data[0] : data) as
-    | { yape?: string | null; bcp_account?: string | null; bcp_cci?: string | null }
+    | {
+        billetera_tipo?: string | null;
+        billetera_nombre?: string | null;
+        yape?: string | null;
+        banco_nombre?: string | null;
+        bcp_account?: string | null;
+        bcp_cci?: string | null;
+      }
     | null
     | undefined;
   if (!fila) return null;
   return {
+    // 0039: sin la migración estas columnas no viajan y las etiquetas caen al texto genérico.
+    billeteraTipo: fila.billetera_tipo || undefined,
+    billeteraNombre: fila.billetera_nombre || undefined,
     yape: fila.yape || undefined,
+    bancoNombre: fila.banco_nombre || undefined,
     bcpAccount: fila.bcp_account || undefined,
     bcpCci: fila.bcp_cci || undefined,
   };
@@ -828,7 +842,10 @@ export async function datosDePagoDelConductor(serviceId: string): Promise<{
  * función autorizada porque `profiles` no expone esos campos a terceros.
  */
 export async function datosDePagoDelProveedor(serviceId: string): Promise<{
+  billeteraTipo?: string;
+  billeteraNombre?: string;
   yape?: string;
+  bancoNombre?: string;
   bcpAccount?: string;
   bcpCci?: string;
   nombre?: string;
@@ -843,7 +860,10 @@ export async function datosDePagoDelProveedor(serviceId: string): Promise<{
   });
   const fila = (Array.isArray(data) ? data[0] : data) as
     | {
+        billetera_tipo?: string | null;
+        billetera_nombre?: string | null;
         yape?: string | null;
+        banco_nombre?: string | null;
         bcp_account?: string | null;
         bcp_cci?: string | null;
         nombre?: string | null;
@@ -852,7 +872,10 @@ export async function datosDePagoDelProveedor(serviceId: string): Promise<{
     | undefined;
   if (!fila) return null;
   return {
+    billeteraTipo: fila.billetera_tipo || undefined,
+    billeteraNombre: fila.billetera_nombre || undefined,
     yape: fila.yape || undefined,
+    bancoNombre: fila.banco_nombre || undefined,
     bcpAccount: fila.bcp_account || undefined,
     bcpCci: fila.bcp_cci || undefined,
     nombre: fila.nombre || undefined,
@@ -1777,6 +1800,10 @@ export interface ProfilePatch {
   yape_number?: string | null;
   bcp_account?: string | null;
   bcp_cci?: string | null;
+  /** 0039: de qué billetera y de qué banco son los números de arriba. */
+  billetera_tipo?: string | null;
+  billetera_nombre?: string | null;
+  banco_nombre?: string | null;
 }
 
 /**
@@ -1786,11 +1813,23 @@ export interface ProfilePatch {
  */
 export async function saveProfileData(userId: string, patch: ProfilePatch): Promise<void> {
   if (!isSupabaseConfigured) throw new Error('Supabase no está configurado en esta build.');
-  const { data, error } = await supabase
-    .from('profiles')
-    .update(patch)
-    .eq('id', userId)
-    .select('id');
+  const guardar = (loQueSea: ProfilePatch) =>
+    supabase.from('profiles').update(loQueSea).eq('id', userId).select('id');
+
+  let { data, error } = await guardar(patch);
+
+  // Sin la 0039, el UPDATE falla ENTERO por las columnas que no existen: se reintenta sin ellas
+  // para que el usuario no se quede sin guardar sus números de cuenta (que es lo importante).
+  if (error && esColumnaAusente(error)) {
+    console.warn(
+      '[database] los datos de pago se guardan sin tipo de billetera ni banco: falta aplicar 0039_tipo_de_billetera_y_banco.sql'
+    );
+    const sinTipos: ProfilePatch = { ...patch };
+    delete sinTipos.billetera_tipo;
+    delete sinTipos.billetera_nombre;
+    delete sinTipos.banco_nombre;
+    ({ data, error } = await guardar(sinTipos));
+  }
   if (error) throw error;
   if (!data || data.length === 0) {
     throw new Error(

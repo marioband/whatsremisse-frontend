@@ -1310,6 +1310,10 @@ export function ChatScreen() {
               yapeNumber: userProfile?.yapeNumber,
               bcpAccount: userProfile?.bcpAccount,
               bcpCci: userProfile?.bcpCci,
+              // 0039: para que el rótulo diga el nombre real de la billetera y del banco.
+              billeteraTipo: userProfile?.billeteraTipo,
+              billeteraNombre: userProfile?.billeteraNombre,
+              bancoNombre: userProfile?.bancoNombre,
             }}
             datosDelConductor={datosDelConductor}
             datosDelProveedor={datosDelProveedor}
