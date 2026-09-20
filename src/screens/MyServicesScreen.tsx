@@ -168,11 +168,6 @@ export function MyServicesScreen() {
             <Text style={styles.obsText}>📝 {service.observations.join(' • ')}</Text>
           )}
 
-          <View style={styles.cardFooter}>
-            <Text style={styles.fare}>S/ {service.fare}</Text>
-            <Text style={styles.payment}>{service.payment_method || 'BCP'}</Text>
-          </View>
-
           {/* Historial del cierre: monto, quién pagó y quién confirmó (0013). */}
           {/* Historial del cierre, sin el check verde (el usuario lo retiró el
               18-09-2026: el texto ya dice que se pagó y quién confirmó). */}
@@ -187,6 +182,16 @@ export function MyServicesScreen() {
             </View>
             <Text style={styles.abrirTexto}>Ver ›</Text>
           </View>
+        </View>
+
+        {/* La tarifa, la fecha de pago y el tipo de pago van en la COLUMNA DERECHA, alineadas a la
+            derecha de la tarjeta, con la MISMA distribución que las tarjetas de servicio de los
+            inicios (pedido del usuario, 20-09-2026). Antes estaban en un pie debajo de las rutas,
+            y así no se leían como el resto de tarjetas del app. */}
+        <View style={styles.rightColumn}>
+          <Text style={styles.amount}>S/ {service.fare}</Text>
+          <Text style={styles.paymentTerm}>{service.payment_term || 'Al término'}</Text>
+          <Text style={styles.paymentMethod}>{service.payment_method || 'BCP'}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -383,19 +388,28 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 6,
   },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+  /** Columna derecha: tarifa, fecha de pago y tipo de pago, pegados al borde derecho. */
+  rightColumn: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    marginLeft: 10,
+    minWidth: 70,
   },
-  fare: {
-    fontSize: 16,
+  amount: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#111',
+    marginBottom: 4,
   },
-  payment: {
-    fontSize: 13,
+  paymentTerm: {
+    fontSize: 11,
     color: '#666',
+    marginBottom: 2,
+  },
+  paymentMethod: {
+    fontSize: 11,
+    color: '#888',
+    fontWeight: '600',
   },
   emptyText: {
     textAlign: 'center',
