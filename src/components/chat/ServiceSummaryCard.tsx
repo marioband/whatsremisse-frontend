@@ -35,10 +35,6 @@ export function ServiceSummaryCard({
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.avatarPlaceholder} />
-        {/* OJO: aquí estaban la TARIFA y el plazo/medio de pago. Se quitaron el 20-09-2026 por
-            pedido del usuario: esta tarjeta se ve en el CHAT DEL SERVICIO y el conductor no tiene
-            por qué ver cuánto se le está pagando por el viaje. De paso, las direcciones (lo que el
-            conductor necesita) ganan todo el ancho. Lo que se paga se trata en la zona de pago. */}
         <View style={styles.cardBody}>
           <Text style={styles.companyName} numberOfLines={1}>
             {nombreDelProveedor}
@@ -53,6 +49,13 @@ export function ServiceSummaryCard({
           <Text style={styles.routeText}>
             <Text style={styles.label}>Observación:</Text>{' '}
             {(service.observations || []).join(', ') || '-'}
+          </Text>
+        </View>
+        <View style={styles.cardAmount}>
+          <Text style={styles.priceText}>S/ {service.fare}</Text>
+          <Text style={styles.paymentMethodText}>
+            {service.payment_term || 'Al término'}
+            {service.payment_method || 'BCP'}
           </Text>
         </View>
       </View>
@@ -120,6 +123,21 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   label: { fontWeight: 'bold', color: '#2D2D2D' },
+  cardAmount: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+  priceText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2D2D2D',
+  },
+  paymentMethodText: {
+    fontSize: 11,
+    color: '#888',
+    textAlign: 'right',
+    marginTop: 4,
+  },
   copyDataBtn: {
     backgroundColor: BLUE,
     borderRadius: 12,

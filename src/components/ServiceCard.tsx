@@ -44,6 +44,14 @@ interface Props {
   miPostulacion?: MiPostulacionEnLaTarjeta;
   notificationCount?: number;
   groupName?: string;
+  /**
+   * Sin la tarifa ni el plazo/medio de pago (pedido del usuario, 20-09-2026).
+   *
+   * Se usa SOLO en el chat del servicio: esa pantalla la ve el conductor con el pasajero delante
+   * —y el proveedor—, y no hay por qué enseñar cuánto se le está pagando al conductor. En los
+   * inicios NO se usa: ahí el conductor necesita la tarifa para decidir a qué servicio postularse.
+   */
+  sinDatosDePago?: boolean;
 }
 
 export function ServiceCard({
@@ -61,6 +69,7 @@ export function ServiceCard({
   miPostulacion,
   notificationCount = 0,
   groupName,
+  sinDatosDePago = false,
 }: Props) {
   const swipeableRef = useRef<Swipeable>(null);
   // El nombre lo configura el proveedor en su perfil; si no lo configuró, van su
@@ -200,12 +209,15 @@ export function ServiceCard({
           )}
         </View>
 
-        {/* Columna derecha */}
-        <View style={styles.rightColumn}>
-          <Text style={styles.amount}>S/ {service.fare}</Text>
-          <Text style={styles.paymentTerm}>{service.payment_term || 'Al término'}</Text>
-          <Text style={styles.paymentMethod}>{service.payment_method || 'BCP'}</Text>
-        </View>
+        {/* Columna derecha: tarifa, plazo y medio de pago. En el chat NO se pinta
+            (`sinDatosDePago`), así que las direcciones se quedan con todo el ancho. */}
+        {!sinDatosDePago && (
+          <View style={styles.rightColumn}>
+            <Text style={styles.amount}>S/ {service.fare}</Text>
+            <Text style={styles.paymentTerm}>{service.payment_term || 'Al término'}</Text>
+            <Text style={styles.paymentMethod}>{service.payment_method || 'BCP'}</Text>
+          </View>
+        )}
 
         {/* Indicador de reserva */}
         {showReservaIndicator && (

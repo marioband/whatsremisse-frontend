@@ -1176,6 +1176,10 @@ export function ChatScreen() {
         <ServiceCard
           service={service}
           disableSwipe
+          // La tarjeta del chat va SIN tarifa, fecha de pago ni tipo de pago (pedido del usuario,
+          // 20-09-2026): esta pantalla la ve el conductor con el pasajero delante. Las direcciones
+          // ganan el ancho que ocupaba esa columna. En los inicios se siguen viendo.
+          sinDatosDePago
           vista={isProvider ? 'PROVEEDOR' : 'CONDUCTOR'}
           miPostulacion={isDriver ? miPostulacionEnLaTarjeta : undefined}
           pie={
