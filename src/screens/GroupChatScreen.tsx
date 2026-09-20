@@ -20,6 +20,7 @@ import { DELAY_PULSACION_LARGA_MS } from '../components/chat/MessageList';
 import { Palomas } from '../components/chat/Palomas';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { useConversacionVista } from '../hooks/useConversacionVista';
 import { useRealtimeMessages } from '../hooks/useRealtimeMessages';
 import { useTecladoAbierto } from '../hooks/useTecladoAbierto';
 import {
@@ -34,6 +35,7 @@ import {
 } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
 import { AZUL } from '../lib/colors';
+import { urlDeLaConversacion } from '../lib/conversacionVista';
 import {
   ChatMessage,
   deleteGroupMessage,
@@ -77,6 +79,10 @@ export function GroupChatScreen() {
   const navigation = useNavigation<GroupChatNav>();
   const route = useRoute<GroupChatRoute>();
   const { groupId, groupName } = route.params;
+
+  // «Estoy viendo esta conversación» (20-09-2026): dentro del chat no llega el aviso de lo que
+  // ya se está leyendo; al minimizar la app la marca se borra y el aviso vuelve.
+  useConversacionVista(urlDeLaConversacion('grupo', groupId));
   const { session } = useAuth();
   const { members, loadGroupMembers } = useMockStore();
 

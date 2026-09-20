@@ -19,6 +19,11 @@ export interface GrupoParaLaLista {
   name: string;
   role: 'owner' | 'admin' | 'member';
   favorite?: boolean;
+  /**
+   * Cuándo llegó el último mensaje del grupo (en milisegundos, de `grupos_ultimo_mensaje`).
+   * Solo manda en los grupos que solo integro. Sin dato (grupo sin mensajes) va al final.
+   */
+  ultimoMensajeAt?: number | null;
 }
 
 export type CategoriaDeGrupo = 'PROPIETARIO' | 'ADMIN' | 'FAVORITO' | 'INTEGRANTE';
@@ -58,15 +63,25 @@ function pesoDeLaCategoria(categoria: CategoriaDeGrupo): number {
 }
 
 /**
- * La lista que se pinta: por categoría y, dentro de cada una, por nombre.
+ * La lista que se pinta: por categoría y, dentro de cada una, por nombre — salvo en los grupos
+ * que solo integro, que van por último mensaje recibido (20-09-2026).
  *
  * No modifica el array que recibe (el del store): devuelve una copia ordenada.
  */
 export function ordenarGrupos<T extends GrupoParaLaLista>(grupos: readonly T[]): T[] {
   return [...grupos].sort((a, b) => {
-    const pesoA = pesoDeLaCategoria(categoriaDelGrupo(a));
+    const categoriaA = categoriaDelGrupo(a);
+    const pesoA = pesoDeLaCategoria(categoriaA);
     const pesoB = pesoDeLaCategoria(categoriaDelGrupo(b));
     if (pesoA !== pesoB) return pesoA - pesoB;
+
+    // Los que solo integro: manda el último mensaje RECIBIDO (lo más reciente, arriba).
+    if (categoriaA === 'INTEGRANTE') {
+      const cuandoA = a.ultimoMensajeAt ?? 0;
+      const cuandoB = b.ultimoMensajeAt ?? 0;
+      if (cuandoA !== cuandoB) return cuandoB - cuandoA;
+    }
+
     return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
   });
 }

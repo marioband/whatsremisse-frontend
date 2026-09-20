@@ -26,8 +26,13 @@ const THUMB_SIZE = 44;
 const MARGEN = 5;
 /** Cuadrado redondeado, no círculo (modelo del usuario): ~11 % del lado. */
 const THUMB_RADIO = 5;
-/** Esquinas de la barra (el modelo las tiene redondeadas): ~9 % del alto. */
-const TRACK_RADIO = 5;
+/**
+ * Esquinas de la barra. En 0 desde el 20-09-2026 (pedido del usuario): el fondo verde de la barra
+ * de reporte del proceso tiene que llegar de extremo izquierdo a extremo derecho de la pantalla,
+ * y con las esquinas redondeadas el verde se cortaba en los dos bordes. El pulgar (el botón de
+ * acción que se desliza) NO se toca: conserva su `THUMB_RADIO`.
+ */
+const TRACK_RADIO = 0;
 /**
  * La flecha y la palomita del pulgar se DIBUJAN CON FORMAS (no con la fuente de iconos).
  *

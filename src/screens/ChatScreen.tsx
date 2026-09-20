@@ -28,6 +28,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
+import { useConversacionVista } from '../hooks/useConversacionVista';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { useServiceProgress } from '../hooks/useServiceProgress';
 import { useTecladoAbierto } from '../hooks/useTecladoAbierto';
@@ -45,6 +46,7 @@ import { Alert } from '../lib/alert';
 import { marcarAvisoPropio } from '../lib/avisos';
 import { AZUL } from '../lib/colors';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
+import { urlDeLaConversacion } from '../lib/conversacionVista';
 import {
   datosDePagoDelConductor,
   datosDePagoDelProveedor,
@@ -133,6 +135,11 @@ export function ChatScreen() {
   const navigation = useNavigation<ChatNav>();
   const route = useRoute<ChatRoute>();
   const { serviceId, driverId, driverName } = route.params;
+
+  // «Estoy viendo esta conversación» (20-09-2026): mientras este chat esté abierto y la app a la
+  // vista, el servidor no manda el aviso de lo que aquí ya se está leyendo; al minimizar la app
+  // la marca se borra y el aviso vuelve a llegar.
+  useConversacionVista(urlDeLaConversacion('servicio', serviceId));
   const { session } = useAuth();
   const {
     role,

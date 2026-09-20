@@ -1,12 +1,15 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 
 import { Fab } from '../components/Fab';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore, GroupMember, rolEnGrupo } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
+import { ROJO_ACCION } from '../lib/colors';
+import { silenciarGrupo } from '../lib/database';
 import { displayName, groupRoleBadgeLabel, initialOf, sortMembersByRole } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -39,6 +42,35 @@ export function GroupMembersScreen() {
     reloadGroups();
     loadGroupMembers(groupId);
   }, [groupId, loadGroupMembers, reloadGroups]);
+
+  /**
+   * Los ajustes del grupo (el engrane de Mis grupos → esta pantalla). Aquí vive el botón de
+   * silenciar, que antes estaba en la tarjeta de Mis grupos: el usuario lo pidió mover el
+   * 20-09-2026. El estado sale de la membresía (`groups[].muted`, migración 0028) y, si el
+   * usuario lo cambia aquí, manda lo que acaba de elegir.
+   */
+  const grupo = useMemo(() => groups.find((g) => g.id === groupId), [groups, groupId]);
+  const [silenciado, setSilenciado] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (silenciado === null && grupo) setSilenciado(grupo.muted === true);
+  }, [grupo, silenciado]);
+
+  /** Silenciar (o volver a activar) los avisos del chat de este grupo. */
+  const alternarSilencio = async () => {
+    const nuevo = !(silenciado ?? false);
+    setSilenciado(nuevo);
+    const guardado = await silenciarGrupo(groupId, nuevo);
+    if (!guardado) {
+      // Si la base no lo aceptó (por ejemplo, la 0028 sin aplicar) se deshace: nada de mentir
+      // con una campana que dice una cosa y el servidor hace otra.
+      setSilenciado(!nuevo);
+      Alert.alert(
+        'No se pudo cambiar',
+        'No se pudo guardar el silencio del grupo. Comprueba tu conexión e inténtalo otra vez.'
+      );
+    }
+  };
 
   // Orden pedido: propietario, luego los administradores que él asignó y al
   // final los integrantes. Dentro de cada rol, por nombre.
@@ -145,9 +177,22 @@ export function GroupMembersScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {groupName}
         </Text>
-        <View style={styles.logoPlaceholder}>
-          <Text style={styles.logoText}>👤</Text>
-        </View>
+        {/* Silenciar el grupo: estaba en la tarjeta de Mis grupos y se mudó aquí (20-09-2026).
+            La campana tachada, en rojo, dice que los avisos de este grupo están silenciados.
+            Ocupa el hueco del icono que antes había y no hacía nada. */}
+        <TouchableOpacity
+          onPress={alternarSilencio}
+          style={styles.muteBtn}
+          accessibilityLabel={
+            silenciado ? 'Activar los avisos de este grupo' : 'Silenciar este grupo'
+          }
+        >
+          <MaterialCommunityIcons
+            name={silenciado ? 'bell-off' : 'bell-outline'}
+            size={22}
+            color={silenciado ? ROJO_ACCION : '#fff'}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Member list */}
@@ -214,17 +259,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 12,
   },
-  logoPlaceholder: {
+  /** El hueco del icono que no hacía nada: ahora lo ocupa la campana de silenciar. */
+  muteBtn: {
     width: 34,
     height: 34,
-    borderRadius: 17,
-    backgroundColor: '#555',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  logoText: {
-    color: '#fff',
-    fontSize: 16,
   },
   list: {
     padding: 16,

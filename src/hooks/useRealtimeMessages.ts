@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { avisarDeMensajeDeLaBase } from '../lib/avisos';
+import { urlDeLaConversacion } from '../lib/conversacionVista';
 import { ChatMessage } from '../lib/database';
 import { supabase } from '../lib/supabase';
 
@@ -80,6 +81,8 @@ export function useRealtimeMessages(
             miId: avisoRef.current.miId,
             enGrupo: true,
             nombreDelGrupo: avisoRef.current.nombreDelGrupo,
+            // La conversación de ESTE grupo: si el usuario la está mirando, no se avisa.
+            conversacion: urlDeLaConversacion('grupo', groupId),
           });
         }
       )

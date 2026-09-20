@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { avisarDeMensajeDeLaBase } from '../lib/avisos';
+import { urlDeLaConversacion } from '../lib/conversacionVista';
 import { ServiceMessage } from '../lib/database';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
@@ -89,6 +90,8 @@ export function useRealtimeServiceMessages(
           avisarDeMensajeDeLaBase(row, {
             miId: avisoRef.current.miId,
             miRol: avisoRef.current.miRol,
+            // La conversación de ESTE servicio: si el usuario la está mirando, no se avisa.
+            conversacion: urlDeLaConversacion('servicio', serviceId),
           });
         }
       )

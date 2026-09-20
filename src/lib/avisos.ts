@@ -17,6 +17,7 @@
  */
 import { Vibration } from 'react-native';
 
+import { estoyViendoAhora } from './conversacionVista';
 import { esAvisoDelHito } from './mensajes';
 import { notifyHighPriority } from '../services/notifications';
 
@@ -125,6 +126,8 @@ export function avisarDeMensajeDeLaBase(
     miRol?: 'DRIVER' | 'PROVIDER' | null;
     enGrupo?: boolean;
     nombreDelGrupo?: string;
+    /** Dirección de la conversación (`/chat/…`, `/grupo/…`) donde cayó el mensaje. */
+    conversacion?: string;
   }
 ): boolean {
   return avisarDeMensaje({
@@ -134,6 +137,7 @@ export function avisarDeMensajeDeLaBase(
     enGrupo: Boolean(quien.enGrupo),
     nombreDelGrupo: quien.nombreDelGrupo,
     miRol: quien.miRol ?? null,
+    conversacion: quien.conversacion,
   });
 }
 
@@ -176,6 +180,12 @@ export type TipoDeAviso = 'SERVICE_CARD' | 'SERVICE_STEP' | 'CHAT' | 'APPLICATIO
 
 export function avisar(aviso: Aviso, datos: Record<string, unknown>): boolean {
   if (!aviso || !aviso.titulo) return false;
+
+  // Lo que ya estoy leyendo en pantalla no se avisa (pedido del usuario, 20-09-2026): dentro
+  // del chat no suena; si se minimiza la app, la marca se borra y el aviso vuelve. El servidor
+  // aplica la misma regla para los avisos del teléfono (migración 0036).
+  const conversacion = typeof datos.conversacion === 'string' ? datos.conversacion : '';
+  if (conversacion && estoyViendoAhora(conversacion)) return false;
   Vibration.vibrate?.(200);
   notifyHighPriority(aviso.titulo, aviso.cuerpo, datos);
   return true;

@@ -16,6 +16,7 @@ import { useRealtimeGroups } from '../hooks/useRealtimeGroups';
 import { useRealtimeServices } from '../hooks/useRealtimeServices';
 import { Alert } from '../lib/alert';
 import { avisarDePostulacion, avisarDeServicioNuevo } from '../lib/avisos';
+import { guardarCache, leerCache } from '../lib/cache';
 import {
   approveApplicationInDb,
   borrarMiPostulacion,
@@ -710,15 +711,41 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const candadoDeEnvio = useRef<Candado>(crearCandado());
 
   /**
+   * La caché del teléfono sirve para PINTAR al instante y refrescar por detrás (20-09-2026).
+   *
+   * POR QUÉ: al volver a la app (o al reabrirla, que es lo que hace iOS con una PWA después de
+   * un rato fuera) la pantalla aparecía vacía esperando a la red —«aún hay una carga», dijo el
+   * usuario—. Con lo último que se sabía se pinta el inicio de inmediato y la consulta de
+   * verdad lo corrige un momento después. La clave lleva el id del usuario: los datos de una
+   * cuenta nunca se pintan en la pantalla de otra.
+   */
+  const TTL_DE_LA_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
+
+  const claveDeCache = (nombre: string, userId: string) => `${nombre}:${userId}`;
+
+  /** Pinta grupos, servicios y postulaciones de la última vez que se abrió la app. */
+  const hidratarDelTelefono = useCallback(async (userId: string) => {
+    const [grupos, servicios, postulaciones] = await Promise.all([
+      leerCache<GroupItem[]>(claveDeCache('grupos', userId), TTL_DE_LA_CACHE_MS),
+      leerCache<ServiceAlert[]>(claveDeCache('servicios', userId), TTL_DE_LA_CACHE_MS),
+      leerCache<Application[]>(claveDeCache('postulaciones', userId), TTL_DE_LA_CACHE_MS),
+    ]);
+    if (grupos?.length) dispatch({ type: 'SET_GROUPS', payload: grupos });
+    if (servicios?.length) dispatch({ type: 'SET_SERVICES', payload: servicios });
+    if (postulaciones?.length) dispatch({ type: 'SET_APPLICATIONS', payload: postulaciones });
+  }, []);
+
+  /**
    * Relee de Supabase grupos, servicios (de las dos identidades) y postulaciones.
    * Vive fuera de los efectos porque la usan dos: la carga inicial y el respaldo
-   * periódico.
+   * periódico. Lo que trae se guarda en el teléfono para el próximo arranque.
    */
   const load = useCallback(async () => {
     if (!isSupabaseConfigured || !session?.user || !profile) return;
     try {
       const groups = await fetchGroupsForUser(profile.id);
       dispatch({ type: 'SET_GROUPS', payload: groups });
+      guardarCache(claveDeCache('grupos', profile.id), groups);
       const groupIds = groups.map((g) => g.id);
 
       // Las dos identidades conviven en la misma cuenta: el usuario puede
@@ -729,7 +756,9 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       ]);
       const servicesById = new Map<string, ServiceAlert>();
       [...providerServices, ...driverServices].forEach((s) => servicesById.set(s.id, s));
-      dispatch({ type: 'SET_SERVICES', payload: [...servicesById.values()] });
+      const servicios = [...servicesById.values()];
+      dispatch({ type: 'SET_SERVICES', payload: servicios });
+      guardarCache(claveDeCache('servicios', profile.id), servicios);
 
       // Postulaciones: las mías y las recibidas en mis servicios (así al
       // proveedor le llega la tarjeta de quién está postulando).
@@ -741,18 +770,22 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       [...myApplications, ...applicationsForMyServices].forEach((a) =>
         applicationsByKey.set(`${a.serviceId}:${a.driverId}`, a)
       );
-      dispatch({ type: 'SET_APPLICATIONS', payload: [...applicationsByKey.values()] });
+      const postulaciones = [...applicationsByKey.values()];
+      dispatch({ type: 'SET_APPLICATIONS', payload: postulaciones });
+      guardarCache(claveDeCache('postulaciones', profile.id), postulaciones);
     } catch (err) {
       console.error('[MockStore] Error loading from Supabase:', err);
     }
   }, [session?.user, profile]);
 
-  // Carga inicial (una sola vez por sesión).
+  // Carga inicial (una sola vez por sesión): primero lo guardado —la pantalla se pinta en el
+  // acto— y en seguida la consulta de verdad, que manda.
   useEffect(() => {
     if (!isSupabaseConfigured || !session?.user || !profile || loadedRef.current) return;
     loadedRef.current = true;
+    hidratarDelTelefono(profile.id);
     load();
-  }, [load, session?.user, profile]);
+  }, [load, session?.user, profile, hidratarDelTelefono]);
 
   // Respaldo de sincronización: si el proyecto no tiene activado el tiempo real
   // (falta aplicar la migración 0011), las tarjetas y el pago se refrescan igual

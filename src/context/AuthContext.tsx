@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, AuthError } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
-import { configurarAlmacen } from '../lib/cache';
+import { usuarioParaPintarSinRed, debeTaparConElLogo } from '../lib/arranque';
+import { configurarAlmacen, limpiarCacheCompleta } from '../lib/cache';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
 
@@ -36,6 +37,18 @@ const PHONE_KEY = '@whatsremisse_phone';
  * detrás; el perfil de verdad llega un momento después y manda.
  */
 const PERFIL_KEY = '@whatsremisse_perfil';
+
+/**
+ * Quién había iniciado sesión (solo el id del usuario), para poder PINTAR al instante al volver
+ * a la app (20-09-2026).
+ *
+ * POR QUÉ: `supabase.auth.getSession()` no siempre responde con lo guardado; cuando el token ya
+ * venció —justo lo que pasa al volver de otra app— tiene que ir a la red a refrescarlo, y hasta
+ * que eso termina el arranque se quedaba en el logo de carga. Con el id guardado, la app entra
+ * con lo que ya sabía y la sesión de verdad manda en cuanto llega (si de verdad no hay sesión,
+ * porque se cerró en otro sitio o venció sin remedio, se vuelve al inicio de sesión).
+ */
+const SESION_KEY = '@whatsremisse_usuario';
 
 const requireSmsVerification = process.env.EXPO_PUBLIC_REQUIRE_SMS_VERIFICATION !== 'false';
 
@@ -76,9 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initSession = async () => {
       try {
-        const [savedPhone, perfilGuardado] = await Promise.all([
+        const [savedPhone, perfilGuardado, usuarioGuardado] = await Promise.all([
           AsyncStorage.getItem(PHONE_KEY),
           AsyncStorage.getItem(PERFIL_KEY),
+          AsyncStorage.getItem(SESION_KEY),
         ]);
         if (savedPhone && mounted) setPhone(savedPhone);
 
@@ -94,6 +108,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch {
             // Caché ilegible: se sigue con la consulta de verdad.
           }
+        }
+
+        // Y la app ARRANCA con la sesión que ya conocía: nada de logo de carga mientras la red
+        // refresca el token (la «carga al volver» que reportó el usuario el 20-09-2026). Lo que
+        // llegue de `getSession()` después manda: si no hay sesión, se vuelve a iniciar sesión.
+        const idParaPintar = usuarioParaPintarSinRed(perfilGuardado, usuarioGuardado);
+        if (idParaPintar && mounted) {
+          setSession({ user: { id: idParaPintar } } as unknown as Session);
+          setLoading(false);
         }
 
         const { data, error } = await supabase.auth.getSession();
@@ -115,9 +138,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (evento, newSession) => {
       if (!mounted) return;
-      setLoading(true);
+      // Solo se tapa la pantalla con el logo cuando se ENTRA o se SALE de verdad. Supabase
+      // dispara `TOKEN_REFRESHED` justo cuando la app vuelve después de un rato (el token venció
+      // mientras estaba fuera): poner el logo en ese momento era la «carga al volver» que
+      // reportó el usuario el 20-09-2026 (ver `lib/arranque`).
+      if (debeTaparConElLogo(evento)) setLoading(true);
       setSession(newSession);
       if (newSession?.user) {
         await loadProfile(newSession.user.id);
@@ -141,8 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data) {
         const mapped = mapProfile(data);
         setProfile(mapped);
-        // Se guarda para el próximo arranque (el de la vuelta de Waze).
+        // Se guarda para el próximo arranque (el de la vuelta de Waze): el perfil y QUIÉN es,
+        // que es lo que permite entrar pintando sin esperar a la red.
         void AsyncStorage.setItem(PERFIL_KEY, JSON.stringify(mapped)).catch(() => undefined);
+        AsyncStorage.setItem(SESION_KEY, mapped.id).catch(() => undefined);
         const isProfileComplete = Boolean(mapped.role && mapped.full_name && mapped.vehicle_data);
         // eslint-disable-next-line no-console
         console.log('[Auth] Perfil cargado:', mapped, 'isProfileComplete:', isProfileComplete);
@@ -313,6 +342,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await AsyncStorage.removeItem(PHONE_KEY);
     await AsyncStorage.removeItem(PERFIL_KEY);
+    // Si se cierra sesión, no puede quedar el id guardado: la próxima vez se entra por la
+    // pantalla de inicio de sesión, no pintando la app de alguien que ya no está.
+    await AsyncStorage.removeItem(SESION_KEY);
+    // Y la caché de datos (grupos, servicios, postulaciones) no se queda en el teléfono de
+    // quien cerró sesión: era su información.
+    limpiarCacheCompleta().catch(() => undefined);
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);

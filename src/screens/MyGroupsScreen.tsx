@@ -1,9 +1,7 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   View,
   Text,
   StyleSheet,
@@ -21,8 +19,8 @@ import { Icono, ICONO_CORAZON_BORDE, ICONO_CORAZON_LLENO, ICONO_GRUPOS } from '.
 import { useMockStore, GroupItem } from '../context/MockStoreContext';
 import { useArrastreDeReordenamiento } from '../hooks/useArrastreDeReordenamiento';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
-import { ROJO_ACCION, TEXTO_SUAVE } from '../lib/colors';
-import { fetchGruposSinLeer, silenciarGrupo } from '../lib/database';
+import { TEXTO_SUAVE } from '../lib/colors';
+import { fetchGruposSinLeer, fetchUltimoMensajePorGrupo } from '../lib/database';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -56,51 +54,42 @@ export function MyGroupsScreen() {
    * vuelve al frente, que es cuando puede haber cambiado.
    */
   const [sinLeer, setSinLeer] = useState<Record<string, number>>({});
-  const [silenciados, setSilenciados] = useState<Record<string, boolean>>({});
 
-  const cargarSinLeer = useCallback(() => {
+  /**
+   * Cuándo llegó el último mensaje de cada grupo (`grupos_ultimo_mensaje`, 0036). Es lo que
+   * ordena los grupos que solo integro (pedido del usuario, 20-09-2026): se recarga al volver
+   * a la pantalla, que es cuando puede haber cambiado.
+   */
+  const [ultimoMensaje, setUltimoMensaje] = useState<Record<string, number>>({});
+
+  const cargarDatosDeLosGrupos = useCallback(() => {
     void fetchGruposSinLeer()
       .then(setSinLeer)
       .catch(() => undefined);
+    void fetchUltimoMensajePorGrupo()
+      .then(setUltimoMensaje)
+      .catch(() => undefined);
   }, []);
 
-  useFocusEffect(cargarSinLeer);
+  useFocusEffect(cargarDatosDeLosGrupos);
 
-  // El silencio se conoce por el grupo (viene de la base con la membresía); si el usuario lo
-  // cambia aquí, manda lo que él acaba de elegir.
-  useEffect(() => {
-    setSilenciados((previos) => {
-      const siguiente = { ...previos };
-      for (const grupo of groups) {
-        if (siguiente[grupo.id] === undefined) siguiente[grupo.id] = grupo.muted === true;
-      }
-      return siguiente;
-    });
-  }, [groups]);
-
-  /** Silenciar (o volver a activar) los avisos del chat de un grupo. */
-  const alternarSilencio = async (grupo: GroupItem) => {
-    const nuevo = !(silenciados[grupo.id] ?? false);
-    setSilenciados((previos) => ({ ...previos, [grupo.id]: nuevo }));
-    const guardado = await silenciarGrupo(grupo.id, nuevo);
-    if (!guardado) {
-      // Si la base no lo aceptó (por ejemplo, la 0028 sin aplicar), se deshace: nada de mentir
-      // con un interruptor que dice una cosa y el servidor hace otra.
-      setSilenciados((previos) => ({ ...previos, [grupo.id]: !nuevo }));
-      Alert.alert(
-        'No se pudo cambiar',
-        'No se pudo guardar el silencio del grupo. Comprueba tu conexión e inténtalo otra vez.'
-      );
-    }
-  };
+  // El botón de silenciar vivía aquí, en la tarjeta; el usuario pidió moverlo a los ajustes del
+  // grupo (el engrane → Miembros del grupo) el 20-09-2026.
 
   /**
    * El orden y el color de las tarjetas salen de `lib/ordenDeGrupos` (propietario →
    * administrador → favorito → integrante), y la lupa filtra esa misma lista.
    */
   const gruposVisibles = useMemo(
-    () => filtrarPorBusqueda(ordenarGrupos(groups), consulta, camposDeBusquedaDeGrupo),
-    [groups, consulta]
+    () =>
+      filtrarPorBusqueda(
+        ordenarGrupos(
+          groups.map((grupo) => ({ ...grupo, ultimoMensajeAt: ultimoMensaje[grupo.id] ?? null }))
+        ),
+        consulta,
+        camposDeBusquedaDeGrupo
+      ),
+    [groups, ultimoMensaje, consulta]
   );
 
   /**
@@ -188,25 +177,11 @@ export function MyGroupsScreen() {
             onPress={() =>
               navigation.navigate('GroupMembers', { groupId: item.id, groupName: item.name })
             }
-            accessibilityLabel="Integrantes del grupo"
+            accessibilityLabel="Ajustes del grupo"
           >
-            {/* El engranaje de grupos, en negro institucional (no el avatar de Cuenta). */}
+            {/* El engranaje de grupos, en negro institucional (no el avatar de Cuenta). Abre los
+                ajustes del grupo: integrantes y el botón de silenciar (20-09-2026). */}
             <Icono fuente={ICONO_GRUPOS} tamano={20} />
-          </TouchableOpacity>
-          {/* Silenciar este grupo: sin avisos de su chat. La campana tachada dice que está
-              silenciado (pedido del usuario, 19-09-2026). */}
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => void alternarSilencio(item)}
-            accessibilityLabel={
-              silenciados[item.id] ? 'Activar los avisos de este grupo' : 'Silenciar este grupo'
-            }
-          >
-            <MaterialCommunityIcons
-              name={silenciados[item.id] ? 'bell-off' : 'bell-outline'}
-              size={20}
-              color={silenciados[item.id] ? ROJO_ACCION : DARK_BG}
-            />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>

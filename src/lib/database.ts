@@ -1990,6 +1990,61 @@ export async function silenciarGrupo(groupId: string, silenciado: boolean): Prom
   return data === true;
 }
 
+/**
+ * Cuándo llegó el último mensaje de cada grupo (sin contar los míos), por id de grupo.
+ *
+ * Sale de `grupos_ultimo_mensaje` (migración 0036) y sirve para que en Mis grupos los grupos
+ * que solo integro se ordenen según cuál recibió el último mensaje (pedido del usuario,
+ * 20-09-2026). Se devuelve en milisegundos para poder ordenar sin volver a parsear fechas.
+ */
+export async function fetchUltimoMensajePorGrupo(): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured) return {};
+  const { data, error } = await supabase.rpc('grupos_ultimo_mensaje');
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) {
+      console.warn(
+        '[database] sin «último mensaje» por grupo: falta aplicar 0036_avisos_sin_la_conversacion_abierta_y_ultimo_mensaje.sql'
+      );
+      return {};
+    }
+    throw error;
+  }
+  const cuando: Record<string, number> = {};
+  for (const fila of (data ?? []) as { group_id: string; ultimo_at: string | null }[]) {
+    const marca = fila.ultimo_at ? Date.parse(fila.ultimo_at) : NaN;
+    if (fila.group_id && Number.isFinite(marca)) cuando[fila.group_id] = marca;
+  }
+  return cuando;
+}
+
+// =====================================================================
+// «Estoy viendo esta conversación» (migración 0036, 20-09-2026)
+// =====================================================================
+// El servidor descarta el aviso de la conversación que el usuario está mirando. Todo esto
+// tolera que la 0036 no esté aplicada: si falta, se avisa como siempre (nunca romper el chat).
+
+/** Marca que este usuario está mirando la conversación de esa dirección (`/chat/…`, `/grupo/…`). */
+export async function marcarConversacionVista(url: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !(url ?? '').trim()) return false;
+  const { data, error } = await supabase.rpc('marcar_conversacion_vista', { p_url: url });
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) return false;
+    throw error;
+  }
+  return data === true;
+}
+
+/** Borra la marca: se sale del chat o la app pasa a segundo plano (ahí SÍ tienen que llegar). */
+export async function cerrarConversacionVista(): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const { data, error } = await supabase.rpc('cerrar_conversacion_vista');
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) return false;
+    throw error;
+  }
+  return data === true;
+}
+
 /** Guarda (o actualiza) la suscripción de avisos de este navegador. */
 export async function guardarSuscripcionDeAvisos(datos: {
   endpoint: string;
