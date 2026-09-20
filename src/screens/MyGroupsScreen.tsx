@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   FlatList,
   TouchableOpacity,
@@ -124,10 +125,14 @@ export function MyGroupsScreen() {
         activeOpacity={0.9}
         onPress={() => navigation.navigate('GroupChat', { groupId: item.id, groupName: item.name })}
       >
-        {/* Avatar */}
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
-        </View>
+        {/* Avatar: la foto del grupo si la tiene (0038); si no, su inicial. */}
+        {item.avatarUrl ? (
+          <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
+          </View>
+        )}
 
         {/* Nombre centrado */}
         <Text style={styles.groupName} numberOfLines={1}>

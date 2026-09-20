@@ -80,6 +80,8 @@ export interface GroupItem {
   favorite: boolean;
   /** Creador del grupo (groups.owner_id): manda por encima del rol de miembro. */
   ownerId?: string;
+  /** Foto del grupo (0038), si tiene. Sin ella la tarjeta pinta la inicial. */
+  avatarUrl?: string | null;
 }
 
 export interface GroupMember {
@@ -1516,7 +1518,12 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         throw new Error('No hay sesión activa. Vuelve a iniciar sesión.');
       }
       try {
-        const { group: dbGroup, member } = await insertGroup(group.name, session.user.id);
+        const { group: dbGroup, member } = await insertGroup(
+          group.name,
+          session.user.id,
+          // La foto (0038) se manda solo si el usuario eligió una: es opcional de principio a fin.
+          group.avatarUrl || null
+        );
         dispatch({
           type: 'ADD_GROUP',
           payload: {
@@ -1525,6 +1532,9 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
             role: member.role as GroupItem['role'],
             favorite: member.favorite,
             ownerId: dbGroup.owner_id,
+            // Si la migración 0038 no está aplicada, `insertGroup` guardó el grupo sin foto y aquí
+            // no habrá nada: la tarjeta pinta la inicial, que es el respaldo de siempre.
+            avatarUrl: dbGroup.avatar_url ?? group.avatarUrl ?? null,
           },
         });
       } catch (err) {

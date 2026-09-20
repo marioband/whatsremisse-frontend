@@ -76,6 +76,8 @@ export interface DbGroup {
   id: string;
   name: string;
   owner_id: string;
+  /** Foto del grupo (0038). Opcional: sin la migración llega `undefined` y el grupo va con inicial. */
+  avatar_url?: string | null;
   created_at: string;
   updated_at: string;
 }

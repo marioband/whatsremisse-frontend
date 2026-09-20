@@ -943,6 +943,8 @@ export function mapGroupFromDb(row: DbGroup, memberRow?: DbGroupMember): GroupIt
     role: (memberRow?.role as GroupItem['role']) || 'member',
     favorite: memberRow?.favorite || false,
     ownerId: row.owner_id,
+    // 0038: la foto del grupo. Sin la migración la columna no viene y queda en null (inicial).
+    avatarUrl: (row as { avatar_url?: string | null }).avatar_url ?? null,
   };
 }
 
@@ -974,10 +976,24 @@ export function mapMessageFromDb(row: DbMessage): ChatMessage {
 
 export async function fetchGroupsForUser(userId: string): Promise<GroupItem[]> {
   if (!isSupabaseConfigured) return [];
-  const { data, error } = await supabase
-    .from('group_members')
-    .select('group_id, role, favorite, muted, groups(id, name, owner_id)')
-    .eq('user_id', userId);
+  // La foto del grupo (0038) va en el SELECT. Si la migración aún no está aplicada, PostgREST
+  // rechaza la consulta ENTERA por una columna que no existe, así que se reintenta sin ella: los
+  // grupos se ven igual que antes (con su inicial) en vez de quedarse «Mis grupos» en blanco.
+  const consulta = (conFoto: boolean) =>
+    supabase
+      .from('group_members')
+      .select(
+        conFoto
+          ? 'group_id, role, favorite, muted, groups(id, name, owner_id, avatar_url)'
+          : 'group_id, role, favorite, muted, groups(id, name, owner_id)'
+      )
+      .eq('user_id', userId);
+
+  let { data, error } = await consulta(true);
+  if (error && esColumnaAusente(error)) {
+    console.warn('[database] los grupos se leen sin foto: falta aplicar 0038_foto_del_grupo.sql');
+    ({ data, error } = await consulta(false));
+  }
   if (error) throw error;
 
   return (data || [])
@@ -1062,14 +1078,28 @@ export async function fetchGroupMembers(groupId: string): Promise<GroupMember[]>
 
 export async function insertGroup(
   name: string,
-  ownerId: string
+  ownerId: string,
+  avatarUrl?: string | null
 ): Promise<{ group: DbGroup; member: DbGroupMember }> {
   if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
-  const { data: group, error: groupError } = await supabase
-    .from('groups')
-    .insert({ name, owner_id: ownerId })
-    .select()
-    .single();
+  // La foto (0038) es opcional: si la migración no está aplicada, se crea el grupo SIN foto en vez
+  // de dejar al usuario sin grupo (antes intentaba guardarla y el INSERT fallaba entero).
+  const insertar = (conFoto: boolean) =>
+    supabase
+      .from('groups')
+      .insert(
+        conFoto && avatarUrl
+          ? { name, owner_id: ownerId, avatar_url: avatarUrl }
+          : { name, owner_id: ownerId }
+      )
+      .select()
+      .single();
+
+  let { data: group, error: groupError } = await insertar(Boolean(avatarUrl));
+  if (groupError && esColumnaAusente(groupError)) {
+    console.warn('[database] el grupo se crea sin foto: falta aplicar 0038_foto_del_grupo.sql');
+    ({ data: group, error: groupError } = await insertar(false));
+  }
   if (groupError) throw groupError;
 
   const { data: member, error: memberError } = await supabase
