@@ -485,7 +485,9 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: FONDO_TARJETA,
+    // Intercambio de colores pedido por el usuario (19-09-2026): la franja va BLANCA y los dos
+    // recuadros (escribir y «+») se quedan con el gris claro que antes era el fondo.
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 8,
     paddingVertical: 8,
     borderTopWidth: 0.5,
@@ -495,14 +497,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: FONDO_TARJETA,
     justifyContent: 'center',
     alignItems: 'center',
   },
   inputPill: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: FONDO_TARJETA,
     borderRadius: 20,
     marginHorizontal: 8,
     minHeight: 40,

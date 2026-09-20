@@ -174,6 +174,33 @@ export function MessageList({
     );
   };
 
+  /**
+   * ¿La persona está mirando el final de la conversación?
+   *
+   * POR QUÉ: al llegar un mensaje más alto que la pantalla, la lista crece por abajo y la vista se
+   * queda donde estaba, así que el mensaje nuevo queda fuera: en la práctica se ve como si el chat
+   * SUBIERA en vez de bajar (reporte del usuario, 19-09-2026). Se sigue el final solo si ya estabas
+   * abajo; si estás leyendo más arriba, no se te mueve nada.
+   */
+  const pegadoAlFinal = React.useRef(true);
+  const alDesplazar = (evento: any) => {
+    const { contentOffset, layoutMeasurement, contentSize } = evento.nativeEvent;
+    const distanciaAlFinal = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    pegadoAlFinal.current = distanciaAlFinal < 60;
+  };
+  /**
+   * Al cambiar el tamaño de la lista se baja al final, y se vuelve a intentar un suspiro después:
+   * el contenido crece en dos tiempos (primero el hueco del mensaje, luego la imagen o el audio que
+   * terminan de medirse) y con la animación el desplazamiento se perdía a mitad de camino.
+   */
+  const alCambiarElTamano = () => {
+    if (!pegadoAlFinal.current) return;
+    listRef.current?.scrollToEnd({ animated: false });
+    setTimeout(() => {
+      if (pegadoAlFinal.current) listRef.current?.scrollToEnd({ animated: false });
+    }, 250);
+  };
+
   return (
     <FlatList
       ref={listRef}
@@ -186,7 +213,9 @@ export function MessageList({
       // es la card del navegador: ver `cardStyle` en RootNavigator.
       style={styles.lista}
       contentContainerStyle={styles.list}
-      onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+      onContentSizeChange={alCambiarElTamano}
+      onScroll={alDesplazar}
+      scrollEventThrottle={16}
       ListHeaderComponent={ListHeaderComponent}
     />
   );
