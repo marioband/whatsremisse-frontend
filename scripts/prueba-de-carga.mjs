@@ -116,11 +116,11 @@ class Tiempos {
   }
 }
 
-/** Una llamada HTTP, midiendo lo que tarda y sin morir si falla. */
-async function pedir(ruta, { metodo = 'GET', cuerpo, token, prefer } = {}) {
+/** Una llamada HTTP en crudo, midiendo lo que tarda y sin morir si falla. */
+async function intento(ruta, { metodo, cuerpo, cabecera, prefer }) {
   const cabeceras = {
     apikey: CLAVE_PUBLICA || CLAVE_SERVICIO,
-    Authorization: `Bearer ${token || CLAVE_SERVICIO || CLAVE_PUBLICA}`,
+    Authorization: `Bearer ${cabecera}`,
     'Content-Type': 'application/json',
   };
   if (prefer) cabeceras.Prefer = prefer;
@@ -140,6 +140,60 @@ async function pedir(ruta, { metodo = 'GET', cuerpo, token, prefer } = {}) {
   }
 }
 
+/**
+ * Una llamada HTTP midiendo lo que tarda. Con `usuario` usa SU sesión (el mismo camino que la app)
+ * y, si el token se venció (el proyecto los caduca antes de lo que dura la prueba: `JWT expired`),
+ * lo renueva y repite la llamada una vez — así una prueba de 5 minutos no se queda sin medir por
+ * eso (pasó en la primera corrida, 21-09-2026).
+ */
+async function pedir(ruta, { metodo = 'GET', cuerpo, token, usuario, prefer } = {}) {
+  const opciones = { metodo, cuerpo, prefer };
+  if (usuario) {
+    if (usuario.expira_at && usuario.expira_at - Date.now() < 30000) await renovar(usuario);
+    const primera = await intento(ruta, { ...opciones, cabecera: usuario.access_token });
+    if (!primera.error || !/JWT expired|PGRST303|invalid claim/i.test(primera.error)) return primera;
+    const ok = await renovar(usuario);
+    if (!ok) return primera;
+    return intento(ruta, { ...opciones, cabecera: usuario.access_token });
+  }
+  return intento(ruta, { ...opciones, cabecera: token || CLAVE_SERVICIO || CLAVE_PUBLICA });
+}
+
+/** Renueva la sesión de ese usuario (primero con su `refresh_token`, y si no, entrando otra vez). */
+async function renovar(usuario) {
+  if (usuario.renovando) return usuario.renovando;
+  usuario.renovando = (async () => {
+    try {
+      if (usuario.refresh_token) {
+        const r = await intento('/auth/v1/token?grant_type=refresh_token', {
+          metodo: 'POST',
+          cuerpo: { refresh_token: usuario.refresh_token },
+          cabecera: CLAVE_PUBLICA,
+        });
+        if (!r.error) {
+          guardarSesion(usuario, r.dato);
+          return true;
+        }
+      }
+      await entrar(usuario);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      usuario.renovando = null;
+    }
+  })();
+  return usuario.renovando;
+}
+
+/** Deja la sesión del usuario lista para usarla (token, refresh y cuándo caduca). */
+function guardarSesion(usuario, sesion) {
+  usuario.access_token = sesion.access_token;
+  usuario.refresh_token = sesion.refresh_token || usuario.refresh_token;
+  const segundos = Number(sesion.expires_in) || 3600;
+  usuario.expira_at = Date.now() + segundos * 1000;
+}
+
 /** Crea un usuario de prueba (el disparador de 0001 le crea el perfil solo). */
 async function crearUsuario(indice) {
   const correo = `carga-${Date.now()}-${indice}@prueba.whatsremisse.tech`;
@@ -152,7 +206,7 @@ async function crearUsuario(indice) {
   return { id: alta.dato.id, correo, clave };
 }
 
-/** Entra como ese usuario y devuelve su token (el mismo camino que la app). */
+/** Entra como ese usuario (el mismo camino que la app) y le deja la sesión guardada. */
 async function entrar(usuario) {
   const entrada = await pedir('/auth/v1/token?grant_type=password', {
     metodo: 'POST',
@@ -160,7 +214,8 @@ async function entrar(usuario) {
     token: CLAVE_PUBLICA,
   });
   if (entrada.error) throw new Error(`no se pudo entrar como ${usuario.correo}: ${entrada.error}`);
-  return entrada.dato.access_token;
+  guardarSesion(usuario, entrada.dato);
+  return usuario.access_token;
 }
 
 /** Espera a que llegue el momento (para clavar el ritmo pedido). */
@@ -256,7 +311,7 @@ async function principal() {
 
   try {
     // ------------------------------------------------------------------ preparación
-    titulo('1) Preparación (ESTADO.usuarios y grupo de prueba)');
+    titulo('1) Preparación (usuarios y grupo de prueba)');
     const cuantos = Math.max(2, TELEFONOS);
     for (let i = 0; i < cuantos; i += 1) ESTADO.usuarios.push(await crearUsuario(i));
     const proveedor = ESTADO.usuarios[0];
@@ -271,7 +326,7 @@ async function principal() {
         cuerpo: { role: 'DRIVER', full_name: `Conductor de prueba ${i}` },
       });
     }
-    linea(`   ${ESTADO.usuarios.length} ESTADO.usuarios de prueba creados (el primero es el proveedor).`);
+    linea(`   ${ESTADO.usuarios.length} usuarios de prueba creados (el primero es el proveedor).`);
 
     const creado = await pedir('/rest/v1/groups', {
       metodo: 'POST',
@@ -286,9 +341,7 @@ async function principal() {
         cuerpo: { group_id: ESTADO.grupoId, user_id: u.id, role: u.esProveedor ? 'owner' : 'member' },
       });
     }
-    const tokens = new Map();
-    for (const u of ESTADO.usuarios) tokens.set(u.id, await entrar(u));
-    const tokenProveedor = tokens.get(proveedor.id);
+    for (const u of ESTADO.usuarios) await entrar(u);
     linea(`   Grupo de prueba creado y ${ESTADO.usuarios.length} integrantes dentro.`);
 
     // Un aviso de referencia para saber cuáles son de la prueba.
@@ -303,7 +356,7 @@ async function principal() {
       await esperarHasta(momento);
       const servicio = await pedir('/rest/v1/service_alerts', {
         metodo: 'POST',
-        token: tokenProveedor,
+        usuario: proveedor,
         prefer: 'return=representation',
         cuerpo: {
           provider_id: proveedor.id,
@@ -319,11 +372,12 @@ async function principal() {
       const id = servicio.dato?.[0]?.id;
       if (!id) continue;
       ESTADO.serviciosCreados.push(id);
-      // La app también comparte el servicio al grupo (0018): es la segunda escritura real.
-      const compartido = await pedir('/rest/v1/service_alert_groups', {
+      // La app comparte el servicio al grupo por la FUNCIÓN de la 0018 (la tabla solo deja leer;
+      // el intento directo lo rechaza RLS, como debe). Es la segunda escritura real.
+      const compartido = await pedir('/rest/v1/rpc/compartir_servicio_con_grupos', {
         metodo: 'POST',
-        token: tokenProveedor,
-        cuerpo: { service_id: id, group_id: ESTADO.grupoId, posicion: 1 },
+        usuario: proveedor,
+        cuerpo: { p_service_id: id, p_group_ids: [ESTADO.grupoId] },
       });
       tiemposCompartir.apunta(compartido.ms, compartido.error);
       process.stdout.write('.');
@@ -344,22 +398,21 @@ async function principal() {
       if (!servicio || !conductor) break;
       // La app, antes de postular, MIRA el estado real (2 lecturas) y después hace el upsert:
       // 3 llamadas por postulación. Se miden las tres juntas, que es lo que cuesta de verdad.
-      const token = tokens.get(conductor.id);
       const arranque = Date.now();
       const estado = await pedir(
         `/rest/v1/service_alerts?select=status,assigned_driver_id&id=eq.${servicio}`,
-        { token }
+        { usuario: conductor }
       );
       const mia = await pedir(
         `/rest/v1/applications?select=*&service_id=eq.${servicio}&driver_id=eq.${conductor.id}`,
-        { token }
+        { usuario: conductor }
       );
       const yaAceptado = mia.dato?.[0]?.status === 'APPROVED' && estado.dato?.[0]?.assigned_driver_id === conductor.id;
       let error = estado.error || mia.error;
       if (!error && !estado.dato?.[0]?.assigned_driver_id && !yaAceptado) {
         const postulacion = await pedir('/rest/v1/applications?on_conflict=service_id,driver_id', {
           metodo: 'POST',
-          token,
+          usuario: conductor,
           prefer: 'resolution=merge-duplicates,return=representation',
           cuerpo: { service_id: servicio, driver_id: conductor.id, status: 'PENDING' },
         });
@@ -370,6 +423,15 @@ async function principal() {
     }
     linea('');
     tiemposPostulaciones.informe();
+
+    // Los avisos que apuntaron los disparadores se miran AHORA: el programa del VPS los intenta cada
+    // 5 s y a los que no puede entregar (estos usuarios de prueba no tienen teléfono) los borra tras
+    // 5 intentos. Al final de la prueba ya no quedaría ninguno.
+    const enCola = await pedir(
+      `/rest/v1/avisos_cola?select=id&enviado_at=is.null&id=gt.${ESTADO.avisoIdInicial}`
+    );
+    ESTADO.avisosEnCola = (enCola.dato || []).length;
+    linea(`   Avisos apuntados en la cola al terminar: ${ESTADO.avisosEnCola}`);
 
     // ------------------------------------------------------------------ fase 3: teléfonos
     titulo(`4) ${TELEFONOS} apps abiertas pidiendo lo de cada 15 s, durante ${SEGUNDOS_LECTURA} s`);
@@ -387,42 +449,46 @@ async function principal() {
     const telefonos = ESTADO.usuarios.slice(0, TELEFONOS);
     await Promise.all(
       telefonos.map(async (u) => {
-        const token = tokens.get(u.id);
+
         while (Date.now() < finLectura) {
           const grupos = await pedir(
             `/rest/v1/group_members?select=group_id,role,favorite,muted,groups(id,name,owner_id,avatar_url)&user_id=eq.${u.id}`,
-            { token }
+            { usuario: u }
           );
           tiemposLecturas.get('mis grupos (group_members)').apunta(grupos.ms, grupos.error);
           const idsGrupos = (grupos.dato || []).map((f) => f.group_id);
 
           const asignados = await pedir(
             `/rest/v1/service_alerts?select=*&assigned_driver_id=eq.${u.id}`,
-            { token }
+            { usuario: u }
           );
           tiemposLecturas.get('servicios asignados (service_alerts)').apunta(asignados.ms, asignados.error);
 
           if (idsGrupos.length) {
             const delGrupo = await pedir(
               `/rest/v1/service_alerts?select=*&group_id=in.(${idsGrupos.join(',')})`,
-              { token }
+              { usuario: u }
             );
             tiemposLecturas.get('alertas de mis grupos (service_alerts)').apunta(delGrupo.ms, delGrupo.error);
           }
 
-          const mias = await pedir(`/rest/v1/applications?select=*&driver_id=eq.${u.id}`, { token });
+          const mias = await pedir(`/rest/v1/applications?select=*&driver_id=eq.${u.id}`, { usuario: u });
           tiemposLecturas.get('mis postulaciones (applications)').apunta(mias.ms, mias.error);
 
           const idsServicios = (asignados.dato || []).map((s) => s.id);
           if (idsServicios.length) {
             const recibidas = await pedir(
               `/rest/v1/applications?select=*&service_id=in.(${idsServicios.join(',')})`,
-              { token }
+              { usuario: u }
             );
             tiemposLecturas.get('postulaciones de mis servicios (applications)').apunta(recibidas.ms, recibidas.error);
           }
 
-          const sinLeer = await pedir('/rest/v1/rpc/servicios_sin_leer', { metodo: 'POST', token, cuerpo: {} });
+          const sinLeer = await pedir('/rest/v1/rpc/servicios_sin_leer', {
+            metodo: 'POST',
+            usuario: u,
+            cuerpo: {},
+          });
           tiemposLecturas.get('contador de sin leer del chat (rpc)').apunta(sinLeer.ms, sinLeer.error);
 
           await new Promise((listo) => setTimeout(listo, 15000));
@@ -433,12 +499,14 @@ async function principal() {
 
     // ------------------------------------------------------------------ avisos
     titulo('5) Los avisos al teléfono que generó la prueba');
-    const despues = await pedir(
-      `/rest/v1/avisos_cola?select=id,enviado_at&id=gt.${ESTADO.avisoIdInicial}`
+    const quedan = await pedir(
+      `/rest/v1/avisos_cola?select=id&id=gt.${ESTADO.avisoIdInicial}`
     );
-    const pendientes = (despues.dato || []).filter((a) => !a.enviado_at).length;
-    linea(`   ${(despues.dato || []).length} avisos apuntados en la cola · ${pendientes} sin enviar todavía`);
-    linea('   (el programa del VPS los manda cada 5 segundos; si quedan muchos sin enviar, la cola va con retraso)');
+    linea(`   Al terminar las postulaciones había ${ESTADO.avisosEnCola} avisos en la cola.`);
+    linea(
+      `   Ahora quedan ${(quedan.dato || []).length} filas: el programa del VPS los manda cada 5 s y borra` +
+        ' los que no puede entregar (estos usuarios de prueba no tienen teléfono), así que lo normal es 0.'
+    );
   } catch (err) {
     linea(`\nLa prueba se cortó: ${err.message}`);
   } finally {
@@ -454,7 +522,7 @@ async function principal() {
 }
 
 // Ctrl+C a media prueba: se avisa y se deja el proceso al `finally`, que limpia.
-const ESTADO = { serviciosCreados: [], usuarios: [], grupoId: null, avisoIdInicial: -1, limpiando: false };
+const ESTADO = { serviciosCreados: [], usuarios: [], grupoId: null, avisoIdInicial: -1, avisosEnCola: 0, limpiando: false };
 
 process.on('SIGINT', async () => {
   if (ESTADO.limpiando) process.exit(1);
