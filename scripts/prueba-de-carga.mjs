@@ -167,12 +167,70 @@ async function entrar(usuario) {
 const esperarHasta = (momento) =>
   new Promise((listo) => setTimeout(listo, Math.max(0, momento - Date.now())));
 
+/** Borra todo lo que dejó una prueba: primero los grupos (no se van con el usuario), luego los
+ * usuarios de prueba (con ellos caen sus perfiles, servicios, postulaciones y mensajes) y antes los
+ * avisos que iban dirigidos a ellos, para que el programa de avisos no los reintente. */
+async function limpiar({ serviciosCreados = [], usuarios = [], grupoId = null, avisoIdInicial = -1 } = {}) {
+  for (const id of serviciosCreados) {
+    await pedir(`/rest/v1/service_alerts?id=eq.${id}`, { metodo: 'DELETE' });
+  }
+  linea(`   ${serviciosCreados.length} servicios de prueba borrados (con sus postulaciones).`);
+  const idsUsuarios = usuarios.map((u) => u.id);
+  if (avisoIdInicial >= 0 && idsUsuarios.length) {
+    await pedir(
+      `/rest/v1/avisos_cola?id=gt.${avisoIdInicial}&destinatarios=cs.{${idsUsuarios.join(',')}}`,
+      { metodo: 'DELETE' }
+    );
+    linea('   avisos de la prueba borrados.');
+  }
+  if (grupoId) {
+    await pedir(`/rest/v1/groups?id=eq.${grupoId}`, { metodo: 'DELETE' });
+    linea('   grupo de prueba borrado.');
+  }
+  for (const u of usuarios) {
+    await pedir(`/auth/v1/admin/users/${u.id}`, { metodo: 'DELETE' });
+  }
+  linea(`   ${usuarios.length} usuarios de prueba borrados.`);
+}
+
+/** Los usuarios que dejó una prueba cortada (por correo) y sus grupos. */
+async function restosDePruebas() {
+  const listado = await pedir('/auth/v1/admin/users?page=1&per_page=1000');
+  if (listado.error) throw new Error(`no se pudo leer la lista de usuarios: ${listado.error}`);
+  const usuarios = (listado.dato?.users || []).filter((u) =>
+    String(u.email || '').endsWith('@prueba.whatsremisse.tech')
+  );
+  const grupos = await pedir(
+    `/rest/v1/groups?select=id&name=eq.${encodeURIComponent('Grupo de prueba (carga)')}`
+  );
+  return { usuarios, grupos: grupos.dato || [] };
+}
+
+/** `--limpiar`: borra lo que haya quedado de una prueba anterior (por si se cortó). */
+async function limpiarRestos() {
+  titulo('Limpiando restos de pruebas anteriores');
+  const { usuarios, grupos } = await restosDePruebas();
+  linea(`   ${usuarios.length} usuarios de prueba y ${grupos.length} grupos encontrados.`);
+  for (const g of grupos) await pedir(`/rest/v1/groups?id=eq.${g.id}`, { metodo: 'DELETE' });
+  for (const u of usuarios) await pedir(`/auth/v1/admin/users/${u.id}`, { metodo: 'DELETE' });
+  linea('   borrado. Si no queda nada que borrar, ya estaba limpio.');
+}
+
 async function principal() {
   titulo('Prueba de carga de WhatsRemisse');
   linea(`   Proyecto: ${URL_BASE || '(sin dirección en el .env)'}`);
   linea(`   Ritmo de servicios:      20 por minuto durante ${MINUTOS} min (${20 * MINUTOS} servicios)`);
   linea(`   Ritmo de postulaciones:  30 por minuto durante ${MINUTOS} min (${30 * MINUTOS} postulaciones)`);
   linea(`   Apps abiertas simuladas: ${TELEFONOS} durante ${SEGUNDOS_LECTURA} s`);
+
+  if (args.includes('--limpiar')) {
+    if (!URL_BASE || !CLAVE_SERVICIO) {
+      linea('\nFalta la dirección del proyecto o la clave de servicio en el .env. Nada que hacer.');
+      process.exit(1);
+    }
+    await limpiarRestos();
+    process.exit(0);
+  }
 
   if (SIMULADO || !CONFIRMADO) {
     linea(
@@ -191,55 +249,51 @@ async function principal() {
     process.exit(1);
   }
 
-  const serviciosCreados = [];
-  const usuarios = [];
-  let grupoId = null;
   const tiemposServicios = new Tiempos('Crear un servicio');
   const tiemposCompartir = new Tiempos('Compartirlo a un grupo');
   const tiemposPostulaciones = new Tiempos('Postularse (las 3 llamadas que hace la app)');
   const tiemposLecturas = new Map();
-  let avisoIdInicial = 0;
 
   try {
     // ------------------------------------------------------------------ preparación
-    titulo('1) Preparación (usuarios y grupo de prueba)');
+    titulo('1) Preparación (ESTADO.usuarios y grupo de prueba)');
     const cuantos = Math.max(2, TELEFONOS);
-    for (let i = 0; i < cuantos; i += 1) usuarios.push(await crearUsuario(i));
-    const proveedor = usuarios[0];
+    for (let i = 0; i < cuantos; i += 1) ESTADO.usuarios.push(await crearUsuario(i));
+    const proveedor = ESTADO.usuarios[0];
     await pedir(`/rest/v1/profiles?id=eq.${proveedor.id}`, {
       metodo: 'PATCH',
       cuerpo: { role: 'PROVIDER', full_name: 'Proveedor de prueba (carga)' },
     });
-    usuarios[0].esProveedor = true;
-    for (let i = 1; i < usuarios.length; i += 1) {
-      await pedir(`/rest/v1/profiles?id=eq.${usuarios[i].id}`, {
+    ESTADO.usuarios[0].esProveedor = true;
+    for (let i = 1; i < ESTADO.usuarios.length; i += 1) {
+      await pedir(`/rest/v1/profiles?id=eq.${ESTADO.usuarios[i].id}`, {
         metodo: 'PATCH',
         cuerpo: { role: 'DRIVER', full_name: `Conductor de prueba ${i}` },
       });
     }
-    linea(`   ${usuarios.length} usuarios de prueba creados (el primero es el proveedor).`);
+    linea(`   ${ESTADO.usuarios.length} ESTADO.usuarios de prueba creados (el primero es el proveedor).`);
 
     const creado = await pedir('/rest/v1/groups', {
       metodo: 'POST',
       cuerpo: { name: 'Grupo de prueba (carga)', owner_id: proveedor.id },
       prefer: 'return=representation',
     });
-    grupoId = creado.dato?.[0]?.id;
-    if (!grupoId) throw new Error(`no se pudo crear el grupo de prueba: ${creado.error}`);
-    for (const u of usuarios) {
+    ESTADO.grupoId = creado.dato?.[0]?.id;
+    if (!ESTADO.grupoId) throw new Error(`no se pudo crear el grupo de prueba: ${creado.error}`);
+    for (const u of ESTADO.usuarios) {
       await pedir('/rest/v1/group_members', {
         metodo: 'POST',
-        cuerpo: { group_id: grupoId, user_id: u.id, role: u.esProveedor ? 'owner' : 'member' },
+        cuerpo: { group_id: ESTADO.grupoId, user_id: u.id, role: u.esProveedor ? 'owner' : 'member' },
       });
     }
     const tokens = new Map();
-    for (const u of usuarios) tokens.set(u.id, await entrar(u));
+    for (const u of ESTADO.usuarios) tokens.set(u.id, await entrar(u));
     const tokenProveedor = tokens.get(proveedor.id);
-    linea(`   Grupo de prueba creado y ${usuarios.length} integrantes dentro.`);
+    linea(`   Grupo de prueba creado y ${ESTADO.usuarios.length} integrantes dentro.`);
 
     // Un aviso de referencia para saber cuáles son de la prueba.
     const antes = await pedir('/rest/v1/avisos_cola?select=id&order=id.desc&limit=1');
-    avisoIdInicial = antes.dato?.[0]?.id ?? 0;
+    ESTADO.avisoIdInicial = antes.dato?.[0]?.id ?? 0;
 
     // ------------------------------------------------------------------ fase 1: servicios
     titulo(`2) Creando servicios (20 por minuto durante ${MINUTOS} min)`);
@@ -253,7 +307,7 @@ async function principal() {
         prefer: 'return=representation',
         cuerpo: {
           provider_id: proveedor.id,
-          group_id: grupoId,
+          group_id: ESTADO.grupoId,
           title: `Prueba de carga ${i + 1} — San Isidro a Callao`,
           origin_address: 'Av. Prueba 100, San Isidro',
           destination_address: 'Av. Prueba 200, Callao',
@@ -264,12 +318,12 @@ async function principal() {
       tiemposServicios.apunta(servicio.ms, servicio.error);
       const id = servicio.dato?.[0]?.id;
       if (!id) continue;
-      serviciosCreados.push(id);
+      ESTADO.serviciosCreados.push(id);
       // La app también comparte el servicio al grupo (0018): es la segunda escritura real.
       const compartido = await pedir('/rest/v1/service_alert_groups', {
         metodo: 'POST',
         token: tokenProveedor,
-        cuerpo: { service_id: id, group_id: grupoId, posicion: 1 },
+        cuerpo: { service_id: id, group_id: ESTADO.grupoId, posicion: 1 },
       });
       tiemposCompartir.apunta(compartido.ms, compartido.error);
       process.stdout.write('.');
@@ -280,12 +334,12 @@ async function principal() {
 
     // ------------------------------------------------------------------ fase 2: postulaciones
     titulo(`3) Postulándose (30 por minuto durante ${MINUTOS} min)`);
-    const conductores = usuarios.filter((u) => !u.esProveedor);
+    const conductores = ESTADO.usuarios.filter((u) => !u.esProveedor);
     const cuantasPostulaciones = 30 * MINUTOS;
     for (let i = 0; i < cuantasPostulaciones; i += 1) {
       const momento = Date.now() + (i * 60000) / 30;
       await esperarHasta(momento);
-      const servicio = serviciosCreados[i % serviciosCreados.length];
+      const servicio = ESTADO.serviciosCreados[i % ESTADO.serviciosCreados.length];
       const conductor = conductores[i % conductores.length];
       if (!servicio || !conductor) break;
       // La app, antes de postular, MIRA el estado real (2 lecturas) y después hace el upsert:
@@ -330,7 +384,7 @@ async function principal() {
       tiemposLecturas.set(nombre, new Tiempos(nombre));
     }
     const finLectura = Date.now() + SEGUNDOS_LECTURA * 1000;
-    const telefonos = usuarios.slice(0, TELEFONOS);
+    const telefonos = ESTADO.usuarios.slice(0, TELEFONOS);
     await Promise.all(
       telefonos.map(async (u) => {
         const token = tokens.get(u.id);
@@ -380,7 +434,7 @@ async function principal() {
     // ------------------------------------------------------------------ avisos
     titulo('5) Los avisos al teléfono que generó la prueba');
     const despues = await pedir(
-      `/rest/v1/avisos_cola?select=id,enviado_at&id=gt.${avisoIdInicial}`
+      `/rest/v1/avisos_cola?select=id,enviado_at&id=gt.${ESTADO.avisoIdInicial}`
     );
     const pendientes = (despues.dato || []).filter((a) => !a.enviado_at).length;
     linea(`   ${(despues.dato || []).length} avisos apuntados en la cola · ${pendientes} sin enviar todavía`);
@@ -390,28 +444,7 @@ async function principal() {
   } finally {
     // ------------------------------------------------------------------ limpieza
     titulo('6) Limpieza (se borra TODO lo de la prueba)');
-    for (const id of serviciosCreados) {
-      await pedir(`/rest/v1/service_alerts?id=eq.${id}`, { metodo: 'DELETE' });
-    }
-    linea(`   ${serviciosCreados.length} servicios de prueba borrados (con sus postulaciones).`);
-    if (avisoIdInicial >= 0) {
-      const idsUsuarios = usuarios.map((u) => u.id);
-      if (idsUsuarios.length) {
-        await pedir(
-          `/rest/v1/avisos_cola?id=gt.${avisoIdInicial}&destinatarios=cs.{${idsUsuarios.join(',')}}`,
-          { metodo: 'DELETE' }
-        );
-        linea('   avisos de la prueba borrados.');
-      }
-    }
-    if (grupoId) {
-      await pedir(`/rest/v1/groups?id=eq.${grupoId}`, { metodo: 'DELETE' });
-      linea('   grupo de prueba borrado.');
-    }
-    for (const u of usuarios) {
-      await pedir(`/auth/v1/admin/users/${u.id}`, { metodo: 'DELETE' });
-    }
-    linea(`   ${usuarios.length} usuarios de prueba borrados.`);
+    await limpiar(ESTADO);
 
     titulo('Cómo leer los números');
     linea('   - Mediana y p95 bajos (< 300 ms) con 0 fallos: ese ritmo lo aguanta con holgura.');
@@ -419,5 +452,20 @@ async function principal() {
     linea('   - La fase 4 es la que más pesa: cada app abierta pide 6 veces cada 15 s.');
   }
 }
+
+// Ctrl+C a media prueba: se avisa y se deja el proceso al `finally`, que limpia.
+const ESTADO = { serviciosCreados: [], usuarios: [], grupoId: null, avisoIdInicial: -1, limpiando: false };
+
+process.on('SIGINT', async () => {
+  if (ESTADO.limpiando) process.exit(1);
+  ESTADO.limpiando = true;
+  linea('\n\nParada a mano (Ctrl+C): limpiando lo creado…');
+  try {
+    await limpiar(ESTADO);
+  } catch {
+    linea('   (no se pudo limpiar del todo: vuelve a lanzar con --limpiar)');
+  }
+  process.exit(0);
+});
 
 principal();
