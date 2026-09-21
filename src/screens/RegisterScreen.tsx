@@ -96,7 +96,9 @@ export function RegisterScreen() {
           onPress={handleSend}
           disabled={loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'enviando...' : 'enviar'}</Text>
+          {/* El texto va como en los demás botones de la app: en mayúscula inicial y en negrita
+              (antes era «enviar», en minúscula y sin negrita). Pedido del usuario, 20-09-2026. */}
+          <Text style={styles.buttonText}>{loading ? 'Enviando...' : 'Enviar'}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -158,7 +160,9 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 15,
+    // Igual que los botones de Guardar/Crear/Aceptar del resto de la app.
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   errorText: {
     color: '#FF8A80',

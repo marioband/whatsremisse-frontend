@@ -8,6 +8,7 @@ import {
   Text,
   TextStyle,
   TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { VisorDeFoto } from './VisorDeFoto';
@@ -84,12 +85,43 @@ export function ContenidoDelMensaje({
     );
   }
 
+  if (tipo === 'CONTACT') {
+    const nombre = ((metadata?.nombre as string) || '').trim();
+    const telefono = ((metadata?.telefono as string) || '').trim();
+    // Los mensajes de contacto que se mandaron ANTES (20-09-2026) solo llevan el texto «👤 Contacto»
+    // y ningún dato: se pintan como texto, como se veían, y no como una tarjeta vacía.
+    if (!nombre && !telefono) return <Text style={estiloTexto}>{contenido}</Text>;
+    const llamar = () => {
+      const url = `tel:${telefono.replace(/[^\d+]/g, '')}`;
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Un enlace `tel:` entrega la llamada al teléfono sin descargar la app (igual que el mapa).
+        window.location.href = url;
+        return;
+      }
+      Linking.openURL(url).catch(() => undefined);
+    };
+    return (
+      <View style={styles.contacto}>
+        <Text style={estiloTexto}>👤 {nombre || telefono}</Text>
+        {!!telefono && (
+          <TouchableOpacity onPress={llamar} activeOpacity={0.8}>
+            <Text style={[styles.locationLink, colorDelEnlace ? { color: colorDelEnlace } : null]}>
+              {telefono}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
   return <Text style={estiloTexto}>{contenido}</Text>;
 }
 
 const styles = StyleSheet.create({
   /** La foto ocupa el ancho disponible de la burbuja (el alto lo decide el navegador). */
   photo: { width: 210, height: 158, borderRadius: 10, backgroundColor: '#E4E6EF' },
+  /** La tarjeta del contacto compartido: el nombre y, debajo, el teléfono que se puede tocar. */
+  contacto: { maxWidth: 240 },
   locationLink: {
     fontSize: 12,
     fontWeight: '600',

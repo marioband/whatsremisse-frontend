@@ -24,8 +24,17 @@ export function GroupMembersScreen() {
   const navigation = useNavigation<MembersNav>();
   const route = useRoute<MembersRoute>();
   const { groupId, groupName } = route.params;
-  const { role, groups, members, updateMemberRole, removeMember, loadGroupMembers, reloadGroups } =
-    useMockStore();
+  const {
+    role,
+    groups,
+    members,
+    updateMemberRole,
+    removeMember,
+    loadGroupMembers,
+    reloadGroups,
+    eliminarGrupo,
+    setRole,
+  } = useMockStore();
   const { session } = useAuth();
 
   // Rol del usuario en ESTE grupo: el creador (groups.owner_id) siempre es owner;
@@ -70,6 +79,36 @@ export function GroupMembersScreen() {
         'No se pudo guardar el silencio del grupo. Comprueba tu conexión e inténtalo otra vez.'
       );
     }
+  };
+
+  /**
+   * Eliminar el grupo (pedido del usuario, 20-09-2026: «agregar opción de Eliminar grupo al
+   * ingresar a ajustes del grupo»).
+   *
+   * Solo su CREADOR: es lo que permite la política de `groups` (0002, «Owners manage groups»), así
+   * que a un admin no se le enseña un botón que la base rechazaría. Se confirma una vez (es
+   * irreversible) y se avisa de todo lo que se lleva por delante, porque la base lo borra en
+   * cascada: integrantes, mensajes, lecturas y los servicios compartidos a ese grupo.
+   */
+  const handleEliminarGrupo = () => {
+    Alert.alert(
+      'Eliminar grupo',
+      `¿Seguro que deseas eliminar «${groupName}»? También se borrarán sus integrantes y todos sus mensajes. Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            const borrado = await eliminarGrupo(groupId);
+            // Si la base no lo borró, el aviso con el motivo ya se mostró: el grupo sigue ahí.
+            if (!borrado) return;
+            setRole('GROUP_OWNER');
+            navigation.navigate('Main');
+          },
+        },
+      ]
+    );
   };
 
   // Orden pedido: propietario, luego los administradores que él asignó y al
@@ -226,6 +265,23 @@ export function GroupMembersScreen() {
           Solo el propietario o un administrador del grupo pueden agregar integrantes
         </Text>
       )}
+
+      {/* Eliminar el grupo: solo para su creador (es quien puede, según la política de la base). */}
+      {viewerGroupRole === 'owner' && (
+        <View style={styles.zonaDeEliminar}>
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={handleEliminarGrupo}
+            accessibilityLabel="Eliminar grupo"
+          >
+            <Text style={styles.deleteBtnText}>Eliminar grupo</Text>
+          </TouchableOpacity>
+          <Text style={styles.deleteNota}>
+            Solo el creador puede eliminar el grupo. Se borran también sus integrantes y sus
+            mensajes.
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -322,6 +378,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#888',
     marginTop: 40,
+  },
+  zonaDeEliminar: {
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+  },
+  deleteBtn: {
+    borderWidth: 1,
+    borderColor: ROJO_ACCION,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  deleteBtnText: {
+    color: ROJO_ACCION,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  deleteNota: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#777',
+    textAlign: 'center',
   },
   memberNote: {
     position: 'absolute',

@@ -20,6 +20,7 @@ import { ServiceCard } from '../components/ServiceCard';
 import { SwipeStatusButton } from '../components/SwipeStatusButton';
 import {
   ChatHeader,
+  CompartirContacto,
   EvaluationBar,
   MessageList,
   PagoDelServicio,
@@ -47,6 +48,8 @@ import { marcarAvisoPropio } from '../lib/avisos';
 import { AZUL } from '../lib/colors';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import { urlDeLaConversacion } from '../lib/conversacionVista';
+import { textoDelContacto } from '../lib/contactosDelTelefono';
+import { destinoDeVuelta } from '../lib/volverDelChat';
 import {
   datosDePagoDelConductor,
   datosDePagoDelProveedor,
@@ -317,6 +320,9 @@ export function ChatScreen() {
    * nombres/apellidos y saca DNI, marca, modelo, color y placa.
    */
   const [perfilDelConductor, setPerfilDelConductor] = useState<DatosPublicos | null>(null);
+
+  /** La ventana de «Compartir un contacto» (20-09-2026). */
+  const [compartirContacto, setCompartirContacto] = useState(false);
 
   useEffect(() => {
     if (!isProvider || !effectiveDriverId) return;
@@ -872,7 +878,7 @@ export function ChatScreen() {
 
   const handleSend = (
     content: string,
-    type: 'TEXT' | 'VOICE' | 'PHOTO' | 'LOCATION' = 'TEXT',
+    type: 'TEXT' | 'VOICE' | 'PHOTO' | 'LOCATION' | 'CONTACT' = 'TEXT',
     datosDelAdjunto: Record<string, unknown> = {}
   ) => {
     const texto = content.trim();
@@ -940,7 +946,10 @@ export function ChatScreen() {
     if (adjuntoEnCurso) return;
 
     if (type === 'contact') {
-      handleSend('👤 Contacto', 'TEXT');
+      // Se abre la ventana de compartir un contacto (lista del teléfono donde el navegador lo
+      // permita, o a mano). Antes esto mandaba un mensaje que solo decía «👤 Contacto», sin datos:
+      // el usuario lo reportó el 20-09-2026 («el botón de contacto no funciona»).
+      setCompartirContacto(true);
       return;
     }
 
@@ -1258,7 +1267,16 @@ export function ChatScreen() {
       navigation.navigate('Main');
       return;
     }
-    navigation.goBack();
+    // El chat de servicio también tiene dirección propia (`/chat/<id>`): si el navegador recarga
+    // la app estando aquí (al volver de Google Maps, iOS descarga la pestaña), esta conversación es
+    // la ÚNICA pantalla y `goBack()` no tiene a dónde ir —la flecha queda muerta, el mismo fallo
+    // que el usuario reportó en el chat de grupo (20-09-2026)—. Sin historial se vuelve al inicio.
+    const destino = destinoDeVuelta(navigation.canGoBack(), 'servicio');
+    if (destino === 'atras') {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('Main');
   };
 
   return (
@@ -1405,6 +1423,18 @@ export function ChatScreen() {
           )}
         </SafeAreaView>
       </KeyboardAvoidingView>
+      {/* Compartir un contacto: se abre desde la bandeja de adjuntos. */}
+      <CompartirContacto
+        visible={compartirContacto}
+        onCerrar={() => setCompartirContacto(false)}
+        onEnviar={(contacto) => {
+          setCompartirContacto(false);
+          handleSend(textoDelContacto(contacto), 'CONTACT', {
+            nombre: contacto.nombre,
+            telefono: contacto.telefono,
+          });
+        }}
+      />
     </SafeAreaView>
   );
 }

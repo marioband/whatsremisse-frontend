@@ -20,9 +20,12 @@ import {
   ICONO_CORAZON_LLENO_AZUL,
   ICONO_GRUPOS_AZUL,
 } from '../components/Icono';
+import { CompartirContacto } from '../components/chat/CompartirContacto';
 import { ContenidoDelMensaje } from '../components/chat/ContenidoDelMensaje';
 import { DELAY_PULSACION_LARGA_MS } from '../components/chat/MessageList';
 import { Palomas } from '../components/chat/Palomas';
+import { destinoDeVuelta } from '../lib/volverDelChat';
+import { textoDelContacto } from '../lib/contactosDelTelefono';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useConversacionVista } from '../hooks/useConversacionVista';
@@ -92,7 +95,10 @@ export function GroupChatScreen() {
   // ya se está leyendo; al minimizar la app la marca se borra y el aviso vuelve.
   useConversacionVista(urlDeLaConversacion('grupo', groupId));
   const { session } = useAuth();
-  const { members, loadGroupMembers, groups, toggleFavoriteGroup } = useMockStore();
+  const { members, loadGroupMembers, groups, toggleFavoriteGroup, setRole } = useMockStore();
+
+  /** La ventana de «Compartir un contacto» (20-09-2026). */
+  const [compartirContacto, setCompartirContacto] = useState(false);
 
   /**
    * ¿Este grupo es favorito mío? El corazón de la cabecera lo enciende y lo apaga (venía de la
@@ -390,8 +396,10 @@ export function GroupChatScreen() {
     if (!userId || adjuntoEnCurso) return;
 
     if (type === 'contact') {
-      const msg = await guardarMensaje('👤 Contacto', 'CONTACT');
-      if (msg) setMessages((prev) => [...prev, msg]);
+      // Se abre la ventana de compartir un contacto (la lista del teléfono donde el navegador lo
+      // permita, o a mano). Antes mandaba un mensaje que solo decía «👤 Contacto», sin ningún dato
+      // (reporte del usuario, 20-09-2026: «el botón de contacto no funciona»).
+      setCompartirContacto(true);
       return;
     }
 
@@ -624,6 +632,25 @@ export function GroupChatScreen() {
   // Con el teclado abierto, la barra de escribir no lleva hueco inferior: va pegada a él.
   const tecladoAbierto = useTecladoAbierto();
 
+  /**
+   * La flecha de atrás NUNCA puede quedar muerta.
+   *
+   * El chat de grupo tiene dirección propia (`/grupo/<id>`): si el navegador recarga la app estando
+   * aquí —pasa al volver de Google Maps, porque iOS descarga la pestaña— la app arranca con esta
+   * conversación como única pantalla y `goBack()` no tiene a dónde ir (reporte del usuario,
+   * 20-09-2026: «al regresar a la pantalla del chat del grupo, ya no puedo seleccionar el botón
+   * atrás»). Sin historial, se vuelve a «Mis grupos».
+   */
+  const volverAtras = () => {
+    const destino = destinoDeVuelta(navigation.canGoBack(), 'grupo');
+    if (destino === 'atras') {
+      navigation.goBack();
+      return;
+    }
+    setRole('GROUP_OWNER');
+    navigation.navigate('Main');
+  };
+
   return (
     <SafeAreaView style={[styles.container, styles.sinInsetInferior]}>
       <KeyboardAvoidingView
@@ -633,7 +660,7 @@ export function GroupChatScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={volverAtras} accessibilityLabel="Volver">
             <Text style={styles.headerArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -705,6 +732,20 @@ export function GroupChatScreen() {
           />
         </SafeAreaView>
       </KeyboardAvoidingView>
+
+      {/* Compartir un contacto: se abre desde la bandeja de adjuntos. */}
+      <CompartirContacto
+        visible={compartirContacto}
+        onCerrar={() => setCompartirContacto(false)}
+        onEnviar={async (contacto) => {
+          setCompartirContacto(false);
+          const msg = await guardarMensaje(textoDelContacto(contacto), 'CONTACT', {
+            nombre: contacto.nombre,
+            telefono: contacto.telefono,
+          });
+          if (msg) setMessages((prev) => [...prev, msg]);
+        }}
+      />
     </SafeAreaView>
   );
 }

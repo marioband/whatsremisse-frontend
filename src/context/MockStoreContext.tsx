@@ -44,6 +44,7 @@ import {
   rejectApplicationInDb,
   rejectApplicationFromDb,
   removeGroupMember,
+  deleteGroup,
   saveProfileData,
   updateApplication,
   updateGroupMember,
@@ -215,6 +216,7 @@ type MockAction =
       payload: { groupId: string; memberId: string; role: 'owner' | 'admin' | 'member' };
     }
   | { type: 'REMOVE_MEMBER'; payload: { groupId: string; memberId: string } }
+  | { type: 'REMOVE_GROUP'; payload: { groupId: string } }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile }
   | { type: 'START_PROVIDER_CHAT'; payload: { serviceId: string; driverId: string } }
   | { type: 'MARK_DRIVER_SEEN_CHAT'; payload: { serviceId: string; driverId: string } };
@@ -542,6 +544,16 @@ function mockReducer(state: MockState, action: MockAction): MockState {
         },
       };
 
+    case 'REMOVE_GROUP': {
+      // El grupo se va con sus integrantes y su conversación (la base los borra en cascada).
+      const { [action.payload.groupId]: _fuera, ...membersRestantes } = state.members;
+      return {
+        ...state,
+        groups: state.groups.filter((g) => g.id !== action.payload.groupId),
+        members: membersRestantes,
+      };
+    }
+
     case 'SET_USER_PROFILE':
       return { ...state, userProfile: action.payload };
 
@@ -631,6 +643,8 @@ interface MockContextValue extends MockState {
   confirmarPagoRecibido: (serviceId: string) => Promise<boolean>;
   toggleFavoriteGroup: (groupId: string) => void;
   addGroup: (group: GroupItem) => Promise<void>;
+  /** Elimina el grupo entero (solo su creador). Devuelve false si la base no lo borró. */
+  eliminarGrupo: (groupId: string) => Promise<boolean>;
   addMember: (member: GroupMember) => void;
   updateMemberRole: (groupId: string, memberId: string, role: 'owner' | 'admin' | 'member') => void;
   /** Devuelve false si la base no confirmó el borrado (para no navegar como si hubiera funcionado). */
@@ -1551,6 +1565,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('[MockStore] addGroup error:', err);
         throw err;
+      }
+    },
+    eliminarGrupo: async (groupId) => {
+      try {
+        await deleteGroup(groupId);
+        dispatch({ type: 'REMOVE_GROUP', payload: { groupId } });
+        return true;
+      } catch (err) {
+        // No se dice «eliminado» si la base no lo borró: se explica el motivo (creador,
+        // permisos, conexión) y el grupo sigue en la lista.
+        Alert.alert('No se pudo eliminar el grupo', textoDeErrorParaElUsuario(err));
+        return false;
       }
     },
     addMember: async (member) => {

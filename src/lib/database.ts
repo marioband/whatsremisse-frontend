@@ -1366,6 +1366,26 @@ async function sigueLaFila(groupId: string, userId: string): Promise<boolean> {
  *
  * Si esa RPC no está instalada, cae al DELETE directo con verificación.
  */
+/**
+ * Elimina un grupo ENTERO (solo su creador).
+ *
+ * Las claves foráneas cuelgan con `ON DELETE CASCADE` (integrantes, mensajes, lecturas y los
+ * servicios compartidos a ese grupo: 0002, 0018 y 0020), así que borrar la fila del grupo se lleva
+ * el resto. Con RLS, un DELETE sin permiso NO es un error: PostgREST responde 204 sin borrar nada.
+ * Por eso se pide de vuelta el id: si no vuelve, se dice el motivo en vez de fingir que se borró
+ * (mismo criterio que en el resto del archivo).
+ */
+export async function deleteGroup(groupId: string): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.from('groups').delete().eq('id', groupId).select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      'La base no eliminó el grupo. Solo su creador puede eliminarlo (política de borrado de groups).'
+    );
+  }
+}
+
 export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
   if (!isSupabaseConfigured) return;
 

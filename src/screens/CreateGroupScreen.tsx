@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
@@ -231,6 +232,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     paddingVertical: 8,
+    // El recuadro negro al tocar el campo era el contorno de foco del navegador (reportado por el
+    // usuario, 20-09-2026). Misma regla que en Busqueda/ChatInputBar; en nativo no existe.
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
   },
   pista: {
     marginTop: 12,

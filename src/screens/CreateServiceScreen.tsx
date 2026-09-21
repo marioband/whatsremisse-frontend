@@ -74,7 +74,8 @@ const LIGHT_BG = '#FFFFFF';
 const OSCURO = '#2D2D2D';
 const ROJO_ACCION = '#C2333F';
 
-const PAYMENT_TYPES = ['BCP', 'Yape', 'Plin', 'Efectivo', 'Otro'];
+// Interbank entra entre BCP y Yape (pedido del usuario, 20-09-2026). El orden manda en la fila.
+const PAYMENT_TYPES = ['BCP', 'Interbank', 'Yape', 'Plin', 'Efectivo', 'Otro'];
 const PAYMENT_DATES = ['Al término', 'Durante el día', 'Mañana', 'Escribir'];
 /** Momento del servicio: "Al momento" es el default; la hora específica abre el reloj. */
 const MOMENTOS_DEL_SERVICIO = ['Al momento', 'Hora específica'];

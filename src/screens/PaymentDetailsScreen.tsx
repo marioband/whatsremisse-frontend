@@ -9,6 +9,7 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
+  Platform,
 } from 'react-native';
 
 import { useMockStore } from '../context/MockStoreContext';
@@ -122,6 +123,24 @@ export function PaymentDetailsScreen() {
     }
   };
 
+  /**
+   * La flecha de atrás.
+   *
+   * En el PRIMER REGISTRO esta pantalla sustituyó a «datos personales» (`ProfileSetupScreen` hace
+   * `replace`), así que no hay nada detrás y la flecha no hacía nada: el usuario lo reportó el
+   * 20-09-2026 («hay una flecha que se entiende que es para regresar a la pantalla de datos
+   * personales, pero no tiene función»). Aquí vuelve a datos personales.
+   *
+   * Ya dentro de la app (Cuenta → Datos de pago) sí hay historial: vuelve a Cuenta, como siempre.
+   */
+  const volver = () => {
+    if (fromOnboarding) {
+      navigation.replace('ProfileSetup');
+      return;
+    }
+    navigation.goBack();
+  };
+
   /** Fila de botones (mismo dibujo que el «Tipo de pago» de Nuevo servicio). */
   const botones = <Opcion extends string>(
     opciones: readonly Opcion[],
@@ -148,7 +167,7 @@ export function PaymentDetailsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={volver} accessibilityLabel="Volver">
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Datos de pago</Text>
@@ -300,6 +319,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: '#111',
+    // En web el navegador dibuja su recuadro de foco (outline) al tocar el campo: la app no lo
+    // quiere (misma regla que en Busqueda y ChatInputBar). En nativo no existe.
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
   },
   saveButton: {
     backgroundColor: BLUE,
