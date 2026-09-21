@@ -20,7 +20,7 @@ import { useFilasDeslizantes } from '../hooks/useFilasDeslizantes';
 import { useRealtimeMisGrupos } from '../hooks/useRealtimeMisGrupos';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
 import { TEXTO_SUAVE } from '../lib/colors';
-import { fetchGruposSinLeer, fetchUltimoMensajePorGrupo } from '../lib/database';
+import { fetchUltimoMensajePorGrupo } from '../lib/database';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -36,7 +36,7 @@ const MARGEN_ENTRE_TARJETAS = 12;
 
 export function MyGroupsScreen() {
   const navigation = useNavigation<GroupsNav>();
-  const { groups } = useMockStore();
+  const { groups, sinLeerDeGrupos: sinLeer, refrescarSinLeer } = useMockStore();
   const { session } = useAuth();
   const miId = session?.user?.id ?? null;
 
@@ -55,7 +55,9 @@ export function MyGroupsScreen() {
    * que se abrió el chat del grupo, sin contar lo propio. Se recarga cada vez que la pantalla
    * vuelve al frente, que es cuando puede haber cambiado.
    */
-  const [sinLeer, setSinLeer] = useState<Record<string, number>>({});
+  // El mapa vive en el almacén (`sinLeerDeGrupos`, de `grupos_sin_leer`): así el número del botón
+  // «Mis grupos» —la suma de todos— y el globo de cada tarjeta salen del MISMO dato y no pueden
+  // contradecirse (20-09-2026).
 
   /**
    * Cuándo llegó el último mensaje de cada grupo (`grupos_ultimo_mensaje`, 0036). Es lo que
@@ -65,13 +67,11 @@ export function MyGroupsScreen() {
   const [ultimoMensaje, setUltimoMensaje] = useState<Record<string, number>>({});
 
   const cargarDatosDeLosGrupos = useCallback(() => {
-    void fetchGruposSinLeer()
-      .then(setSinLeer)
-      .catch(() => undefined);
+    void refrescarSinLeer();
     void fetchUltimoMensajePorGrupo()
       .then(setUltimoMensaje)
       .catch(() => undefined);
-  }, []);
+  }, [refrescarSinLeer]);
 
   useFocusEffect(cargarDatosDeLosGrupos);
 

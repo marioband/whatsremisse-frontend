@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 
 import { Icono, ICONO_AJUSTES } from './Icono';
+import { textoDelBoton } from '../lib/novedadesDelInicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type HeaderNav = StackNavigationProp<RootStackParamList, 'Main'>;
@@ -29,9 +30,21 @@ const ETIQUETA_DEL_TAB: Record<MainTab, string> = {
 interface MainHeaderProps {
   activeTab: MainTab;
   onTabChange: (tab: MainTab) => void;
+  /**
+   * Novedades sin ver de cada apartado (20-09-2026): van DENTRO del botón, al lado del texto
+   * («Conductor 12», «Mis grupos 14») en vez del globo rojo de la esquina. Cada uno es la suma de
+   * sus sub botones; «Mis grupos» es la suma de los mensajes sin leer de todos los grupos.
+   */
+  contadores?: { conductor: number; proveedor: number; misGrupos: number };
 }
 
-export function MainHeader({ activeTab, onTabChange }: MainHeaderProps) {
+const CLAVE_DE_CONTADOR: Record<MainTab, keyof NonNullable<MainHeaderProps['contadores']>> = {
+  Conductor: 'conductor',
+  Proveedor: 'proveedor',
+  'Mis Grupos': 'misGrupos',
+};
+
+export function MainHeader({ activeTab, onTabChange, contadores }: MainHeaderProps) {
   const navigation = useNavigation<HeaderNav>();
 
   return (
@@ -72,7 +85,9 @@ export function MainHeader({ activeTab, onTabChange }: MainHeaderProps) {
             onPress={() => onTabChange(tab)}
           >
             <Text style={[styles.roleTabText, activeTab === tab && styles.roleTabTextActive]}>
-              {ETIQUETA_DEL_TAB[tab]}
+              {/* El botón se ensancha solo con el número; la separación entre botones (el
+                  `marginRight` de `roleTab`) no se toca. */}
+              {textoDelBoton(ETIQUETA_DEL_TAB[tab], contadores?.[CLAVE_DE_CONTADOR[tab]] ?? 0)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -124,6 +139,10 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_BG,
     paddingHorizontal: 16,
     paddingBottom: 14,
+    // Con el número dentro, el botón se ensancha: si los tres no caben en una línea (números
+    // grandes y pantalla estrecha), pasan a la siguiente en vez de quedar cortados. La separación
+    // entre botones es la misma.
+    flexWrap: 'wrap',
   },
   roleTab: {
     paddingHorizontal: 16,

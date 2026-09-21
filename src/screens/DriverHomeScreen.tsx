@@ -29,6 +29,7 @@ import {
   AVISO_POSTULACION_CANCELADA,
 } from '../lib/deslizamientoDeLaTarjeta';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
+import { ApartadoDelInicio, textoDelBoton } from '../lib/novedadesDelInicio';
 import {
   guardarIniciosDelViaje,
   IniciosDelViaje,
@@ -37,7 +38,6 @@ import {
   yaInicio,
 } from '../lib/inicioDelViaje';
 import {
-  contarEnProceso,
   esAceptadoMio as esAceptadoMioDe,
   estadoEfectivoDeMiPostulacion,
   filaDeMiPostulacion,
@@ -60,7 +60,6 @@ type HomeNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
 
 const BLUE = '#3F51B5';
 const LIGHT_BG = '#FFFFFF';
-const BADGE_RED = '#C2333F';
 /** Cuánto se queda a la vista la tarjeta del rechazo recién llegado (3 segundos). */
 const VISTA_DE_RECHAZO_MS = 3000;
 
@@ -70,11 +69,18 @@ const VISTA_DE_RECHAZO_MS = 3000;
  */
 type StatusFilter = 'Disponibles' | 'En proceso';
 
+interface DriverHomeProps {
+  /** Novedades sin ver de cada apartado (las cuenta `useContadoresDelInicio`). */
+  novedades?: { disponibles: number; enProceso: number };
+  /** Tocar el botón de un apartado lo marca como visto: su número se apaga y baja el de arriba. */
+  alEntrarAlApartado?: (apartado: ApartadoDelInicio) => void;
+}
+
 const STATUS_FILTERS: StatusFilter[] = ['Disponibles', 'En proceso'];
 /** Separación entre tarjetas de servicio: el `marginBottom` de `ServiceCard` (12). */
 const MARGEN_ENTRE_TARJETAS = 12;
 
-export function DriverHomeScreen() {
+export function DriverHomeScreen({ novedades, alEntrarAlApartado }: DriverHomeProps = {}) {
   const navigation = useNavigation<HomeNav>();
   const { session, profile } = useAuth();
   const {
@@ -400,12 +406,6 @@ export function DriverHomeScreen() {
     ];
   }, [myActiveServices, applications, opcionesDelInicio]);
 
-  // Contadores para badges (misma condición que las listas de cada apartado)
-  const enProcesoCount = useMemo(
-    () => contarEnProceso(myActiveServices, opcionesDelInicio),
-    [myActiveServices, opcionesDelInicio]
-  );
-
   const handleCardPress = async (service: ServiceAlert) => {
     const application = getApplication(service.id);
     const notificationCount = getDriverNotification(service.id);
@@ -557,27 +557,27 @@ export function DriverHomeScreen() {
     MARGEN_ENTRE_TARJETAS
   );
 
-  const renderBadge = (count: number) => {
-    if (count <= 0) return null;
-    return (
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
-      </View>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Secondary filters */}
       <View style={styles.filterBar}>
         <View style={styles.statusPills}>
           {STATUS_FILTERS.map((status) => {
-            const count = status === 'En proceso' ? enProcesoCount : 0;
+            // El número son novedades sin ver (lo cuenta `useContadoresDelInicio`) y va DENTRO del
+            // botón, al lado del texto: «Disponibles 10», «En proceso 2» (pedido del usuario,
+            // 20-09-2026); antes era un globo rojo en la esquina. Al tocar el botón se apaga.
+            const numero =
+              status === 'En proceso' ? (novedades?.enProceso ?? 0) : (novedades?.disponibles ?? 0);
             return (
               <TouchableOpacity
                 key={status}
                 style={[styles.statusPill, activeStatus === status && styles.statusPillActive]}
-                onPress={() => setActiveStatus(status)}
+                onPress={() => {
+                  setActiveStatus(status);
+                  alEntrarAlApartado?.(
+                    status === 'En proceso' ? 'en-proceso-conductor' : 'disponibles'
+                  );
+                }}
               >
                 <Text
                   style={[
@@ -585,9 +585,8 @@ export function DriverHomeScreen() {
                     activeStatus === status && styles.statusPillTextActive,
                   ]}
                 >
-                  {status}
+                  {textoDelBoton(status, numero)}
                 </Text>
-                {renderBadge(count)}
               </TouchableOpacity>
             );
           })}
@@ -737,6 +736,8 @@ const styles = StyleSheet.create({
   },
   statusPills: {
     flexDirection: 'row',
+    // Igual que los botones de arriba: si con el número no caben, pasan a la línea de abajo.
+    flexWrap: 'wrap',
   },
   statusPill: {
     flexDirection: 'row',
@@ -758,23 +759,6 @@ const styles = StyleSheet.create({
   },
   statusPillTextActive: {
     color: '#fff',
-  },
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: BADGE_RED,
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   filterActions: {
     flexDirection: 'row',

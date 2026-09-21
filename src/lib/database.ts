@@ -2049,6 +2049,44 @@ export async function fetchGruposSinLeer(): Promise<Record<string, number>> {
   return cuenta;
 }
 
+/**
+ * Cuántos mensajes sin leer tiene cada conversación de SERVICIO, por `serviceId|driverId`.
+ *
+ * Sale de la función `servicios_sin_leer` (0040), el espejo de `grupos_sin_leer` para el chat de
+ * servicio: cuenta lo que llegó después de la última vez que ese usuario abrió la conversación
+ * (`service_chat_reads.last_read_at`, que escribe `marcarLecturaDelServicio`).
+ */
+export async function fetchServiciosSinLeer(): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured) return {};
+  const { data, error } = await supabase.rpc('servicios_sin_leer');
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) {
+      console.warn(
+        '[database] no hay contador de sin leer del chat de servicio: falta aplicar 0040_sin_leer_del_chat_de_servicio.sql'
+      );
+      return {};
+    }
+    throw error;
+  }
+  const cuenta: Record<string, number> = {};
+  for (const fila of (data ?? []) as {
+    service_id: string;
+    driver_id: string | null;
+    sin_leer: number | string;
+  }[]) {
+    const numero = Number(fila.sin_leer ?? 0);
+    if (fila.service_id && Number.isFinite(numero) && numero > 0) {
+      cuenta[claveDeSinLeer(fila.service_id, fila.driver_id || '')] = numero;
+    }
+  }
+  return cuenta;
+}
+
+/** La clave con la que se busca el contador de una conversación (servicio + conductor). */
+export function claveDeSinLeer(serviceId: string, driverId: string): string {
+  return `${serviceId}|${driverId}`;
+}
+
 /** Marca el chat del grupo como leído (el contador vuelve a cero). */
 export async function marcarGrupoLeido(groupId: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;

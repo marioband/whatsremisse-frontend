@@ -35,6 +35,8 @@ import {
   compartirServicioConGrupos as compartirServicioEnDb,
   fetchGruposDeServicios,
   fetchServicesForDriver,
+  fetchGruposSinLeer,
+  fetchServiciosSinLeer,
   fetchServicesForProvider,
   fetchServiceAlertById,
   postularAServicio,
@@ -170,6 +172,10 @@ export interface UserProfile {
 
 interface MockState {
   role: AppRole;
+  /** Mensajes sin leer por grupo (`grupos_sin_leer`, 0028). */
+  sinLeerDeGrupos: Record<string, number>;
+  /** Mensajes sin leer por conversación de servicio (`servicios_sin_leer`, 0040), clave `serviceId|driverId`. */
+  sinLeerDeServicios: Record<string, number>;
   services: ServiceAlert[];
   applications: Application[];
   chats: Record<string, Message[]>;
@@ -183,6 +189,10 @@ interface MockState {
 type MockAction =
   | { type: 'SET_ROLE'; payload: AppRole }
   | { type: 'SET_GROUPS'; payload: GroupItem[] }
+  | {
+      type: 'SET_SIN_LEER';
+      payload: { grupos: Record<string, number>; servicios: Record<string, number> };
+    }
   | { type: 'SET_MEMBERS'; payload: { groupId: string; members: GroupMember[] } }
   | { type: 'SET_SERVICES'; payload: ServiceAlert[] }
   | { type: 'SET_APPLICATIONS'; payload: Application[] }
@@ -226,6 +236,8 @@ const REFRESCO_MS = 15000;
 
 const initialState: MockState = {
   role: 'DRIVER',
+  sinLeerDeGrupos: {},
+  sinLeerDeServicios: {},
   services: [],
   applications: [],
   chats: {},
@@ -251,6 +263,13 @@ function mockReducer(state: MockState, action: MockAction): MockState {
           ...state.members,
           [action.payload.groupId]: action.payload.members,
         },
+      };
+
+    case 'SET_SIN_LEER':
+      return {
+        ...state,
+        sinLeerDeGrupos: action.payload.grupos,
+        sinLeerDeServicios: action.payload.servicios,
       };
 
     case 'SET_SERVICES':
@@ -649,6 +668,12 @@ interface MockContextValue extends MockState {
   updateMemberRole: (groupId: string, memberId: string, role: 'owner' | 'admin' | 'member') => void;
   /** Devuelve false si la base no confirmó el borrado (para no navegar como si hubiera funcionado). */
   removeMember: (groupId: string, memberId: string) => Promise<boolean>;
+  /**
+   * Relee SOLO los contadores de sin leer (grupos y conversaciones de servicio). Lo usan las
+   * pantallas que necesitan el número al instante —Mis grupos al volver y al llegar un mensaje en
+   * vivo— sin recargar toda la app.
+   */
+  refrescarSinLeer: () => Promise<void>;
   setUserProfile: (profile: UserProfile) => void;
   persistUserProfile: (profile: UserProfile) => Promise<void>;
   startProviderChat: (serviceId: string, driverId: string) => void;
@@ -800,6 +825,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       const postulaciones = [...applicationsByKey.values()];
       dispatch({ type: 'SET_APPLICATIONS', payload: postulaciones });
       guardarCache(claveDeCache('postulaciones', profile.id), postulaciones);
+
+      // Los contadores de sin leer (los números de los botones del inicio): los grupos desde la
+      // 0028 y las conversaciones de servicio desde la 0040. Si falta alguna migración, su mapa
+      // llega vacío y el contador de ese apartado se queda en las novedades de las tarjetas.
+      const [sinLeerDeGrupos, sinLeerDeServicios] = await Promise.all([
+        fetchGruposSinLeer(),
+        fetchServiciosSinLeer(),
+      ]);
+      dispatch({
+        type: 'SET_SIN_LEER',
+        payload: { grupos: sinLeerDeGrupos, servicios: sinLeerDeServicios },
+      });
     } catch (err) {
       console.error('[MockStore] Error loading from Supabase:', err);
     }
@@ -838,6 +875,20 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const refrescar = useCallback(() => {
     load();
   }, [load]);
+
+  /** Solo los contadores de sin leer (grupos + conversaciones de servicio). */
+  const refrescarSinLeer = useCallback(async () => {
+    if (!isSupabaseConfigured || !session?.user) return;
+    try {
+      const [grupos, servicios] = await Promise.all([
+        fetchGruposSinLeer(),
+        fetchServiciosSinLeer(),
+      ]);
+      dispatch({ type: 'SET_SIN_LEER', payload: { grupos, servicios } });
+    } catch (err) {
+      console.warn('[MockStore] no se pudieron releer los contadores de sin leer:', err);
+    }
+  }, [session?.user]);
 
   /**
    * Relectura de UNA fila. El conductor no puede enterarse del rechazo o de la
@@ -1448,6 +1499,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     setDebtThreshold: (amount) => dispatch({ type: 'SET_DEBT_THRESHOLD', payload: amount }),
     loadGroupMembers,
     reloadGroups,
+    refrescarSinLeer,
     refrescar,
     refrescarServicio,
     declararPago: async (serviceId, direccion, monto) => {

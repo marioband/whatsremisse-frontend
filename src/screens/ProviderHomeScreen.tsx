@@ -25,6 +25,7 @@ import {
   ordenarEnProceso,
 } from '../lib/apartadosDelInicio';
 import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
+import { ApartadoDelInicio, textoDelBoton } from '../lib/novedadesDelInicio';
 import { TEXTO_SUAVE } from '../lib/colors';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
@@ -49,6 +50,13 @@ const LIGHT_BG = '#FFFFFF';
  */
 type StatusFilter = 'Publicados' | 'En proceso';
 
+interface ProviderHomeProps {
+  /** Novedades sin ver de cada apartado (las cuenta `useContadoresDelInicio`). */
+  novedades?: { publicados: number; enProceso: number };
+  /** Tocar el botón de un apartado lo marca como visto: su número se apaga y baja el de arriba. */
+  alEntrarAlApartado?: (apartado: ApartadoDelInicio) => void;
+}
+
 const STATUS_FILTERS: StatusFilter[] = ['Publicados', 'En proceso'];
 
 /**
@@ -61,7 +69,7 @@ const STATUS_FILTERS: StatusFilter[] = ['Publicados', 'En proceso'];
  * usan la lista y el contador. Lo que sí se tomó sigue vivo hasta cerrar el pago.
  */
 
-export function ProviderHomeScreen() {
+export function ProviderHomeScreen({ novedades, alEntrarAlApartado }: ProviderHomeProps = {}) {
   const navigation = useNavigation<HomeNav>();
   const { session } = useAuth();
   const { services, applications, archiveService } = useMockStore();
@@ -90,14 +98,6 @@ export function ProviderHomeScreen() {
   const serviciosDelInicio = useMemo(
     () => listaDelProveedor(myProviderServices, { mostrarArchivados: showArchived }),
     [myProviderServices, showArchived]
-  );
-
-  // Contador de la píldora "En proceso": sale de la MISMA función que la lista, así que
-  // no puede contar una tarjeta que ya no se ve. Los asignados que esperan el toque
-  // "toca para iniciar" siguen contando en "Publicados".
-  const enProcesoCount = useMemo(
-    () => listaDelProveedor(myProviderServices).filter((s) => estaEnProcesoDelProveedor(s)).length,
-    [myProviderServices]
   );
 
   const serviciosDelApartado = useMemo(() => {
@@ -211,12 +211,21 @@ export function ProviderHomeScreen() {
       <View style={styles.filterBar}>
         <View style={styles.statusPills}>
           {STATUS_FILTERS.map((status) => {
-            const count = status === 'En proceso' ? enProcesoCount : 0;
+            // El número son novedades sin ver (lo cuenta `useContadoresDelInicio`) y va DENTRO del
+            // botón, al lado del texto: «Publicados 10», «En proceso 2» (pedido del usuario,
+            // 20-09-2026); antes era un globo rojo en la esquina. Al tocar el botón se apaga.
+            const numero =
+              status === 'En proceso' ? (novedades?.enProceso ?? 0) : (novedades?.publicados ?? 0);
             return (
               <TouchableOpacity
                 key={status}
                 style={[styles.statusPill, activeStatus === status && styles.statusPillActive]}
-                onPress={() => setActiveStatus(status)}
+                onPress={() => {
+                  setActiveStatus(status);
+                  alEntrarAlApartado?.(
+                    status === 'En proceso' ? 'en-proceso-proveedor' : 'publicados'
+                  );
+                }}
               >
                 <Text
                   style={[
@@ -224,13 +233,8 @@ export function ProviderHomeScreen() {
                     activeStatus === status && styles.statusPillTextActive,
                   ]}
                 >
-                  {status}
+                  {textoDelBoton(status, numero)}
                 </Text>
-                {status === 'En proceso' && count > 0 && (
-                  <View style={styles.tabBadge}>
-                    <Text style={styles.tabBadgeText}>{count > 99 ? '99+' : count}</Text>
-                  </View>
-                )}
               </TouchableOpacity>
             );
           })}
@@ -313,6 +317,8 @@ const styles = StyleSheet.create({
   },
   statusPills: {
     flexDirection: 'row',
+    // Igual que los botones de arriba: si con el número no caben, pasan a la línea de abajo.
+    flexWrap: 'wrap',
   },
   statusPill: {
     position: 'relative',
@@ -332,25 +338,6 @@ const styles = StyleSheet.create({
   },
   statusPillTextActive: {
     color: '#fff',
-  },
-  tabBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#C2333F',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  tabBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   filterActions: {
     flexDirection: 'row',
