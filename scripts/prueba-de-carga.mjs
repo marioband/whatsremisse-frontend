@@ -77,12 +77,34 @@ const MINUTOS = opcion('minutos', 2);
 const TELEFONOS = opcion('telefonos', 10);
 const SEGUNDOS_LECTURA = opcion('segundos-lectura', 30);
 
-/** Letra y barras para el informe. */
+// ---------------------------------------------------------------------------
+// Reloj de la corrida (22-09-2026)
+// ---------------------------------------------------------------------------
+// Las dos corridas reales (21 y 22-09) tardaron ~2 HORAS cuando el plan de este script son ~5 min, y
+// no había manera de saber dónde se iba el tiempo: solo se cronometraban las llamadas de la app
+// (crear / postular / leer). Las de preparar (altas de usuario, entrar, grupo) y las de BORRAR no se
+// medían, y son justo las que NO dependen de la app. Ahora cada sección dice en qué segundo empieza y
+// toda llamada que pase de 1 s deja su tiempo en el informe.
+const ARRANQUE = Date.now();
+const segundos = () => Math.round((Date.now() - ARRANQUE) / 1000);
+
+/** Letra y barras para el informe (con el segundo de la corrida, para ver dónde se va el tiempo). */
 const linea = (t = '') => console.log(t);
 const titulo = (t) => {
   linea('');
-  linea(`== ${t} ==`);
+  linea(`== ${t} ==   [t+${segundos()} s]`);
 };
+
+/** `pedir` dejando dicho cuánto tardó: es para las llamadas que antes NO se medían. */
+async function pedirConReloj(ruta, etiqueta, opciones) {
+  const antes = Date.now();
+  const r = await pedir(ruta, opciones);
+  const s = (Date.now() - antes) / 1000;
+  if (s > 1 || r.error) {
+    linea(`      [t+${segundos()} s] ${etiqueta}: ${s.toFixed(1)} s${r.error ? ` — ${r.error}` : ''}`);
+  }
+  return r;
+}
 
 /** Los tiempos de cada operación, para poder dar mediana/p95/peor. */
 class Tiempos {
@@ -130,6 +152,12 @@ async function intento(ruta, { metodo, cuerpo, cabecera, prefer }) {
       method: metodo,
       headers: cabeceras,
       body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+      // Sin tope, una llamada que se cuelga no deja rastro: se espera para siempre y la corrida se va
+      // en silencio (las 2 h del 22-09). Con esto, a los 2 min se cae y queda dicho en el informe.
+      signal:
+        typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+          ? AbortSignal.timeout(120000)
+          : undefined,
     });
     const texto = await respuesta.text();
     const ms = Date.now() - inicio;
@@ -198,7 +226,7 @@ function guardarSesion(usuario, sesion) {
 async function crearUsuario(indice) {
   const correo = `carga-${Date.now()}-${indice}@prueba.whatsremisse.tech`;
   const clave = `Carga${Date.now()}${indice}!`;
-  const alta = await pedir('/auth/v1/admin/users', {
+  const alta = await pedirConReloj('/auth/v1/admin/users', `alta del usuario de prueba ${indice + 1}`, {
     metodo: 'POST',
     cuerpo: { email: correo, password: clave, email_confirm: true },
   });
@@ -208,7 +236,7 @@ async function crearUsuario(indice) {
 
 /** Entra como ese usuario (el mismo camino que la app) y le deja la sesión guardada. */
 async function entrar(usuario) {
-  const entrada = await pedir('/auth/v1/token?grant_type=password', {
+  const entrada = await pedirConReloj('/auth/v1/token?grant_type=password', `entrar como ${usuario.correo}`, {
     metodo: 'POST',
     cuerpo: { email: usuario.correo, password: usuario.clave },
     token: CLAVE_PUBLICA,
@@ -226,24 +254,35 @@ const esperarHasta = (momento) =>
  * usuarios de prueba (con ellos caen sus perfiles, servicios, postulaciones y mensajes) y antes los
  * avisos que iban dirigidos a ellos, para que el programa de avisos no los reintente. */
 async function limpiar({ serviciosCreados = [], usuarios = [], grupoId = null, avisoIdInicial = -1 } = {}) {
+  const antesBorrado = Date.now();
   for (const id of serviciosCreados) {
-    await pedir(`/rest/v1/service_alerts?id=eq.${id}`, { metodo: 'DELETE' });
+    await pedirConReloj(`/rest/v1/service_alerts?id=eq.${id}`, 'borrar un servicio de prueba', {
+      metodo: 'DELETE',
+    });
   }
-  linea(`   ${serviciosCreados.length} servicios de prueba borrados (con sus postulaciones).`);
+  linea(
+    `   ${serviciosCreados.length} servicios de prueba borrados (con sus postulaciones): ` +
+      `${((Date.now() - antesBorrado) / 1000).toFixed(1)} s`
+  );
   const idsUsuarios = usuarios.map((u) => u.id);
   if (avisoIdInicial >= 0 && idsUsuarios.length) {
-    await pedir(
+    await pedirConReloj(
       `/rest/v1/avisos_cola?id=gt.${avisoIdInicial}&destinatarios=cs.{${idsUsuarios.join(',')}}`,
+      'borrar los avisos de prueba',
       { metodo: 'DELETE' }
     );
     linea('   avisos de la prueba borrados.');
   }
   if (grupoId) {
-    await pedir(`/rest/v1/groups?id=eq.${grupoId}`, { metodo: 'DELETE' });
+    await pedirConReloj(`/rest/v1/groups?id=eq.${grupoId}`, 'borrar el grupo de prueba', {
+      metodo: 'DELETE',
+    });
     linea('   grupo de prueba borrado.');
   }
   for (const u of usuarios) {
-    await pedir(`/auth/v1/admin/users/${u.id}`, { metodo: 'DELETE' });
+    await pedirConReloj(`/auth/v1/admin/users/${u.id}`, `borrar el usuario de prueba ${u.correo}`, {
+      metodo: 'DELETE',
+    });
   }
   linea(`   ${usuarios.length} usuarios de prueba borrados.`);
 }
@@ -312,23 +351,25 @@ async function principal() {
   try {
     // ------------------------------------------------------------------ preparación
     titulo('1) Preparación (usuarios y grupo de prueba)');
+    const antesPreparacion = Date.now();
     const cuantos = Math.max(2, TELEFONOS);
     for (let i = 0; i < cuantos; i += 1) ESTADO.usuarios.push(await crearUsuario(i));
     const proveedor = ESTADO.usuarios[0];
-    await pedir(`/rest/v1/profiles?id=eq.${proveedor.id}`, {
+    await pedirConReloj(`/rest/v1/profiles?id=eq.${proveedor.id}`, 'marcar el proveedor de prueba', {
       metodo: 'PATCH',
       cuerpo: { role: 'PROVIDER', full_name: 'Proveedor de prueba (carga)' },
     });
     ESTADO.usuarios[0].esProveedor = true;
     for (let i = 1; i < ESTADO.usuarios.length; i += 1) {
-      await pedir(`/rest/v1/profiles?id=eq.${ESTADO.usuarios[i].id}`, {
-        metodo: 'PATCH',
-        cuerpo: { role: 'DRIVER', full_name: `Conductor de prueba ${i}` },
-      });
+      await pedirConReloj(
+        `/rest/v1/profiles?id=eq.${ESTADO.usuarios[i].id}`,
+        `marcar al conductor de prueba ${i}`,
+        { metodo: 'PATCH', cuerpo: { role: 'DRIVER', full_name: `Conductor de prueba ${i}` } }
+      );
     }
     linea(`   ${ESTADO.usuarios.length} usuarios de prueba creados (el primero es el proveedor).`);
 
-    const creado = await pedir('/rest/v1/groups', {
+    const creado = await pedirConReloj('/rest/v1/groups', 'crear el grupo de prueba', {
       metodo: 'POST',
       cuerpo: { name: 'Grupo de prueba (carga)', owner_id: proveedor.id },
       prefer: 'return=representation',
@@ -336,13 +377,14 @@ async function principal() {
     ESTADO.grupoId = creado.dato?.[0]?.id;
     if (!ESTADO.grupoId) throw new Error(`no se pudo crear el grupo de prueba: ${creado.error}`);
     for (const u of ESTADO.usuarios) {
-      await pedir('/rest/v1/group_members', {
+      await pedirConReloj('/rest/v1/group_members', `meter al integrante ${u.correo}`, {
         metodo: 'POST',
         cuerpo: { group_id: ESTADO.grupoId, user_id: u.id, role: u.esProveedor ? 'owner' : 'member' },
       });
     }
     for (const u of ESTADO.usuarios) await entrar(u);
     linea(`   Grupo de prueba creado y ${ESTADO.usuarios.length} integrantes dentro.`);
+    linea(`   (preparación: ${((Date.now() - antesPreparacion) / 1000).toFixed(1)} s de las llamadas que antes no se medían)`);
 
     // Un aviso de referencia para saber cuáles son de la prueba.
     const antes = await pedir('/rest/v1/avisos_cola?select=id&order=id.desc&limit=1');
@@ -527,6 +569,8 @@ async function principal() {
     linea('   - Mediana y p95 bajos (< 300 ms) con 0 fallos: ese ritmo lo aguanta con holgura.');
     linea('   - p95 por encima de 1 s o fallos: ese ritmo empieza a apretar. Mirar `docker stats`.');
     linea('   - La fase 4 es la que más pesa: cada app abierta pide 6 veces cada 15 s.');
+    linea(`   - La corrida entera tardó ${segundos()} s: preparar y borrar las cuentas de prueba es lo`);
+    linea('     que NO depende de la app; si ahí salen minutos por llamada, el problema es del alta');
   }
 }
 
