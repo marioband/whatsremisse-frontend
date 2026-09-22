@@ -393,8 +393,14 @@ async function principal() {
     // ------------------------------------------------------------------ fase 1: servicios
     titulo(`2) Creando servicios (20 por minuto durante ${MINUTOS} min)`);
     const cuantosServicios = 20 * MINUTOS;
+    // El momento de cada servicio se cuenta desde el ARRANQUE de la fase, no desde «ahora»: así el
+    // ritmo es el pedido (20/min) y la fase dura los 2 min que dice. Con `Date.now()` dentro del
+    // bucle la espera se SUMABA (0 s, 3 s, 6 s, 9 s…) y esta fase sola tardaba 39 min en vez de 2:
+    // de ahí las corridas de 2 horas del 21 y el 22-09-2026, y de ahí también que se venciera el
+    // token de sesión a mitad (y salieran los 24 «JWT expired» de la primera corrida).
+    const arranqueDeLosServicios = Date.now();
     for (let i = 0; i < cuantosServicios; i += 1) {
-      const momento = Date.now() + (i * 60000) / 20;
+      const momento = arranqueDeLosServicios + (i * 60000) / 20;
       await esperarHasta(momento);
       const servicio = await pedir('/rest/v1/service_alerts', {
         metodo: 'POST',
@@ -432,8 +438,9 @@ async function principal() {
     titulo(`3) Postulándose (30 por minuto durante ${MINUTOS} min)`);
     const conductores = ESTADO.usuarios.filter((u) => !u.esProveedor);
     const cuantasPostulaciones = 30 * MINUTOS;
+    const arranqueDeLasPostulaciones = Date.now(); // mismo motivo que en la fase 2 (antes: 59 min por la suma)
     for (let i = 0; i < cuantasPostulaciones; i += 1) {
-      const momento = Date.now() + (i * 60000) / 30;
+      const momento = arranqueDeLasPostulaciones + (i * 60000) / 30;
       await esperarHasta(momento);
       const servicio = ESTADO.serviciosCreados[i % ESTADO.serviciosCreados.length];
       const conductor = conductores[i % conductores.length];
