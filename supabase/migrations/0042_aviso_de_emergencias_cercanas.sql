@@ -24,6 +24,18 @@
 -- grupo y además cerca recibe uno solo: el de emergencia, que es el texto correcto.
 --
 -- Se aplica con el rol DUEÑO (`supabase_admin`), después de la 0041.
+--
+-- ============================================
+-- OJO: LO QUE ESTA MIGRACIÓN NECESITA DE OTRAS (comprobado en producción el 21-09-2026)
+-- ============================================
+--   * `profiles.tier` y `profiles.subscription_expires_at` → los crea la **0008** (membresía).
+--   * `profiles.last_lat`, `last_lng`, `last_seen_at` y las funciones `publish_my_position` /
+--     `service_applicant_positions` → los crea la **0009** (posiciones).
+--
+-- En la base de producción esas dos migraciones VIEJAS nunca se aplicaron (la app funcionaba igual
+-- porque el premium se simula en el teléfono y las posiciones nunca se llegaron a publicar). Si
+-- esta migración falla con «column p.tier does not exist», NO es un fallo de esta migración: es el
+-- aviso de que hay que aplicar la 0008 y la 0009 ANTES. El rollback deja la base como estaba.
 
 BEGIN;
 
