@@ -447,6 +447,9 @@ async function principal() {
     }
     const finLectura = Date.now() + SEGUNDOS_LECTURA * 1000;
     const telefonos = ESTADO.usuarios.slice(0, TELEFONOS);
+    // Los servicios que publicó el proveedor de prueba: su teléfono los tiene ya cargados, así que
+    // pedir SUS postulaciones no añade ninguna consulta nueva al bucle (no se vuelve a pedir la lista).
+    const serviciosDelProveedor = ESTADO.serviciosCreados;
     await Promise.all(
       telefonos.map(async (u) => {
 
@@ -475,7 +478,13 @@ async function principal() {
           const mias = await pedir(`/rest/v1/applications?select=*&driver_id=eq.${u.id}`, { usuario: u });
           tiemposLecturas.get('mis postulaciones (applications)').apunta(mias.ms, mias.error);
 
-          const idsServicios = (asignados.dato || []).map((s) => s.id);
+          // «Postulaciones de mis servicios»: en la app la pide el PROVEEDOR sobre las alertas que
+          // publicó (`fetchApplicationsForProvider(serviceIds)`) y el conductor sobre las que tiene
+          // asignadas. Aquí solo se miraba lo ASIGNADO y, como en esta prueba nadie queda asignado,
+          // la línea salía «0 medidas» (22-09-2026): era un hueco del instrumento, no un cero de la app.
+          const idsServicios = u.esProveedor
+            ? serviciosDelProveedor
+            : (asignados.dato || []).map((s) => s.id);
           if (idsServicios.length) {
             const recibidas = await pedir(
               `/rest/v1/applications?select=*&service_id=in.(${idsServicios.join(',')})`,
