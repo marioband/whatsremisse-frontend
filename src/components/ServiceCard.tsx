@@ -198,6 +198,14 @@ export function ServiceCard({
             </Text>
           </View>
 
+          {/* 0041: si el proveedor lo marcó como emergencia, la tarjeta lo dice. Si no lo dijera,
+              el aviso del teléfono («Emergencia cerca») no cuadraría con lo que se ve al abrir. */}
+          {service.emergencia === true && (
+            <View style={styles.emergenciaBadge}>
+              <Text style={styles.emergenciaText}>⚡ Emergencia</Text>
+            </View>
+          )}
+
           {service.observations && service.observations.length > 0 && (
             <View style={styles.observationsRow}>
               {service.observations.map((obs, index) => (
@@ -396,6 +404,15 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 12,
   },
+  emergenciaBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FDECEA',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 6,
+  },
+  emergenciaText: { fontSize: 11, fontWeight: '700', color: '#B3261E' },
   observationsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

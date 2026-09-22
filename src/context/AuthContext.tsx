@@ -21,6 +21,11 @@ interface AuthContextValue {
   requestOtp: (phone: string) => Promise<void>;
   signIn: (phone: string, otp: string) => Promise<boolean>;
   completeProfileSetup: (updates?: Partial<Profile>) => Promise<void>;
+  /**
+   * Vuelve a leer el perfil de la base (0042: al activar las emergencias, el servidor tiene que
+   * ver la marca puesta; y la app, reflejarla). `loadProfile` ya hacía el trabajo.
+   */
+  refrescarPerfil: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -185,6 +190,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setRequiresProfileSetup(true);
     }
+  };
+
+  const refrescarPerfil = async () => {
+    const actual = session?.user?.id;
+    if (!actual) return;
+    await loadProfile(actual);
   };
 
   const requestOtp = async (inputPhone: string) => {
@@ -367,6 +378,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         requestOtp,
         signIn,
         completeProfileSetup,
+        refrescarPerfil,
         signOut,
       }}
     >

@@ -64,6 +64,11 @@ export interface Profile {
   billetera_nombre?: string | null;
   /** 0039: banco de los datos de pago (BCP, Interbank, Scotiabank o el nombre escrito). */
   banco_nombre?: string | null;
+  /**
+   * 0042: el conductor quiere recibir avisos de EMERGENCIAS cercanas de grupos que no integra.
+   * Vive en la base (no solo en el teléfono) porque el aviso lo manda el servidor.
+   */
+  recibir_emergencias?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +84,11 @@ export interface Group {
 
 export interface ServiceAlert {
   id: string;
+  /**
+   * El proveedor lo marcó como EMERGENCIA (0041): los conductores premium cercanos pueden verlo
+   * aunque no estén en sus grupos (ver `lib/emergencias.ts`).
+   */
+  emergencia?: boolean;
   provider_id: string;
   group_id: string;
   title: string;

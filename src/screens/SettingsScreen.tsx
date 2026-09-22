@@ -4,6 +4,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 
+import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
 import {
@@ -124,6 +125,35 @@ function BloqueDeAvisos() {
 export function SettingsScreen() {
   const navigation = useNavigation<SettingsNav>();
   const { userProfile } = useMockStore();
+  const { signOut } = useAuth();
+  const [saliendo, setSaliendo] = useState(false);
+
+  /**
+   * Cerrar sesión (el usuario preguntó el 21-09-2026: «¿cómo se cierra la sesión?»).
+   *
+   * La función existía desde el principio, pero NINGUNA pantalla la ofrecía: en el teléfono no
+   * había forma de salir de la cuenta. Va al final de Cuenta, en rojo y pidiendo confirmación —
+   * cerrar la sesión deja el teléfono listo para otra cuenta y borra lo guardado en él.
+   */
+  const cerrarSesion = async () => {
+    setSaliendo(true);
+    try {
+      await signOut();
+    } finally {
+      setSaliendo(false);
+    }
+  };
+
+  const confirmarCerrarSesion = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      'Se cerrará tu sesión en este teléfono y tendrás que volver a entrar con tu número. ¿Continuamos?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Cerrar sesión', style: 'destructive', onPress: () => void cerrarSesion() },
+      ]
+    );
+  };
 
   const fullName = userProfile
     ? `${userProfile.firstName} ${userProfile.lastName}`.trim()
@@ -209,6 +239,19 @@ export function SettingsScreen() {
 
         {/* Los avisos del teléfono (Web Push, migración 0028) */}
         <BloqueDeAvisos />
+
+        {/* Cerrar sesión: al final y en rojo, porque deja el teléfono listo para otra cuenta. */}
+        <TouchableOpacity
+          style={styles.cerrarSesion}
+          onPress={confirmarCerrarSesion}
+          disabled={saliendo}
+          activeOpacity={0.75}
+          accessibilityLabel="Cerrar sesión"
+        >
+          <Text style={styles.cerrarSesionTexto}>
+            {saliendo ? 'Cerrando sesión…' : 'Cerrar sesión'}
+          </Text>
+        </TouchableOpacity>
 
         {/* Diagnóstico de llamadas externas: solo en desarrollo */}
         {__DEV__ && (
@@ -351,6 +394,20 @@ const styles = StyleSheet.create({
     marginRight: 16,
     width: 28,
     textAlign: 'center',
+  },
+  cerrarSesion: {
+    marginHorizontal: 20,
+    marginTop: 22,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: ROJO_ACCION,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  cerrarSesionTexto: {
+    color: ROJO_ACCION,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   devItem: {
     flexDirection: 'row',

@@ -48,6 +48,89 @@ export const UNIDADES_POR_DEFECTO: readonly string[] = ['Auto', 'Camioneta', 'Ca
 /** La unidad que se supone cuando un perfil no declara ninguna. */
 export const UNIDAD_POR_DEFECTO = 'Auto';
 
+/**
+ * Las unidades de MENOR a MAYOR. Es la escala del filtro del conductor (pedido del usuario,
+ * 21-09-2026): «de acuerdo a la unidad que tiene, el usuario puede optar por elegir recibir alertas
+ * de unidades de menor dimensión». De aquí sale quién es «más grande que» quién.
+ */
+export const ESCALA_DE_UNIDADES: readonly string[] = [
+  'Auto compacto',
+  'Auto',
+  'Camioneta',
+  'Camioneta 3 filas',
+  'Minivan',
+  'Minibús',
+  'Bus',
+];
+
+/** Qué tan grande es una unidad (índice en la escala; -1 si no es de la lista). */
+export function tamanoDeUnidad(unidad: string): number {
+  return ESCALA_DE_UNIDADES.indexOf(unidad);
+}
+
+/** La unidad MÁS grande de un perfil: marca el techo de lo que puede recibir. */
+export function unidadMayor(unidades: readonly string[]): string | null {
+  let mayor: string | null = null;
+  for (const unidad of unidades) {
+    if (tamanoDeUnidad(unidad) > (mayor ? tamanoDeUnidad(mayor) : -1)) mayor = unidad;
+  }
+  return mayor;
+}
+
+/**
+ * Las unidades de las que SÍ puede recibir alertas: la suya y todas las menores.
+ *
+ * El usuario lo describió así: con una «Camioneta 3 filas» puede recibir además de `Auto compacto`,
+ * `Auto` y `Camioneta`; con una «Camioneta», `Auto compacto` y `Auto`; con un «Auto», `Auto
+ * compacto`; y con un «Auto compacto» no hay opciones (no puede llevar nada más pequeño).
+ */
+export function unidadesQuePuedeRecibir(misUnidades: readonly string[]): string[] {
+  const techo = unidadMayor(misUnidades);
+  if (!techo) return [];
+  const limite = tamanoDeUnidad(techo);
+  return ESCALA_DE_UNIDADES.filter((unidad) => tamanoDeUnidad(unidad) <= limite);
+}
+
+/** ¿Esta unidad es más GRANDE que el techo del conductor? (su botón va sombreado, no se puede marcar) */
+export function esUnidadMayorQueLaSuya(unidad: string, misUnidades: readonly string[]): boolean {
+  const techo = unidadMayor(misUnidades);
+  if (!techo) return false;
+  return tamanoDeUnidad(unidad) > tamanoDeUnidad(techo);
+}
+
+/**
+ * Las unidades con las que la app le muestra alertas: las SUYAS más las que marcó en el filtro.
+ * Es la única lista que usan la visibilidad del inicio y los contadores, para que no discrepen.
+ */
+export function tiposEfectivos(
+  propios: readonly string[],
+  extra: readonly string[] = []
+): string[] {
+  const techo = unidadMayor(propios);
+  // Solo se aceptan las extra que de verdad puede recibir: ni repetidas, ni más grandes que él.
+  const validas = extra.filter(
+    (unidad) =>
+      tamanoDeUnidad(unidad) >= 0 &&
+      propios.includes(unidad) === false &&
+      (!techo || tamanoDeUnidad(unidad) <= tamanoDeUnidad(techo))
+  );
+  return propios.concat(validas);
+}
+
+/** Dónde se guarda lo que el conductor marcó en «Recibir también alertas de unidades». */
+export const CLAVE_UNIDADES_EXTRA = 'unidades:extra';
+
+/** Las unidades extra marcadas en el filtro (vacío si no hay ninguna). */
+export async function leerUnidadesExtra(): Promise<string[]> {
+  const guardadas = await leerCache<string[]>(CLAVE_UNIDADES_EXTRA, VIGENCIA_DE_LA_PREFERENCIA_MS);
+  return normalizarUnidades(guardadas);
+}
+
+/** Guarda el filtro. Una lista vacía SÍ se guarda: significa «solo mis unidades». */
+export async function guardarUnidadesExtra(unidades: readonly string[]): Promise<void> {
+  await guardarCache(CLAVE_UNIDADES_EXTRA, normalizarUnidades(unidades));
+}
+
 /** Dónde se guarda la última selección del proveedor. */
 export const CLAVE_UNIDADES_PREFERIDAS = 'unidades:preferidas';
 

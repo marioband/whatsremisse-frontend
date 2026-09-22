@@ -61,6 +61,13 @@ import {
   leerHuellasDePostulacion,
   marcarPostulacion,
 } from '../lib/marcaDePostulacion';
+import {
+  emergenciasCercanas,
+  esEmergenciaCercaDeMi,
+  leerEmergenciasActivas,
+} from '../lib/emergencias';
+import { ultimaUbicacion } from '../lib/geolocation';
+import { esPremium } from '../lib/premium';
 import { registrarTokenDePush } from '../lib/pushToken';
 import {
   fusionarLista,
@@ -168,6 +175,8 @@ export interface UserProfile {
   billeteraTipo?: string;
   billeteraNombre?: string;
   bancoNombre?: string;
+  /** 0042: recibir avisos de emergencias cercanas de grupos que no integra (por defecto, no). */
+  recibirEmergencias?: boolean;
 }
 
 interface MockState {
@@ -717,6 +726,8 @@ function userProfileFromAuthProfile(profile: Profile): UserProfile {
     billeteraTipo: profile.billetera_tipo || undefined,
     billeteraNombre: profile.billetera_nombre || undefined,
     bancoNombre: profile.banco_nombre || undefined,
+    // 0042: sin la migración la columna no viene y queda en false (nadie recibe emergencias).
+    recibirEmergencias: profile.recibir_emergencias === true,
   };
 }
 
@@ -747,6 +758,10 @@ function userProfileToPatch(profile: UserProfile): ProfilePatch {
     billetera_tipo: profile.billeteraTipo || null,
     billetera_nombre: profile.billeteraNombre || null,
     banco_nombre: profile.bancoNombre || null,
+    // Solo se manda si está decidido: así guardar otros datos no apaga la marca sin querer.
+    ...(profile.recibirEmergencias === undefined
+      ? {}
+      : { recibir_emergencias: profile.recibirEmergencias === true }),
   };
 }
 
@@ -754,6 +769,8 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const { session, profile } = useAuth();
   const [state, dispatch] = useReducer(mockReducer, initialState);
   const loadedRef = useRef(false);
+  /** Los ids de las emergencias cercanas que le tocan (0041/0042); se recalcula en cada carga. */
+  const emergenciasCercaRef = useRef<string[]>([]);
   /**
    * Candado de los envíos a la base: la misma publicación o el mismo compartir SOLO
    * se ejecuta una vez mientras está en vuelo; quien insista recibe la misma promesa.
@@ -802,15 +819,24 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
       // Las dos identidades conviven en la misma cuenta: el usuario puede
       // publicar servicios como proveedor y recibir alertas como conductor.
+      // 0041/0042: si pidió recibir emergencias cercanas (y es premium), se traen también las de
+      // grupos a los que no pertenece. El «cerca de él» (15 km) se decide después, con su
+      // ubicación, en `lib/emergencias.ts`.
+      const emergenciasActivas = esPremium(profile) && leerEmergenciasActivas(profile);
       const [providerServices, driverServices] = await Promise.all([
         fetchServicesForProvider(profile.id),
-        fetchServicesForDriver(profile.id, groupIds),
+        fetchServicesForDriver(profile.id, groupIds, emergenciasActivas),
       ]);
       const servicesById = new Map<string, ServiceAlert>();
       [...providerServices, ...driverServices].forEach((s) => servicesById.set(s.id, s));
       const servicios = [...servicesById.values()];
       dispatch({ type: 'SET_SERVICES', payload: servicios });
       guardarCache(claveDeCache('servicios', profile.id), servicios);
+      // Las que le tocan AHORA: es lo que la lista y los contadores dejan pasar aunque no sean de
+      // sus grupos (el tiempo real usa esta misma lista para no descartarlas).
+      emergenciasCercaRef.current = emergenciasActivas
+        ? emergenciasCercanas(servicios, ultimaUbicacion())
+        : [];
 
       // Postulaciones: las mías y las recibidas en mis servicios (así al
       // proveedor le llega la tarjeta de quién está postulando).
@@ -962,7 +988,18 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const isRelevant = isVisibleAsProvider(fila, myId) || isVisibleAsDriver(fila, myId, groupIds);
+    // Una emergencia cercana que este conductor pidió recibir entra aunque no sea de sus grupos
+    // (0042). Se comprueba la que acaba de llegar y las que ya tenía.
+    const emergenciasAqui =
+      esPremium(profile) && leerEmergenciasActivas(profile)
+        ? [
+            ...emergenciasCercaRef.current,
+            ...(esEmergenciaCercaDeMi(fila, ultimaUbicacion()) ? [fila.id] : []),
+          ]
+        : [];
+
+    const isRelevant =
+      isVisibleAsProvider(fila, myId) || isVisibleAsDriver(fila, myId, groupIds, emergenciasAqui);
     if (!isRelevant) return;
 
     const exists = !!enMemoria;

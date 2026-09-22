@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
+import { useEmergenciasCerca } from './useEmergenciasCerca';
+import { useUnidadesExtra } from './useUnidadesExtra';
 import {
   estaEnProcesoDelConductor,
   estaEnProcesoDelProveedor,
@@ -9,6 +11,7 @@ import {
 } from '../lib/apartadosDelInicio';
 import { claveDeSinLeer } from '../lib/database';
 import { listaBaseDelConductor, serviciosDelInicio } from '../lib/listaDelConductor';
+import { tiposEfectivos } from '../lib/unidades';
 import {
   APARTADOS_DEL_INICIO,
   ApartadoDelInicio,
@@ -65,6 +68,12 @@ export function useContadoresDelInicio(): {
     useMockStore();
   const { session } = useAuth();
   const userId = session?.user?.id ?? '';
+  // Las mismas unidades que ve el inicio (las suyas + las que marcó en el filtro): si aquí no se
+  // contaran, el número del botón contradiría la lista.
+  const [unidadesExtra] = useUnidadesExtra();
+  // La MISMA lista que usa el inicio: si aquí no entraran, el botón «Disponibles» no contaría las
+  // emergencias que el conductor sí ve en la lista.
+  const emergenciasCerca = useEmergenciasCerca();
 
   /** Las marcas de «ya lo miré» viven en el dispositivo, por cuenta y apartado. */
   const [marcas, setMarcas] = useState<Partial<Record<ApartadoDelInicio, Date | null>>>({});
@@ -105,7 +114,8 @@ export function useContadoresDelInicio(): {
     const opciones = {
       userId,
       groupIds: groups.map((g) => g.id),
-      tiposDeVehiculo: userProfile?.vehicleTypes ?? [],
+      tiposDeVehiculo: tiposEfectivos(userProfile?.vehicleTypes ?? [], unidadesExtra),
+      emergenciasCerca,
       mostrarArchivados: false,
       rechazoReciente: () => false,
       inicioCumplido: () => false,
@@ -187,6 +197,8 @@ export function useContadoresDelInicio(): {
     services,
     sinLeerDeGrupos,
     sinLeerDeServicios,
+    unidadesExtra,
+    emergenciasCerca,
     userProfile,
     userId,
   ]);

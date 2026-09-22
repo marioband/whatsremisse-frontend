@@ -13,6 +13,7 @@ import { convieneBuscar, filasDeSugerencias, FilaSugerencia } from '../lib/addre
 import { registrarAhorro } from '../lib/medidor';
 import {
   detalleDeDireccion,
+  textoDelCampo,
   hayApiDeDirecciones,
   nuevaSesion,
   sugerirDirecciones,
@@ -146,8 +147,21 @@ export function AddressInput({
     onChangeText(sugerencia.texto);
     setAbierto(false);
     const detalle = await detalleDeDireccion(sugerencia.placeId, sesion.current);
+    /**
+     * Si lo elegido es un lugar CON NOMBRE (un aeropuerto, un centro comercial), el campo se queda
+     * con ese nombre —lo que el usuario vio en la lista— y no con la dirección exacta, que antes lo
+     * borraba (pedido del usuario, 21-09-2026). Si es una dirección de calle, se queda la dirección
+     * exacta, como siempre. Las coordenadas que viajan aparte son las del detalle: la ruta y la
+     * distancia no cambian.
+     */
+    const texto = textoDelCampo({
+      nombre: sugerencia.principal || sugerencia.texto,
+      direccion: detalle?.texto || sugerencia.texto,
+      tipos: detalle?.tipos,
+    });
+    onChangeText(texto);
     onConfirmar({
-      texto: detalle?.texto || sugerencia.texto,
+      texto,
       lat: detalle?.lat ?? null,
       lng: detalle?.lng ?? null,
       escritaPorElUsuario: false,

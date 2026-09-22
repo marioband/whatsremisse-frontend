@@ -18,6 +18,8 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { useFilasDeslizantes } from '../hooks/useFilasDeslizantes';
+import { useEmergenciasCerca } from '../hooks/useEmergenciasCerca';
+import { useUnidadesExtra } from '../hooks/useUnidadesExtra';
 import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { ordenarEnProceso } from '../lib/apartadosDelInicio';
@@ -30,6 +32,7 @@ import {
 } from '../lib/deslizamientoDeLaTarjeta';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { ApartadoDelInicio, textoDelBoton } from '../lib/novedadesDelInicio';
+import { tiposEfectivos } from '../lib/unidades';
 import {
   guardarIniciosDelViaje,
   IniciosDelViaje,
@@ -322,6 +325,16 @@ export function DriverHomeScreen({ novedades, alEntrarAlApartado }: DriverHomePr
 
   const driverVehicleTypes = userProfile?.vehicleTypes ?? [];
 
+  /**
+   * Las unidades que marcó en «Filtro conductor» (21-09-2026): con ellas la app le muestra también
+   * las alertas de unidades más pequeñas que la suya. La lista que manda es `tiposEfectivos` (sus
+   * unidades + las extra), la MISMA que usan los contadores: el inicio y los números no pueden
+   * discrepar.
+   */
+  const [unidadesExtra] = useUnidadesExtra();
+  // Las emergencias cercanas que pidió recibir (0041/0042), para que pasen el filtro de visibilidad.
+  const emergenciasCerca = useEmergenciasCerca();
+
   const groupIdList = useMemo(() => groups.map((g) => g.id), [groups]);
 
   /**
@@ -333,7 +346,9 @@ export function DriverHomeScreen({ novedades, alEntrarAlApartado }: DriverHomePr
     () => ({
       userId: currentDriverId,
       groupIds: groupIdList,
-      tiposDeVehiculo: driverVehicleTypes,
+      tiposDeVehiculo: tiposEfectivos(driverVehicleTypes, unidadesExtra),
+      // 0041/0042: las emergencias cercanas que pidió recibir (aunque no sean de sus grupos).
+      emergenciasCerca,
       mostrarArchivados: showArchived,
       rechazoReciente,
       inicioCumplido,
@@ -605,7 +620,13 @@ export function DriverHomeScreen({ novedades, alEntrarAlApartado }: DriverHomePr
             estilo={styles.filterBtn}
             etiqueta="Buscar servicio"
           />
-          <TouchableOpacity style={[styles.filterBtn, styles.filterBtnSeparado]}>
+          {/* El botón ▼ de al lado de la lupa: abre «Filtro conductor» (pedido del usuario,
+              21-09-2026). Antes estaba ahí sin hacer nada. */}
+          <TouchableOpacity
+            style={[styles.filterBtn, styles.filterBtnSeparado]}
+            onPress={() => navigation.navigate('FiltroConductor')}
+            accessibilityLabel="Filtro conductor"
+          >
             <Text style={styles.filterIcon}>▼</Text>
           </TouchableOpacity>
         </View>

@@ -1,3 +1,4 @@
+import { LIMITE_DE_EMERGENCIAS } from './emergencias';
 import { describeError, esColumnaAusente, esFalloDeTransporte } from './errors';
 import { conGrupos } from './gruposDeServicio';
 import { displayName } from './names';
@@ -56,6 +57,8 @@ export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
     driver_payment_received: row.driver_payment_received ?? false,
     settlement_enabled: row.settlement_enabled ?? false,
     archived: row.archived ?? false,
+    // Sin la 0041 la columna no viene: la tarjeta se comporta como un servicio normal.
+    emergencia: row.emergencia === true,
     provider_yape: row.provider_yape ?? undefined,
     provider_bcp_account: row.provider_bcp_account ?? undefined,
     provider_bcp_cci: row.provider_bcp_cci ?? undefined,
@@ -112,6 +115,8 @@ export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbS
   // Las paradas (0027). Sin la migración aplicada el INSERT/UPDATE falla por esta columna y se
   // reintenta sin ella (abajo): el servicio se guarda igual, sin las paradas.
   if (service.destinations !== undefined) mapped.destinations = service.destinations;
+  // La emergencia (0041). Si falta la migración, el INSERT/UPDATE se reintenta sin ella.
+  if (service.emergencia !== undefined) mapped.emergencia = service.emergencia;
   if (service.destination_lng !== undefined) mapped.destination_lng = service.destination_lng;
   if (service.vehicle_requirements !== undefined)
     mapped.vehicle_requirements = service.vehicle_requirements;
@@ -145,6 +150,13 @@ export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbS
 function sinCamposDeLa0027(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
   const copia = { ...mapped };
   delete copia.destinations;
+  return copia;
+}
+
+/** La columna que añade la 0041 (emergencia), para poder reintentar sin ella. */
+function sinCamposDeLa0041(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
+  const copia = { ...mapped };
+  delete copia.emergencia;
   return copia;
 }
 
@@ -295,7 +307,13 @@ export async function fetchServiceAlertById(serviceId: string): Promise<ServiceA
  */
 export async function fetchServicesForDriver(
   driverId: string,
-  groupIds: string[] = []
+  groupIds: string[] = [],
+  /**
+   * 0041/0042: traer TAMBIÉN las emergencias cercanas de grupos a los que el conductor no
+   * pertenece. Solo se pide si tiene la marca activada y es premium (lo decide quien llama); el
+   * «cerca de él» (15 km) se filtra después con su ubicación, en `lib/emergencias.ts`.
+   */
+  incluirEmergencias = false
 ): Promise<ServiceAlert[]> {
   if (!isSupabaseConfigured) return [];
 
@@ -350,6 +368,31 @@ export async function fetchServicesForDriver(
         if (extra.error) throw extra.error;
         rows.push(...((extra.data || []) as DbServiceAlert[]));
       }
+    }
+  }
+
+  if (incluirEmergencias) {
+    // Las emergencias abiertas de CUALQUIER grupo: la política de lectura de los conductores ya
+    // permite los servicios abiertos (0001), así que no hace falta tocar nada en la base. Se traen
+    // las últimas y la app decide cuáles están cerca.
+    const emergencias = await supabase
+      .from('service_alerts')
+      .select('*')
+      .eq('emergencia', true)
+      .eq('status', 'STATUS_OPEN')
+      .neq('provider_id', driverId)
+      .order('created_at', { ascending: false })
+      .limit(LIMITE_DE_EMERGENCIAS);
+    if (emergencias.error) {
+      if (!esColumnaAusente(emergencias.error)) throw emergencias.error;
+      console.warn(
+        '[database] no se pudieron leer las emergencias cercanas: falta aplicar 0041_servicios_de_emergencia.sql'
+      );
+    } else {
+      const yaVistos = new Set(rows.map((fila) => fila.id));
+      ((emergencias.data || []) as DbServiceAlert[]).forEach((fila) => {
+        if (!yaVistos.has(fila.id)) rows.push(fila);
+      });
     }
   }
 
@@ -1824,6 +1867,8 @@ export interface ProfilePatch {
   billetera_tipo?: string | null;
   billetera_nombre?: string | null;
   banco_nombre?: string | null;
+  /** 0042: recibir avisos de emergencias cercanas de grupos que no integra. */
+  recibir_emergencias?: boolean | null;
 }
 
 /**

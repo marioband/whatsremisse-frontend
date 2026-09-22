@@ -248,6 +248,12 @@ export interface OpcionesDelInicioDelConductor {
   inicioCumplido?: (serviceId: string) => boolean;
   /** Huella de la alerta cuando me postulé (marca local): ver `rechazoVigente`. */
   huellaAlPostular?: (serviceId: string) => string | undefined;
+  /**
+   * Los ids de las EMERGENCIAS cercanas que este conductor pidió recibir (0041/0042). Son servicios
+   * de grupos a los que NO pertenece: sin esta lista no pasarían el filtro de visibilidad. La regla
+   * de a quién le tocan vive en `lib/emergencias.ts`; aquí solo se deja pasar lo que ya se decidió.
+   */
+  emergenciasCerca?: readonly string[];
 }
 
 /** Siempre false: el valor por defecto de "no acabo de ser rechazado". */
@@ -288,7 +294,11 @@ export function listaBaseDelConductor(
     const recienRechazado = reciente(s.id);
 
     // Visible como alerta de mis grupos (o asignada a mí), o el aviso del rechazo…
-    if (!isVisibleAsDriver(s, userId, groupIds) && !recienRechazado) return false;
+    // …o una emergencia cercana que este conductor pidió recibir (aunque no sea de sus grupos):
+    // eso último lo decide `isVisibleAsDriver` con la lista de emergencias del conductor.
+    if (!isVisibleAsDriver(s, userId, groupIds, opciones.emergenciasCerca) && !recienRechazado) {
+      return false;
+    }
 
     // …pero si el rechazo sigue en pie, la tarjeta se va al cumplirse los 3
     // segundos: el conductor ya no ve el servicio.

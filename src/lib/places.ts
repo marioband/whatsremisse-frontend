@@ -32,6 +32,8 @@ export interface DireccionElegida {
   texto: string;
   lat: number | null;
   lng: number | null;
+  /** Los tipos del lugar (los usa `textoDelCampo` para decidir si se queda el nombre). */
+  tipos?: string[];
 }
 
 const URL_AUTOCOMPLETADO = 'https://places.googleapis.com/v1/places:autocomplete';
@@ -41,8 +43,70 @@ const URL_DETALLE = 'https://places.googleapis.com/v1/places';
 export const CAMPOS_AUTOCOMPLETADO =
   'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text';
 
-/** Al elegir una sugerencia sí hacen falta dirección y coordenadas. */
-export const CAMPOS_DETALLE = 'formattedAddress,location';
+/**
+ * Al elegir una sugerencia sí hacen falta dirección, coordenadas y los TIPOS del lugar.
+ *
+ * «types» es lo que deja saber si lo elegido es un lugar con nombre (un aeropuerto, un centro
+ * comercial) o una dirección de calle — y va en la MISMA unidad de cobro (Place Details
+ * Essentials), igual que `formattedAddress` y `location`. NO se pide `displayName` a propósito:
+ * ese campo es del SKU **Pro** y subiría el precio de cada búsqueda solo por escribir el nombre,
+ * que ya lo tenemos del autocompletado (ver `textoDelCampo`).
+ */
+export const CAMPOS_DETALLE = 'formattedAddress,location,types';
+
+/**
+ * Los tipos con los que Google marca un sitio CON NOMBRE propio. Si aparece alguno, lo elegido es
+ * un lugar (y se queda su nombre); si solo salen tipos de dirección, es una dirección y se queda la
+ * dirección exacta, como hasta ahora.
+ */
+const TIPOS_DE_LUGAR: readonly string[] = [
+  'point_of_interest',
+  'establishment',
+  'premise',
+  'subpremise',
+  'airport',
+  'transit_station',
+  'train_station',
+  'bus_station',
+  'shopping_mall',
+  'lodging',
+  'hospital',
+  'university',
+  'school',
+  'gas_station',
+  'park',
+  'stadium',
+  'restaurant',
+  'store',
+];
+
+/** ¿Con estos tipos, lo elegido es un lugar con nombre propio? */
+export function esLugarConNombre(tipos?: readonly string[] | null): boolean {
+  if (!tipos || tipos.length === 0) return false;
+  return tipos.some((tipo) => TIPOS_DE_LUGAR.includes(tipo));
+}
+
+/**
+ * Lo que se escribe en el campo al elegir una sugerencia.
+ *
+ * Pedido del usuario (21-09-2026): «en la búsqueda de dirección los nombres de lugares conocidos
+ * como “Aeropuerto Jorge Chávez” … al seleccionarlo cambia a la dirección exacta; lo ideal sería
+ * que se mantenga con el nombre comercial del lugar». Así que: si es un lugar con nombre, se queda
+ * el nombre; si es una dirección, se queda la dirección exacta (y en los dos casos las coordenadas
+ * del detalle son las que usan la ruta y la medición de distancia).
+ */
+export function textoDelCampo(datos: {
+  /** El nombre que el usuario vio en la lista (`mainText` de la sugerencia). */
+  nombre: string;
+  /** La dirección exacta que devolvió el detalle. */
+  direccion: string;
+  tipos?: readonly string[] | null;
+}): string {
+  const nombre = (datos.nombre || '').trim();
+  const direccion = (datos.direccion || '').trim();
+  if (nombre && esLugarConNombre(datos.tipos)) return nombre;
+  return direccion || nombre;
+}
 
 /** Clave pública de Google Maps (vacía si el usuario todavía no la configuró). */
 export function claveDeGoogle(): string {
@@ -188,12 +252,17 @@ export async function detalleDeDireccion(
       headers: { 'X-Goog-Api-Key': claveDeGoogle(), 'X-Goog-FieldMask': CAMPOS_DETALLE },
     },
     8000
-  )) as { formattedAddress?: string; location?: { latitude?: number; longitude?: number } } | null;
+  )) as {
+    formattedAddress?: string;
+    location?: { latitude?: number; longitude?: number };
+    types?: string[];
+  } | null;
 
   if (!respuesta?.formattedAddress) return null;
   return {
     texto: respuesta.formattedAddress,
     lat: respuesta.location?.latitude ?? null,
     lng: respuesta.location?.longitude ?? null,
+    tipos: respuesta.types ?? [],
   };
 }

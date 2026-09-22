@@ -119,6 +119,12 @@ export function CreateServiceScreen() {
   const [paymentType, setPaymentType] = useState(editingService?.payment_method || 'BCP');
   const [otherPayment, setOtherPayment] = useState('');
   const [paymentDate, setPaymentDate] = useState(editingService?.payment_term || 'Al término');
+  /**
+   * 0041: marcar el servicio como EMERGENCIA. Lo que hace: además de tus grupos, lo pueden ver (y
+   * les suena el teléfono) los conductores premium que pidieron emergencias y estén a menos de
+   * 15 km del punto de recogida. Sin marcar, el servicio se comporta como siempre.
+   */
+  const [emergencia, setEmergencia] = useState(editingService?.emergencia === true);
   const [customPaymentDate, setCustomPaymentDate] = useState('');
   /**
    * Las unidades que sirven para este servicio (regla del usuario, 19-09-2026).
@@ -436,6 +442,7 @@ export function CreateServiceScreen() {
       fare: parseFloat(fare) || 0,
       scheduled_at: scheduledAt,
       observations: observationsList.length > 0 ? observationsList : undefined,
+      emergencia,
       payment_term: finalPaymentDate,
       payment_method: finalPaymentType,
       updated_at: new Date().toISOString(),
@@ -756,6 +763,27 @@ export function CreateServiceScreen() {
             })}
           </View>
         )}
+
+        {/* Emergencia (0041): el proveedor decide servicio por servicio. */}
+        <Text style={styles.label}>¿Es una emergencia?</Text>
+        <View style={styles.optionsRow}>
+          <TouchableOpacity
+            style={[styles.optionChip, emergencia && styles.optionChipActive]}
+            onPress={() => setEmergencia(!emergencia)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: emergencia }}
+            accessibilityLabel="Marcar como emergencia"
+          >
+            <Text style={[styles.optionChipText, emergencia && styles.optionChipTextActive]}>
+              {emergencia ? 'Marcado como emergencia' : 'Marcar como emergencia'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.helperText}>
+          {emergencia
+            ? 'Además de tus grupos, lo verán los conductores premium que pidieron emergencias y estén cerca del punto de recogida.'
+            : 'Solo lo verán los grupos a los que lo compartas. Márcalo si necesitas que llegue a conductores cercanos de otros grupos.'}
+        </Text>
 
         {/* Momento del servicio: "Al momento" por defecto (regla del usuario). Solo
             al elegir "Hora específica" se abren el calendario y el reloj. */}

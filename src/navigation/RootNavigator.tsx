@@ -25,6 +25,7 @@ import { MyServicesScreen } from '../screens/MyServicesScreen';
 import { NavegacionScreen } from '../screens/NavegacionScreen';
 import { ParticipantDetailScreen } from '../screens/ParticipantDetailScreen';
 import { PaymentDetailsScreen } from '../screens/PaymentDetailsScreen';
+import { FiltroConductorScreen } from '../screens/FiltroConductorScreen';
 import { PrivacyScreen } from '../screens/PrivacyScreen';
 import { ProfileSetupScreen } from '../screens/ProfileSetupScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
@@ -66,6 +67,8 @@ export type RootStackParamList = {
   PaymentDetails: { fromOnboarding?: boolean } | undefined;
   MyServices: undefined;
   Privacy: undefined;
+  /** Conductor → Filtro conductor: qué unidades y qué grupos externos quiere recibir (21-09-2026). */
+  FiltroConductor: undefined;
   BlockedDrivers: undefined;
   BlockedProviders: undefined;
   BlockedUserProfile: { user: BlockedUser };
@@ -215,6 +218,11 @@ export function RootNavigator() {
               <Stack.Screen
                 name="Navegacion"
                 component={NavegacionScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="FiltroConductor"
+                component={FiltroConductorScreen}
                 options={{ headerShown: false }}
               />
               <Stack.Screen

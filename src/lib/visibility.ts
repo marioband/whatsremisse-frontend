@@ -30,9 +30,21 @@ export function isVisibleAsProvider(service: ServiceAlert, userId?: string | nul
 export function isVisibleAsDriver(
   service: ServiceAlert,
   userId: string | undefined | null,
-  groupIds: readonly string[]
+  groupIds: readonly string[],
+  /**
+   * Las emergencias cercanas que este conductor pidió recibir (0041/0042). Son de grupos a los que
+   * no pertenece, así que sin esto no pasarían; quién entra en la lista lo decide
+   * `lib/emergencias.ts` (premium + activado + dentro de 15 km).
+   */
+  emergenciasCerca?: readonly string[]
 ): boolean {
   if (!userId) return false;
+  if (emergenciasCerca && emergenciasCerca.includes(service.id)) {
+    // Suya (proveedor) no: las emergencias ajenas son para conductores.
+    if (service.provider_id === userId) return false;
+    if (service.archived) return false;
+    return service.status === 'STATUS_OPEN';
+  }
 
   // Ya asignado: siempre visible para ese conductor, aunque la hora de inicio ya
   // haya pasado (el viaje en curso tiene que seguir mostrándose).
