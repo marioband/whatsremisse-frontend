@@ -8,6 +8,7 @@ import { Alert } from '../lib/alert';
 import { limpiarBorradorDeServicio } from '../lib/borradorDeServicio';
 import { EstadoDeEnvio, estadoDelBotonDeEnvio, opacidadDelBotonDeEnvio } from '../lib/envioUnico';
 import { gruposDeServicio } from '../lib/gruposDeServicio';
+import { TEXTO_TENUE } from '../lib/colors';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
@@ -275,11 +276,13 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    // El círculo SIN marcar tiene que verse sobre el color de la tarjeta. Antes era un borde
-    // gris claro sobre fondo transparente y en las tarjetas del propietario (#B8BED8) y del
-    // administrador (#B8B8B8) desaparecía (lo reportó el usuario el 19-09-2026): ahora es blanco
-    // con borde oscuro, que contrasta con los cuatro colores.
-    borderColor: NEGRO_INSTITUCIONAL,
+    // El círculo SIN marcar tiene que verse sobre el color de la tarjeta. Antes era un borde gris
+    // claro sobre fondo transparente y en las tarjetas del propietario (#B8BED8) y del administrador
+    // (#B8B8B8) desaparecía (lo reportó el usuario el 19-09-2026), así que se puso el negro
+    // institucional; el 23-09-2026 el usuario lo vio «muy oscuro» y pidió el gris de los
+    // subtítulos. Va en gris sobre blanco: el disco blanco lo separa de los cuatro colores de
+    // tarjeta, así que se ve igual.
+    borderColor: TEXTO_TENUE,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',

@@ -18,10 +18,20 @@ import {
 import { Alert } from '../lib/alert';
 
 /**
+ * El avatar de la tarjeta: 56 de ancho y 12 de separación con el texto. Van declarados porque los
+ * dos renglones de arriba («Auto» y el tiempo/distancia) llevan ese MISMO hueco como margen
+ * izquierdo: así quedan centrados sobre la columna de datos, no sobre toda la tarjeta (el usuario
+ * lo pidió el 23-09-2026: «auto está centrado a todo el campo y los datos están centrados a todo el
+ * campo menos el campo de la imagen, no hay armonía»).
+ */
+const ANCHO_DEL_AVATAR = 56;
+const SEPARACION_DEL_AVATAR = 12;
+
+/**
  * Tarjeta de un postulante, con la estructura de la referencia del usuario (22-09 y 23-09-2026):
  *
- *   [        tipo de unidad del postulante (centrado)                 ]
- *   [        tiempo y distancia al punto de origen (centrado)        ]
+ *   [        tipo de unidad del postulante (sobre la columna de datos)  ]
+ *   [        tiempo y distancia al punto de origen (igual eje)         ]
  *   (avatar)      Mario André, Baldeón Andía
  *                 Mitsubishi, Lancer
  *                 Color: Rojo Metálico
@@ -127,19 +137,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 16,
   },
-  /** Tipo de unidad del postulante: el primer renglón de la tarjeta, centrado. */
+  /**
+   * Tipo de unidad del postulante y el tiempo/distancia: los dos van en el MISMO eje que la columna
+   * de datos, no centrados en toda la tarjeta (pedido del usuario, 23-09-2026: «veo que auto está
+   * centrado a todo el campo y los datos están centrados a todo el campo menos el campo de la
+   * imagen, ordena eso, no hay armonía»). Por eso llevan el hueco del avatar como margen izquierdo:
+   * así «Auto», el tiempo/distancia y los datos comparten centro y columna.
+   */
   unidadTop: {
     fontSize: 14,
     fontWeight: '700',
     color: OSCURO,
     textAlign: 'center',
+    marginLeft: ANCHO_DEL_AVATAR + SEPARACION_DEL_AVATAR,
     marginBottom: 2,
   },
-  /** Tiempo y distancia al punto de origen, centrado arriba (referencia del usuario). */
+  /** Tiempo y distancia al punto de origen, en el mismo eje que los datos. */
   estimateTop: {
     fontSize: 13,
     color: TEXTO,
     textAlign: 'center',
+    marginLeft: ANCHO_DEL_AVATAR + SEPARACION_DEL_AVATAR,
     marginBottom: 12,
   },
   topRow: {
@@ -148,13 +166,13 @@ const styles = StyleSheet.create({
   },
   /** El círculo del avatar: en el dibujo del usuario es grande, con el texto a su derecha. */
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: ANCHO_DEL_AVATAR,
+    height: ANCHO_DEL_AVATAR,
+    borderRadius: ANCHO_DEL_AVATAR / 2,
     backgroundColor: OSCURO,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: SEPARACION_DEL_AVATAR,
   },
   avatarText: {
     color: '#fff',

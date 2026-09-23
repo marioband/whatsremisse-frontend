@@ -4,7 +4,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 
 import { Icono, ICONO_AJUSTES } from './Icono';
-import { textoDelBoton } from '../lib/novedadesDelInicio';
+import { textoDelBoton } from '../lib/numerosDelInicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type HeaderNav = StackNavigationProp<RootStackParamList, 'Main'>;

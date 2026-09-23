@@ -20,9 +20,11 @@ export function HomeScreen() {
   const activeTab = roleToTab(role);
   /**
    * Los números de los botones (20-09-2026): salen del almacén, no de cada inicio, porque la
-   * cabecera los enseña también cuando el usuario está en otro apartado.
+   * cabecera los enseña también cuando el usuario está en otro apartado. Desde el 23-09-2026 son
+   * las TARJETAS activas de cada apartado (entrar no los baja), menos Mis grupos, que son los
+   * mensajes sin leer.
    */
-  const { contadores, marcarVisto } = useContadoresDelInicio();
+  const { contadores } = useContadoresDelInicio();
 
   const handleTabChange = useCallback(
     (tab: MainTab) => {
@@ -38,21 +40,19 @@ export function HomeScreen() {
       case 'Conductor':
         return (
           <DriverHomeScreen
-            novedades={{
+            numeros={{
               disponibles: contadores.disponibles,
               enProceso: contadores.enProcesoConductor,
             }}
-            alEntrarAlApartado={marcarVisto}
           />
         );
       case 'Proveedor':
         return (
           <ProviderHomeScreen
-            novedades={{
+            numeros={{
               publicados: contadores.publicados,
               enProceso: contadores.enProcesoProveedor,
             }}
-            alEntrarAlApartado={marcarVisto}
           />
         );
       case 'Mis Grupos':

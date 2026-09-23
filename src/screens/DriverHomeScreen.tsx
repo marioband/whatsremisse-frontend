@@ -31,7 +31,7 @@ import {
   AVISO_POSTULACION_CANCELADA,
 } from '../lib/deslizamientoDeLaTarjeta';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
-import { ApartadoDelInicio, textoDelBoton } from '../lib/novedadesDelInicio';
+import { textoDelBoton } from '../lib/numerosDelInicio';
 import { tiposEfectivos } from '../lib/unidades';
 import {
   guardarIniciosDelViaje,
@@ -73,17 +73,18 @@ const VISTA_DE_RECHAZO_MS = 3000;
 type StatusFilter = 'Disponibles' | 'En proceso';
 
 interface DriverHomeProps {
-  /** Novedades sin ver de cada apartado (las cuenta `useContadoresDelInicio`). */
-  novedades?: { disponibles: number; enProceso: number };
-  /** Tocar el botón de un apartado lo marca como visto: su número se apaga y baja el de arriba. */
-  alEntrarAlApartado?: (apartado: ApartadoDelInicio) => void;
+  /**
+   * Las TARJETAS que hay en cada apartado (las cuenta `useContadoresDelInicio`). No son novedades
+   * sin ver: entrar al apartado no las baja, solo bajan cuando una tarjeta desaparece (23-09-2026).
+   */
+  numeros?: { disponibles: number; enProceso: number };
 }
 
 const STATUS_FILTERS: StatusFilter[] = ['Disponibles', 'En proceso'];
 /** Separación entre tarjetas de servicio: el `marginBottom` de `ServiceCard` (12). */
 const MARGEN_ENTRE_TARJETAS = 12;
 
-export function DriverHomeScreen({ novedades, alEntrarAlApartado }: DriverHomeProps = {}) {
+export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
   const navigation = useNavigation<HomeNav>();
   const { session, profile } = useAuth();
   const {
@@ -578,21 +579,17 @@ export function DriverHomeScreen({ novedades, alEntrarAlApartado }: DriverHomePr
       <View style={styles.filterBar}>
         <View style={styles.statusPills}>
           {STATUS_FILTERS.map((status) => {
-            // El número son novedades sin ver (lo cuenta `useContadoresDelInicio`) y va DENTRO del
-            // botón, al lado del texto: «Disponibles 10», «En proceso 2» (pedido del usuario,
-            // 20-09-2026); antes era un globo rojo en la esquina. Al tocar el botón se apaga.
+            // El número son las TARJETAS de ese apartado (las cuenta `useContadoresDelInicio`) y va
+            // DENTRO del botón, al lado del texto: «Disponibles 10», «En proceso 2» (pedido del
+            // usuario, 20-09-2026); antes era un globo rojo en la esquina. Entrar NO lo apaga: baja
+            // cuando la tarjeta desaparece de la lista (23-09-2026).
             const numero =
-              status === 'En proceso' ? (novedades?.enProceso ?? 0) : (novedades?.disponibles ?? 0);
+              status === 'En proceso' ? (numeros?.enProceso ?? 0) : (numeros?.disponibles ?? 0);
             return (
               <TouchableOpacity
                 key={status}
                 style={[styles.statusPill, activeStatus === status && styles.statusPillActive]}
-                onPress={() => {
-                  setActiveStatus(status);
-                  alEntrarAlApartado?.(
-                    status === 'En proceso' ? 'en-proceso-conductor' : 'disponibles'
-                  );
-                }}
+                onPress={() => setActiveStatus(status)}
               >
                 <Text
                   style={[

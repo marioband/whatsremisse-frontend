@@ -39,7 +39,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     marginBottom: 8,
-    width: '50%',
+    // El campo ocupa TODO el ancho de la tarjeta. El 23-09-2026 se probó a la mitad y el usuario
+    // lo devolvió a como estaba: «regresa a la configuración anterior, donde el campo ocupa todo el
+    // espacio, déjalo como estaba antes».
   },
   info: { flex: 1 },
   label: { fontSize: 11, color: '#888', marginBottom: 2 },

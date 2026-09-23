@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
@@ -9,22 +9,13 @@ import {
   estaEnProcesoDelProveedor,
   listaDelProveedor,
 } from '../lib/apartadosDelInicio';
-import { claveDeSinLeer } from '../lib/database';
 import { listaBaseDelConductor, serviciosDelInicio } from '../lib/listaDelConductor';
+import { sumaDeNumeros } from '../lib/numerosDelInicio';
 import { tiposEfectivos } from '../lib/unidades';
-import {
-  APARTADOS_DEL_INICIO,
-  ApartadoDelInicio,
-  contarNovedades,
-  hayNovedadDesde,
-  leerApartadoVisto,
-  marcarApartadoVisto,
-  sumaDeNovedades,
-} from '../lib/novedadesDelInicio';
 
 /**
  * Los números de los botones (Conductor / Proveedor / Mis grupos) y de sus sub botones
- * (Disponibles, En proceso, Publicados). Pedido del usuario, 20-09-2026.
+ * (Disponibles, En proceso, Publicados).
  *
  * Se calculan AQUÍ y no dentro de cada inicio porque la cabecera los enseña siempre —también
  * cuando el usuario está en otro apartado—, así que tienen que salir de los datos del almacén, que
@@ -32,9 +23,17 @@ import {
  * (`listaBaseDelConductor`, `serviciosDelInicio`, `listaDelProveedor`, `estaEnProceso…`): el número
  * de un apartado no puede contradecir lo que se ve al entrar en él.
  *
- * Cada número son NOVEDADES SIN VER (lo eligió el usuario): lo que llegó después de la última vez
- * que tocó ese botón. Al tocar un sub botón, su marca pasa a «ahora» y el número baja —y con él el
- * del botón de arriba, que es la suma—.
+ * QUÉ SON LOS NÚMEROS (cambio del 23-09-2026, pedido textual del usuario):
+ *
+ *   - Conductor, Proveedor y sus sub botones (Disponibles, En proceso, Publicados) cuentan las
+ *     **tarjetas activas que hay en ese momento**. No son «novedades sin ver»: entrar al apartado
+ *     NO baja el número (el usuario las puede haber visto, pero las tarjetas siguen ahí) y solo baja
+ *     cuando una tarjeta desaparece de la lista — por ejemplo, cuando otro conductor la cubre o el
+ *     servicio se cierra—. Con 100 disponibles, entrar deja 100; si una se cubre, queda 99.
+ *   - Mis grupos NO cambia: es la SUMA de los mensajes sin leer de todos los grupos, y al abrir el
+ *     grupo pasa a cero (así lo fijó el usuario el 20-09-2026 y lo confirmó el 23-09-2026).
+ *
+ * Por eso aquí ya no hay marcas de «ya lo miré»: el número es la cuenta de la lista, ni más ni menos.
  */
 export interface ContadoresDelInicio {
   /** Botones de arriba: la suma de sus dos apartados. */
@@ -60,12 +59,8 @@ const SIN_CONTADORES: ContadoresDelInicio = {
   enProcesoProveedor: 0,
 };
 
-export function useContadoresDelInicio(): {
-  contadores: ContadoresDelInicio;
-  marcarVisto: (apartado: ApartadoDelInicio) => void;
-} {
-  const { services, applications, groups, userProfile, sinLeerDeGrupos, sinLeerDeServicios } =
-    useMockStore();
+export function useContadoresDelInicio(): { contadores: ContadoresDelInicio } {
+  const { services, applications, groups, userProfile, sinLeerDeGrupos } = useMockStore();
   const { session } = useAuth();
   const userId = session?.user?.id ?? '';
   // Las mismas unidades que ve el inicio (las suyas + las que marcó en el filtro): si aquí no se
@@ -75,42 +70,12 @@ export function useContadoresDelInicio(): {
   // emergencias que el conductor sí ve en la lista.
   const emergenciasCerca = useEmergenciasCerca();
 
-  /** Las marcas de «ya lo miré» viven en el dispositivo, por cuenta y apartado. */
-  const [marcas, setMarcas] = useState<Partial<Record<ApartadoDelInicio, Date | null>>>({});
-
-  useEffect(() => {
-    if (!userId) {
-      setMarcas({});
-      return;
-    }
-    let vigente = true;
-    (async () => {
-      const leidas: Partial<Record<ApartadoDelInicio, Date | null>> = {};
-      for (const apartado of APARTADOS_DEL_INICIO) {
-        leidas[apartado] = await leerApartadoVisto(apartado, userId);
-      }
-      if (vigente) setMarcas(leidas);
-    })();
-    return () => {
-      vigente = false;
-    };
-  }, [userId]);
-
-  /** El usuario toca el botón de un apartado: lo que hay ahora ya es «lo que miré». */
-  const marcarVisto = useCallback(
-    (apartado: ApartadoDelInicio) => {
-      setMarcas((actuales) => ({ ...actuales, [apartado]: new Date() }));
-      void marcarApartadoVisto(apartado, userId);
-    },
-    [userId]
-  );
-
   const contadores = useMemo<ContadoresDelInicio>(() => {
     if (!userId) return SIN_CONTADORES;
 
     // Mismas reglas que los inicios (lib/listaDelConductor). Lo único que NO entra son los estados
     // transitorios de la pantalla —el rechazo recién llegado de 3 segundos y el toque local de
-    // inicio—: no son novedades que el usuario tenga que ir a ver.
+    // inicio—: no son tarjetas de la lista.
     const opciones = {
       userId,
       groupIds: groups.map((g) => g.id),
@@ -136,46 +101,14 @@ export function useContadoresDelInicio(): {
     const publicadosLista = mios.filter((s) => !estaEnProcesoDelProveedor(s));
     const enProcesoDelProveedorLista = mios.filter((s) => estaEnProcesoDelProveedor(s));
 
-    /** Mensajes sin leer de la conversación de ese servicio con ese conductor. */
-    const sinLeerDe = (serviceId: string, driverId: string | null | undefined): number =>
-      sinLeerDeServicios[claveDeSinLeer(serviceId, driverId || '')] ?? 0;
+    // Las TARJETAS de cada apartado, contadas tal cual: si una desaparece de la lista, el número
+    // baja solo (no hay marcas ni «visto» que apaguen nada).
+    const disponibles = disponiblesLista.length;
+    const enProcesoConductor = enProcesoLista.length;
+    const publicados = publicadosLista.length;
+    const enProcesoProveedor = enProcesoDelProveedorLista.length;
 
-    /** Todos los mensajes sin leer de un servicio (el proveedor tiene una conversación por conductor). */
-    const sinLeerDelServicio = (serviceId: string): number =>
-      Object.entries(sinLeerDeServicios).reduce(
-        (total, [clave, numero]) => (clave.startsWith(`${serviceId}|`) ? total + numero : total),
-        0
-      );
-
-    const disponibles = contarNovedades(
-      disponiblesLista.map((s) => s.created_at),
-      marcas.disponibles ?? null
-    );
-
-    // «En proceso» son novedades de SUS conversaciones: mensajes sin leer, o la fila del servicio
-    // que cambió (avance del viaje, pago, aceptación) desde la última visita al apartado.
-    const enProcesoConductor = enProcesoLista.filter(
-      (s) =>
-        sinLeerDe(s.id, userId) > 0 ||
-        hayNovedadDesde(s.updated_at || s.created_at, marcas['en-proceso-conductor'] ?? null)
-    ).length;
-
-    const enProcesoProveedor = enProcesoDelProveedorLista.filter(
-      (s) =>
-        sinLeerDelServicio(s.id) > 0 ||
-        hayNovedadDesde(s.updated_at || s.created_at, marcas['en-proceso-proveedor'] ?? null)
-    ).length;
-
-    // «Publicados»: los servicios publicados que recibieron POSTULACIONES nuevas desde su visita.
-    const publicados = publicadosLista.filter((s) =>
-      applications.some(
-        (a) =>
-          a.serviceId === s.id &&
-          a.status === 'PENDING' &&
-          hayNovedadDesde(a.createdAt, marcas.publicados ?? null)
-      )
-    ).length;
-
+    // Mis grupos sí es «sin leer»: al abrir el grupo, su globo y este número bajan.
     const misGrupos = Object.values(sinLeerDeGrupos).reduce(
       (total, numero) => total + (Number.isFinite(numero) ? numero : 0),
       0
@@ -186,22 +119,20 @@ export function useContadoresDelInicio(): {
       enProcesoConductor,
       publicados,
       enProcesoProveedor,
-      conductor: sumaDeNovedades(disponibles, enProcesoConductor),
-      proveedor: sumaDeNovedades(publicados, enProcesoProveedor),
+      conductor: sumaDeNumeros(disponibles, enProcesoConductor),
+      proveedor: sumaDeNumeros(publicados, enProcesoProveedor),
       misGrupos,
     };
   }, [
     applications,
     groups,
-    marcas,
     services,
     sinLeerDeGrupos,
-    sinLeerDeServicios,
     unidadesExtra,
     emergenciasCerca,
     userProfile,
     userId,
   ]);
 
-  return { contadores, marcarVisto };
+  return { contadores };
 }
