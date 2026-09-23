@@ -150,6 +150,7 @@ export function ChatScreen() {
     applications,
     startProviderChat,
     approveApplication,
+    esAceptacionRecienEmpezada,
     rejectApplicationFrom,
     markDriverSeenChat,
     advanceDriverProgress,
@@ -264,7 +265,12 @@ export function ChatScreen() {
     !cargando &&
     !isAssigned &&
     service.status !== 'STATUS_COMPLETED' &&
-    postulacionDelConductor?.status === 'PENDING';
+    postulacionDelConductor?.status === 'PENDING' &&
+    // 23-09-2026: el proveedor acaba de tocar «Aceptar» en la lista de postulantes y el chat se abrió
+    // en el acto: el estado local todavía dice PENDING (la escritura sigue en camino), así que sin
+    // esto los botones Aceptar/Rechazar parpadeaban un instante al abrir el chat. Es un fallo que ya
+    // se había dado antes (por eso la condición es tan exigente); esta es la pieza que faltaba.
+    !esAceptacionRecienEmpezada(service.id, effectiveDriverId || '');
 
   /**
    * El proveedor rechazó a este conductor: la conversación se cierra (aviso con

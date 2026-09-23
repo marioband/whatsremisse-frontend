@@ -651,6 +651,15 @@ interface MockContextValue extends MockState {
   /** Postularme a una alerta. Es asíncrona (escribe la fila y devuelve el puesto). */
   applyToService: (serviceId: string, driverId: string) => Promise<void>;
   approveApplication: (serviceId: string, driverId: string) => void;
+  /**
+   * ¿Se acaba de empezar a aceptar a este conductor? (23-09-2026)
+   *
+   * `approveApplication` espera a que la base confirme y DESPUÉS refresca el estado local. Si el
+   * proveedor acepta en la lista de postulantes, el chat se abre en el acto con el estado viejo (la
+   * postulación todavía PENDING) y pinta un instante los botones Aceptar/Rechazar, que ya no tocan.
+   * Con esta marca, el chat sabe que esa aceptación está en camino y no los pinta.
+   */
+  esAceptacionRecienEmpezada: (serviceId: string, driverId: string) => boolean;
   rejectApplication: (serviceId: string) => void;
   rejectApplicationFrom: (serviceId: string, driverId: string) => void;
   /** Devuelve false si la base no confirmó el borrado (la postulación sigue en pie). */
@@ -811,6 +820,24 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
    * repetido no debe crear dos alertas del mismo servicio).
    */
   const candadoDeEnvio = useRef<Candado>(crearCandado());
+
+  /**
+   * «Acabo de empezar a aceptar a este conductor»: servicio+conductor → cuándo se tocó.
+   *
+   * Es un ref (no estado) a propósito: solo tiene que tapar la ventana entre el toque y la respuesta
+   * de la base, y no debe provocar renders. Si la escritura falla, la ventana se cierra sola al
+   * pasar el tiempo y el aviso del error ya se habrá enseñado.
+   */
+  const aceptacionesEnCurso = useRef<Map<string, number>>(new Map());
+  /** Cuánto tapa la ventana: de sobra para la escritura (mediana ~200 ms) sin quedarse colgada. */
+  const VENTANA_DE_ACEPTACION_MS = 6000;
+  const esAceptacionRecienEmpezada = useCallback(
+    (serviceId: string, driverId: string) => {
+      const cuando = aceptacionesEnCurso.current.get(`${serviceId}:${driverId}`);
+      return cuando !== undefined && Date.now() - cuando < VENTANA_DE_ACEPTACION_MS;
+    },
+    []
+  );
 
   /**
    * La caché del teléfono sirve para PINTAR al instante y refrescar por detrás (20-09-2026).
@@ -1456,6 +1483,9 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'APPLY_TO_SERVICE', payload: { serviceId, driverId } });
     },
     approveApplication: async (serviceId, driverId) => {
+      // La marca va ANTES de escribir: es lo que impide que el chat pinte los botones viejos en la
+      // ventana entre el toque y la respuesta de la base.
+      aceptacionesEnCurso.current.set(`${serviceId}:${driverId}`, Date.now());
       if (isSupabaseConfigured) {
         try {
           await approveApplicationInDb(serviceId, driverId);
@@ -1470,6 +1500,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
       dispatch({ type: 'APPROVE_APPLICATION', payload: { serviceId, driverId } });
     },
+    esAceptacionRecienEmpezada,
     rejectApplication: async (serviceId) => {
       if (isSupabaseConfigured) {
         try {
