@@ -267,8 +267,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: {
-    /* Ocupa el sitio del botón que se quitó, para que el título siga centrado. */
-    width: 24,
+    /* Ocupa el sitio del botón que se quitó, para que el título siga centrado.
+       Medida igual al botón del atrás (4 + 28 + 4) para que el título quede centrado de verdad. */
+    width: 36,
   },
   list: {
     padding: 16,

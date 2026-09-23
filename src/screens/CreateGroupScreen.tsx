@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: {
-    width: 28,
+    width: 36,
   },
   body: {
     flex: 1,

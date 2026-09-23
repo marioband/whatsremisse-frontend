@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   headerSpacer: {
-    width: 28,
+    width: 36,
   },
   center: {
     flex: 1,

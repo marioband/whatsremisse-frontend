@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: {
-    width: 32,
+    width: 36,
   },
   body: {
     paddingHorizontal: 24,

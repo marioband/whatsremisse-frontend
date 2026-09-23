@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: {
-    width: 28,
+    width: 36,
   },
   body: {
     padding: 20,
