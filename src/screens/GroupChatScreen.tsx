@@ -87,6 +87,8 @@ const TAMANO_DEL_NOMBRE_EN_EL_TITULO = 18;
  * grupo». La cuenta queda escrita aquí, no a mano, para que no se desajusten si cambia el nombre.
  */
 const TAMANO_DE_LA_IMAGEN_DEL_TITULO = TAMANO_DEL_NOMBRE_EN_EL_TITULO * 1.5;
+/** La caja de la flecha de atrás (y el hueco de la derecha, que mide lo mismo para centrar). */
+const TAMANO_DEL_HUECO_DE_LA_FLECHA = 34;
 
 /** Sondeo de respaldo: las ediciones y los borrados del otro lado llegan igual. */
 const SONDEO_MS = 6000;
@@ -665,7 +667,7 @@ export function GroupChatScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={volverAtras} accessibilityLabel="Volver">
+          <TouchableOpacity onPress={volverAtras} accessibilityLabel="Volver" style={styles.backBox}>
             <Text style={styles.headerArrow}>←</Text>
           </TouchableOpacity>
           {/*
@@ -683,16 +685,22 @@ export function GroupChatScreen() {
             accessibilityLabel={`Ajustes del grupo ${nombreDelGrupo}`}
             accessibilityHint="Abre los ajustes: foto, nombre, integrantes y los botones del grupo."
           >
-            {grupo?.avatarUrl ? (
-              <Image source={{ uri: grupo.avatarUrl }} style={styles.avatarDelTitulo} />
-            ) : (
-              <View style={styles.avatarDelTitulo}>
-                <Text style={styles.avatarDelTituloTexto}>{nombreDelGrupo.charAt(0)}</Text>
-              </View>
-            )}
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {nombreDelGrupo}
-            </Text>
+            {/* La imagen y el nombre van JUNTOS en su propia fila centrada. Con los dos sueltos dentro
+                del botón, el nombre se estiraba (tenía `flex: 1`) y empujaba la imagen al borde
+                izquierdo — que es justo lo que el usuario reportó dos veces («la imagen del grupo debe
+                estar junto al nombre, ambos centrados», 23-09-2026). */}
+            <View style={styles.tituloContenido}>
+              {grupo?.avatarUrl ? (
+                <Image source={{ uri: grupo.avatarUrl }} style={styles.avatarDelTitulo} />
+              ) : (
+                <View style={styles.avatarDelTitulo}>
+                  <Text style={styles.avatarDelTituloTexto}>{nombreDelGrupo.charAt(0)}</Text>
+                </View>
+              )}
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {nombreDelGrupo}
+              </Text>
+            </View>
           </TouchableOpacity>
           {/* El mismo ancho que la flecha, para que el título quede centrado de verdad. */}
           <View style={styles.headerSpacer} />
@@ -811,16 +819,27 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   avatarDelTituloTexto: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  /* El hueco de la flecha: sin él el título no queda centrado. */
-  headerSpacer: { width: 26 },
+  /** La flecha vive en una caja FIJA: el hueco de la derecha mide lo mismo y el título centra exacto. */
+  backBox: {
+    width: TAMANO_DEL_HUECO_DE_LA_FLECHA,
+    alignItems: 'flex-start',
+  },
+  /* El hueco de la flecha, del MISMO ancho que ella: sin esto el título se va a un lado. */
+  headerSpacer: { width: TAMANO_DEL_HUECO_DE_LA_FLECHA },
+  /** La fila que va DENTRO del botón: imagen + nombre, juntos y centrados. */
+  tituloContenido: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
     color: '#fff',
     // El tamaño sale de la constante: el círculo de la imagen se calcula desde él (nombre × 1,5).
     fontSize: TAMANO_DEL_NOMBRE_EN_EL_TITULO,
     fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: 12,
+    // NO lleva `flex: 1`: así el nombre mide lo suyo y queda PEGADO a la imagen. Solo se encoge
+    // (`flexShrink`) si es larguísimo, para no salirse de la cabecera.
+    flexShrink: 1,
   },
   messagesList: {
     padding: 16,

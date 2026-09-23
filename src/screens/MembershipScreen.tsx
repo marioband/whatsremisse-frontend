@@ -11,10 +11,15 @@ const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
 const GREEN = '#2E9E5B';
 
+/**
+ * Los planes y sus precios (23-09-2026: «membresía, cambiar los planes por: 1 mes 50, 2 meses 90,
+ * 3 meses 120»). Antes eran 30/60/90 días a S/ 29.90, 49.90 y 69.90 — y el rótulo decía los días.
+ * Los días siguen siendo 30/60/90 (es lo que dura cada plan); lo que se enseña es el mes.
+ */
 const PLANS = [
-  { days: 30, price: 'S/ 29.90', popular: true },
-  { days: 60, price: 'S/ 49.90', popular: false },
-  { days: 90, price: 'S/ 69.90', popular: false },
+  { dias: 30, nombre: '1 mes', price: 'S/ 50', popular: true },
+  { dias: 60, nombre: '2 meses', price: 'S/ 90', popular: false },
+  { dias: 90, nombre: '3 meses', price: 'S/ 120', popular: false },
 ];
 
 export function MembershipScreen() {
@@ -40,9 +45,9 @@ export function MembershipScreen() {
         <Text style={styles.sectionTitle}>Renovar suscripción</Text>
 
         {PLANS.map((plan) => (
-          <View key={plan.days} style={[styles.planCard, plan.popular && styles.planCardPopular]}>
+          <View key={plan.dias} style={[styles.planCard, plan.popular && styles.planCardPopular]}>
             <View style={styles.planHeader}>
-              <Text style={styles.planDays}>{plan.days} días</Text>
+              <Text style={styles.planDays}>{plan.nombre}</Text>
               {plan.popular && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>Popular</Text>

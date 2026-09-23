@@ -72,8 +72,10 @@ export function memberRoleLabel(role?: string | null): string {
  */
 export function groupRoleBadgeLabel(role?: string | null): string {
   const value = (role || '').trim().toLowerCase();
-  if (value === 'owner') return 'Propietario';
-  if (value === 'admin') return 'Admin.';
+  // 23-09-2026: el usuario mandó que el creador y los administradores lleven el MISMO sufijo —
+  // «El propietario tenía el sufijo a la derecha de su nombre y decía Propietario, cambiar por Admin
+  // al igual que los que son asignados como administradores». Antes eran «Propietario» y «Admin.».
+  if (value === 'owner' || value === 'admin') return 'Admin';
   return '';
 }
 

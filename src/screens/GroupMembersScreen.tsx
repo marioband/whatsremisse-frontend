@@ -207,16 +207,20 @@ export function GroupMembersScreen() {
   };
 
   /**
-   * Salir del grupo (pedido del usuario, 22-09-2026).
+   * Salir del grupo (22-09-2026; y el CREADOR también desde el 23-09-2026).
    *
    * Cualquier integrante —o un administrador— puede irse: se borra SU fila de `group_members`
-   * (migración 0043). El creador no tiene este botón: su salida dejaría al grupo sin dueño, así que
-   * para él está «Eliminar». Se confirma una vez y, al salir, el grupo desaparece de Mis grupos.
+   * (migración 0043). Y el creador también puede irse: el usuario decidió el 23-09-2026 que «si el
+   * propietario deja el grupo, la propiedad pasará al primer admin nombrado; si no hay admin nombrado,
+   * pasará al primer integrante registrado» (lo hace la base, migración 0045). Si es el creador y está
+   * SOLO, la base no lo deja: el grupo quedaría sin dueño y se le dice que lo elimine.
    */
   const handleSalirDelGrupo = () => {
     Alert.alert(
       'Salir del grupo',
-      `¿Seguro que quieres salir de «${nombreDelGrupo}»? Dejarás de verlo en Mis grupos y no te llegarán sus avisos.`,
+      esCreador
+        ? `¿Seguro que quieres salir de «${nombreDelGrupo}»? La propiedad pasará al administrador más antiguo y, si no hay ninguno, al primer integrante. Dejarás de verlo en Mis grupos.`
+        : `¿Seguro que quieres salir de «${nombreDelGrupo}»? Dejarás de verlo en Mis grupos y no te llegarán sus avisos.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -433,7 +437,9 @@ export function GroupMembersScreen() {
                 () => void alternarSilencio(),
                 { activo: enSilencio }
               )}
-              {!esCreador && boton('exit-to-app', 'salir', handleSalirDelGrupo, { rojo: true })}
+              {/* Salir: desde el 23-09-2026 lo tiene TODO EL MUNDO, también el creador (al salir, la
+                  propiedad se hereda en la base). «Eliminar» sigue siendo solo del creador. */}
+              {boton('exit-to-app', 'salir', handleSalirDelGrupo, { rojo: true })}
               {esCreador && boton('delete', 'Eliminar', handleEliminarGrupo, { rojo: true })}
             </View>
 
