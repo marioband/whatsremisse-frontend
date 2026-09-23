@@ -1008,6 +1008,12 @@ export function mapGroupFromDb(row: DbGroup, memberRow?: DbGroupMember): GroupIt
     name: row.name,
     role: (memberRow?.role as GroupItem['role']) || 'member',
     favorite: memberRow?.favorite || false,
+    // 0028 — y este campo FALTABA aquí (reportado por el usuario el 23-09-2026: «no se ve el icono
+    // de silencio en los grupos silenciados»). El dato se pedía en el `select` y quien lo mapeaba lo
+    // tiraba, así que `groups[].muted` era siempre `undefined`: ni la tarjeta de Mis grupos ni los
+    // ajustes del grupo podían saber que el grupo estaba en silencio. El silencio SÍ se guardaba en
+    // la base; lo que no llegaba a la pantalla era el dato.
+    muted: memberRow?.muted === true,
     ownerId: row.owner_id,
     // 0038: la foto del grupo. Sin la migración la columna no viene y queda en null (inicial).
     avatarUrl: (row as { avatar_url?: string | null }).avatar_url ?? null,

@@ -78,6 +78,16 @@ type GroupChatRoute = RouteProp<RootStackParamList, 'GroupChat'>;
 
 const DARK_BG = '#2D2D2D';
 
+/** El nombre del grupo en la cabecera del chat. */
+const TAMANO_DEL_NOMBRE_EN_EL_TITULO = 18;
+/**
+ * El círculo con la imagen del grupo, junto al nombre (23-09-2026).
+ *
+ * Pedido del usuario: «el circulo de la imagen debe ser 50 % más grande que el texto del nombre del
+ * grupo». La cuenta queda escrita aquí, no a mano, para que no se desajusten si cambia el nombre.
+ */
+const TAMANO_DE_LA_IMAGEN_DEL_TITULO = TAMANO_DEL_NOMBRE_EN_EL_TITULO * 1.5;
+
 /** Sondeo de respaldo: las ediciones y los borrados del otro lado llegan igual. */
 const SONDEO_MS = 6000;
 
@@ -791,20 +801,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarDelTitulo: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    // 23-09-2026: «el círculo de la imagen debe ser 50 % más grande que el texto del nombre».
+    width: TAMANO_DE_LA_IMAGEN_DEL_TITULO,
+    height: TAMANO_DE_LA_IMAGEN_DEL_TITULO,
+    borderRadius: TAMANO_DE_LA_IMAGEN_DEL_TITULO / 2,
     backgroundColor: '#1A1A1A',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
   },
-  avatarDelTituloTexto: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  avatarDelTituloTexto: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   /* El hueco de la flecha: sin él el título no queda centrado. */
   headerSpacer: { width: 26 },
   headerTitle: {
     color: '#fff',
-    fontSize: 17,
+    // El tamaño sale de la constante: el círculo de la imagen se calcula desde él (nombre × 1,5).
+    fontSize: TAMANO_DEL_NOMBRE_EN_EL_TITULO,
     fontWeight: 'bold',
     flex: 1,
     textAlign: 'center',

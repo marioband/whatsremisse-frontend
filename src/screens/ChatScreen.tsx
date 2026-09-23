@@ -1212,7 +1212,10 @@ export function ChatScreen() {
                     onPress={() => copiarDatosRef.current()}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.copyDataBtnText}>Copiar datos</Text>
+                    {/* 23-09-2026: el proveedor copia los datos DEL CONDUCTOR, así que el botón
+                        lo dice (antes «Copiar datos», que no decía de quién). Este botón solo lo ve
+                        el proveedor: el conductor no lo tiene. */}
+                    <Text style={styles.copyDataBtnText}>Copiar conductor</Text>
                   </TouchableOpacity>
                 </View>
               )}
