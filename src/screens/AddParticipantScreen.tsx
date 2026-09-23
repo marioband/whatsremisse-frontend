@@ -74,7 +74,12 @@ function mensajeDeAlta(err: unknown): string {
 export function AddParticipantScreen() {
   const navigation = useNavigation<AddNav>();
   const route = useRoute<AddRoute>();
-  const { groupId } = route.params;
+  /**
+   * `paraGrupoNuevo` (23-09-2026): el «+» de Mis grupos pide PRIMERO los integrantes y después el
+   * nombre, como WhatsApp. En ese modo esta pantalla no toca la base: solo elige personas y se las
+   * pasa a «Nuevo grupo».
+   */
+  const { groupId, groupName, paraGrupoNuevo } = route.params;
   const { members, addMember } = useMockStore();
 
   const [query, setQuery] = useState('');
@@ -92,8 +97,9 @@ export function AddParticipantScreen() {
   const selectedCount = selectedList.length;
 
   const existingMemberIds = useMemo(
-    () => new Set((members[groupId] || []).map((m) => m.id)),
-    [members, groupId]
+    // Al crear un grupo todavía no hay integrantes: nadie sale como «ya es integrante».
+    () => new Set(paraGrupoNuevo || !groupId ? [] : (members[groupId] || []).map((m) => m.id)),
+    [members, groupId, paraGrupoNuevo]
   );
 
   useEffect(() => {
@@ -168,6 +174,14 @@ export function AddParticipantScreen() {
 
   const handleAdd = async () => {
     if (adding || selectedCount === 0) return;
+
+    // Camino del grupo NUEVO: no se escribe nada todavía, se pasa a ponerle nombre y foto.
+    if (paraGrupoNuevo) {
+      navigation.navigate('CreateGroup', {
+        integrantes: selectedList.map((contacto) => ({ id: contacto.id, name: contacto.name })),
+      });
+      return;
+    }
     setAdding(true);
     setAddError(null);
 
@@ -271,7 +285,9 @@ export function AddParticipantScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Añadir participante</Text>
+        <Text style={styles.headerTitle}>
+          {paraGrupoNuevo ? 'Elegir integrantes' : 'Añadir participante'}
+        </Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -354,9 +370,11 @@ export function AddParticipantScreen() {
             disabled={adding}
           >
             <Text style={styles.addButtonText}>
-              {adding
-                ? 'Añadiendo...'
-                : `Añadir (${selectedCount})${selectedCount > 1 ? ' integrantes' : ''}`}
+              {paraGrupoNuevo
+                ? `Siguiente (${selectedCount})`
+                : adding
+                  ? 'Añadiendo...'
+                  : `Añadir (${selectedCount})${selectedCount > 1 ? ' integrantes' : ''}`}
             </Text>
           </TouchableOpacity>
         )}

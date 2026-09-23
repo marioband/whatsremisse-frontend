@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { CommonActions, RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
 import {
@@ -21,14 +21,24 @@ import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
 type CreateGroupNav = StackNavigationProp<RootStackParamList, 'CreateGroup'>;
+type CreateGroupRoute = RouteProp<RootStackParamList, 'CreateGroup'>;
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
 
+/**
+ * Nuevo grupo: nombre y foto.
+ *
+ * 23-09-2026 — se llega aquí DESPUÉS de elegir a los integrantes (el «+» de Mis grupos abre primero
+ * el selector, como WhatsApp): los elegidos vienen en los parámetros y se meten al grupo recién
+ * creado. Al terminar se abre el chat del grupo nuevo.
+ */
 export function CreateGroupScreen() {
   const navigation = useNavigation<CreateGroupNav>();
-  const { addGroup } = useMockStore();
+  const route = useRoute<CreateGroupRoute>();
+  const { addGroup, addMember } = useMockStore();
   const { session } = useAuth();
+  const integrantes = route.params?.integrantes ?? [];
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
   /**
@@ -49,14 +59,50 @@ export function CreateGroupScreen() {
 
     setCreating(true);
     try {
-      await addGroup({
+      const creado = await addGroup({
         id: '',
         name: name.trim(),
         role: 'owner',
         favorite: false,
         avatarUrl: foto,
       });
-      navigation.goBack();
+
+      // Los integrantes elegidos en el paso anterior. Uno que falle no tumba el grupo: se avisa al
+      // final con quién se quedó fuera (el grupo ya existe y se abre igual).
+      const fallaron: string[] = [];
+      for (const persona of integrantes) {
+        try {
+          await addMember({
+            id: persona.id,
+            groupId: creado.id,
+            name: persona.name,
+            role: 'member',
+          });
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[CreateGroup] no se pudo agregar a', persona.name, err);
+          fallaron.push(persona.name);
+        }
+      }
+
+      if (fallaron.length > 0) {
+        Alert.alert(
+          'Grupo creado con algunos avisos',
+          `No se pudo agregar a: ${fallaron.join(', ')}. Puedes intentarlo de nuevo desde los ajustes del grupo.`
+        );
+      }
+
+      // Se abre el CHAT del grupo recién creado (23-09-2026) y la pila queda en [Mis grupos, chat]:
+      // la flecha de atrás vuelve a Mis grupos, no al paso de elegir integrantes.
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 1,
+          routes: [
+            { name: 'Main' },
+            { name: 'GroupChat', params: { groupId: creado.id, groupName: creado.name } },
+          ],
+        })
+      );
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[CreateGroup] no se pudo crear el grupo:', err);
@@ -146,6 +192,16 @@ export function CreateGroupScreen() {
         <Text style={styles.pista}>
           La foto es opcional: puedes crear el grupo solo con el nombre.
         </Text>
+
+        {/* Lo que se está creando: así se ve que los integrantes elegidos viajan con el grupo. */}
+        {integrantes.length > 0 && (
+          <Text style={styles.pistaIntegrantes}>
+            {integrantes.length === 1
+              ? 'Se agregará 1 integrante: '
+              : `Se agregarán ${integrantes.length} integrantes: `}
+            {integrantes.map((p) => p.name).join(', ')}
+          </Text>
+        )}
       </View>
 
       {/* Action button */}
@@ -240,6 +296,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 12,
     color: '#777',
+  },
+  pistaIntegrantes: {
+    marginTop: 18,
+    fontSize: 13,
+    color: '#3F51B5',
+    fontWeight: '600',
+    lineHeight: 18,
   },
   footer: {
     backgroundColor: '#fff',

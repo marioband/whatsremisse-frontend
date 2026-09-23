@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -20,7 +21,9 @@ import { useFilasDeslizantes } from '../hooks/useFilasDeslizantes';
 import { useRealtimeMisGrupos } from '../hooks/useRealtimeMisGrupos';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
 import { TEXTO_SUAVE } from '../lib/colors';
-import { fetchUltimoMensajePorGrupo } from '../lib/database';
+import { fetchResumenDeMisGrupos, fetchUltimoMensajePorGrupo, ResumenDeGrupoDeLaLista } from '../lib/database';
+import { horaDelUltimoMensaje } from '../lib/horaDelMensaje';
+import { vistaPreviaDelMensaje } from '../lib/mensajes';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -66,10 +69,22 @@ export function MyGroupsScreen() {
    */
   const [ultimoMensaje, setUltimoMensaje] = useState<Record<string, number>>({});
 
+  /**
+   * El resumen de cada grupo (23-09-2026, migración 0044): el último mensaje con su autor, su tipo y
+   * la hora. Es lo que pinta la tarjeta como WhatsApp (antes solo se sabía CUÁNDO llegó el último
+   * recibido, para ordenar). Sin la 0044 llega vacío y la lista se queda como estaba.
+   */
+  const [resumen, setResumen] = useState<Record<string, ResumenDeGrupoDeLaLista>>({});
+
   const cargarDatosDeLosGrupos = useCallback(() => {
     void refrescarSinLeer();
-    void fetchUltimoMensajePorGrupo()
-      .then(setUltimoMensaje)
+    void fetchResumenDeMisGrupos()
+      .then((datos) => {
+        setResumen(datos);
+        // Si la 0044 todavía no está aplicada no hay resumen: se ordena con la 0036, como antes.
+        if (Object.keys(datos).length > 0) return undefined;
+        return fetchUltimoMensajePorGrupo().then(setUltimoMensaje);
+      })
       .catch(() => undefined);
   }, [refrescarSinLeer]);
 
@@ -94,12 +109,16 @@ export function MyGroupsScreen() {
     () =>
       filtrarPorBusqueda(
         ordenarGrupos(
-          groups.map((grupo) => ({ ...grupo, ultimoMensajeAt: ultimoMensaje[grupo.id] ?? null }))
+          groups.map((grupo) => ({
+            ...grupo,
+            // La misma regla de siempre: ordena lo RECIBIDO, no lo que escribí yo.
+            ultimoMensajeAt: resumen[grupo.id]?.ultimoRecibidoAt ?? ultimoMensaje[grupo.id] ?? null,
+          }))
         ),
         consulta,
         camposDeBusquedaDeGrupo
       ),
-    [groups, ultimoMensaje, consulta]
+    [groups, resumen, ultimoMensaje, consulta]
   );
 
   /**
@@ -113,7 +132,19 @@ export function MyGroupsScreen() {
     MARGEN_ENTRE_TARJETAS
   );
 
-  const renderGroupCard = ({ item, index }: { item: GroupItem; index: number }) => (
+  const renderGroupCard = ({ item, index }: { item: GroupItem; index: number }) => {
+    const deEste = resumen[item.id];
+    const vista = deEste
+      ? vistaPreviaDelMensaje({
+          tipo: deEste.ultimoTipo,
+          texto: deEste.ultimoTexto,
+          autor: deEste.ultimoAutor,
+          esMio: deEste.ultimoEsMio,
+        })
+      : '';
+    const hora = deEste ? horaDelUltimoMensaje(deEste.ultimoAt) : '';
+    const nuevos = sinLeer[item.id] ?? 0;
+    return (
     /* La capa que se desliza al reordenar: su `translateY` arranca en la distancia hasta
        su hueco viejo y vuelve a 0 (donde le toca ahora). */
     <Animated.View
@@ -134,25 +165,41 @@ export function MyGroupsScreen() {
           </View>
         )}
 
-        {/* Nombre centrado */}
-        <Text style={styles.groupName} numberOfLines={1}>
-          {item.name}
-        </Text>
-
-        {/* El globo del contador de sin leer, en el hueco que dejaron el corazón y el engrane
-            (que se mudaron al chat del grupo, 20-09-2026). Sale solo cuando hay mensajes nuevos. */}
-        <View style={styles.globoSlot}>
-          {(sinLeer[item.id] ?? 0) > 0 && (
-            <View style={styles.globoSinLeer}>
-              <Text style={styles.globoSinLeerTexto}>
-                {sinLeer[item.id] > 99 ? '99+' : sinLeer[item.id]}
-              </Text>
-            </View>
+        {/* 23-09-2026, como WhatsApp: el nombre arriba y, debajo, las DOS primeras líneas del último
+            mensaje con quien lo escribió. Los dos van pegados a la imagen del grupo (el nombre ya no
+            va centrado: dejaba un hueco raro entre la foto y el texto). */}
+        <View style={styles.textos}>
+          <Text style={styles.groupName} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {vista !== '' && (
+            <Text style={styles.vistaPrevia} numberOfLines={2}>
+              {vista}
+            </Text>
           )}
+        </View>
+
+        {/* A la derecha, como WhatsApp: la hora del último mensaje y debajo los iconos — silenciado,
+            fijado— y el globo de mensajes sin leer. El texto «Admin» NO va aquí (lo retiró el usuario
+            el 23-09-2026: en este apartado solo iconos). */}
+        <View style={styles.derecha}>
+          {hora !== '' && <Text style={[styles.hora, nuevos > 0 && styles.horaConNuevos]}>{hora}</Text>}
+          <View style={styles.filaDeIconos}>
+            {item.muted === true && (
+              <MaterialCommunityIcons name="bell-off" size={15} color={TEXTO_SUAVE} />
+            )}
+            {item.favorite && <MaterialCommunityIcons name="pin" size={15} color={DARK_BG} />}
+            {nuevos > 0 && (
+              <View style={styles.globoSinLeer}>
+                <Text style={styles.globoSinLeerTexto}>{nuevos > 99 ? '99+' : nuevos}</Text>
+              </View>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -193,18 +240,17 @@ export function MyGroupsScreen() {
       />
 
       {/* FAB */}
-      <Fab etiqueta="Agregar grupo" onPress={() => navigation.navigate('CreateGroup')} />
+      {/* El «+» abre PRIMERO la elección de integrantes y después el nombre (23-09-2026, como
+          WhatsApp): el grupo se crea con esa gente dentro. */}
+      <Fab
+        etiqueta="Agregar grupo"
+        onPress={() => navigation.navigate('AddParticipant', { paraGrupoNuevo: true })}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  /** El hueco del globo: el MISMO sitio donde estaban el corazón y el engrane (20-09-2026). */
-  globoSlot: {
-    width: 44,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
   /** El globo del contador: oscuro sobre las tarjetas claras. */
   globoSinLeer: {
     minWidth: 22,
@@ -272,13 +318,44 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  groupName: {
+  /** La columna del nombre y la vista previa, pegada a la imagen del grupo. */
+  textos: {
     flex: 1,
-    textAlign: 'center',
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  groupName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#111',
-    marginHorizontal: 12,
+  },
+  /** Las dos primeras líneas del último mensaje («Gregory Medina: Gracias Mario»). */
+  vistaPrevia: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#6B6B6B',
+  },
+  /** La columna de la derecha: hora arriba, iconos debajo. */
+  derecha: {
+    marginLeft: 10,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minWidth: 54,
+  },
+  hora: {
+    fontSize: 11,
+    color: '#8A8A8A',
+  },
+  /** Con mensajes sin leer, la hora se destaca (como el verde de WhatsApp, pero en azul de marca). */
+  horaConNuevos: {
+    color: '#3F51B5',
+    fontWeight: '700',
+  },
+  filaDeIconos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
   },
   emptyText: {
     textAlign: 'center',

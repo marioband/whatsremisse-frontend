@@ -164,3 +164,35 @@ export function accionesDelMensaje(
     textoDelMenu: puedeEditar ? 'Elige una acción.' : AVISO_VENTANA_VENCIDA,
   };
 }
+
+/**
+ * La vista previa del último mensaje para la tarjeta de **Mis grupos** (23-09-2026).
+ *
+ * El usuario quiere la tarjeta como WhatsApp: el nombre, y debajo hasta DOS líneas del último
+ * mensaje con su autor («Gregory Medina: Gracias Mario»). De los mensajes que no son texto se enseña
+ * QUÉ son (una nota de voz no tiene texto que enseñar), y de los míos el autor es «Tú».
+ *
+ * Es una función pura a propósito: la regla del texto se prueba con node, sin montar la pantalla.
+ */
+export function vistaPreviaDelMensaje(mensaje: {
+  tipo?: string | null;
+  texto?: string | null;
+  autor?: string | null;
+  esMio?: boolean;
+}): string {
+  const tipo = (mensaje.tipo || 'TEXT').toUpperCase();
+  const cuerpo = (() => {
+    if (tipo === 'TEXT' || tipo === 'SYSTEM') {
+      // Un mensaje con saltos de línea se aplana: en la tarjeta solo caben dos líneas.
+      return (mensaje.texto || '').replace(/\s+/g, ' ').trim();
+    }
+    if (tipo === 'VOICE') return 'Mensaje de voz';
+    if (tipo === 'PHOTO') return 'Foto';
+    if (tipo === 'LOCATION') return 'Ubicación';
+    if (tipo === 'CONTACT') return 'Contacto';
+    return (mensaje.texto || '').replace(/\s+/g, ' ').trim();
+  })();
+  if (!cuerpo) return '';
+  const quien = mensaje.esMio ? 'Tú' : (mensaje.autor || '').trim();
+  return quien ? `${quien}: ${cuerpo}` : cuerpo;
+}

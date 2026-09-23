@@ -47,9 +47,19 @@ export type RootStackParamList = {
     /** Si viene, se está eligiendo grupo para una tarjeta que YA existe. */
     serviceId?: string;
   };
-  CreateGroup: undefined;
+  /**
+   * Crear grupo. Desde el 23-09-2026 se llega aquí DESPUÉS de elegir a los integrantes (el «+» de
+   * Mis grupos abre primero el selector), así que los trae en los parámetros.
+   */
+  CreateGroup: { integrantes?: { id: string; name: string }[] } | undefined;
   GroupMembers: { groupId: string; groupName: string };
-  AddParticipant: { groupId: string; groupName: string };
+  /**
+   * Añadir integrantes. Sin grupo (`paraGrupoNuevo`) es el PRIMER paso de crear un grupo: se eligen
+   * las personas y después se pone el nombre (23-09-2026, como WhatsApp).
+   */
+  AddParticipant:
+    | { groupId: string; groupName: string; paraGrupoNuevo?: false }
+    | { paraGrupoNuevo: true; groupId?: undefined; groupName?: undefined };
   ApplicantsScreen: { serviceId: string };
   Chat: { serviceId: string; driverId?: string; driverName?: string };
   GroupChat: { groupId: string; groupName: string };

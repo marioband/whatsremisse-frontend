@@ -8,10 +8,16 @@
  * con el color de administrador, que es la información más fuerte), y dentro de cada
  * categoría se ordena por nombre, como en la lista de integrantes.
  *
+ * 23-09-2026 — el usuario quitó los colores: «los grupos ya no se dividirán por colores, todos serán
+ * del mismo color que se usa en los grupos a los que el usuario integra (gris claro)». El ORDEN sigue
+ * siendo el mismo y sigue viviendo aquí; lo único que cambia es que las cuatro categorías se pintan
+ * igual. Así la categoría se lee por los ICONOS de la tarjeta (candado/silenciado, pin de fijado), no
+ * por el fondo.
+ *
  * Vive aquí, sin React, porque es la regla del reparto y hay que poder ejecutarla con
  * node: la pantalla no decide colores ni orden por su cuenta.
  */
-import { GRUPO_ADMIN, GRUPO_FAVORITO, GRUPO_INTEGRANTE, GRUPO_PROPIETARIO } from './colors';
+import { GRUPO_INTEGRANTE } from './colors';
 
 /** Lo mínimo que necesita un grupo para ordenarse y pintarse. */
 export interface GrupoParaLaLista {
@@ -36,11 +42,17 @@ export const ORDEN_DE_LAS_CATEGORIAS: readonly CategoriaDeGrupo[] = [
   'INTEGRANTE',
 ];
 
-/** El color de la tarjeta de cada categoría. */
+/**
+ * El color de la tarjeta: el MISMO para todas las categorías (23-09-2026).
+ *
+ * Es el gris claro con el que ya se pintaban los grupos que solo integro (`GRUPO_INTEGRANTE`,
+ * `#F2F2F2`). Se deja el mapa por categoría —y no una sola constante— porque la prueba del reparto y
+ * el resto del proyecto lo consultan por nombre.
+ */
 export const COLOR_DE_LA_CATEGORIA: Record<CategoriaDeGrupo, string> = {
-  PROPIETARIO: GRUPO_PROPIETARIO,
-  ADMIN: GRUPO_ADMIN,
-  FAVORITO: GRUPO_FAVORITO,
+  PROPIETARIO: GRUPO_INTEGRANTE,
+  ADMIN: GRUPO_INTEGRANTE,
+  FAVORITO: GRUPO_INTEGRANTE,
   INTEGRANTE: GRUPO_INTEGRANTE,
 };
 

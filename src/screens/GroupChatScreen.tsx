@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   SafeAreaView,
   FlatList,
@@ -14,12 +15,6 @@ import {
 } from 'react-native';
 
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
-import {
-  Icono,
-  ICONO_CORAZON_BORDE_AZUL,
-  ICONO_CORAZON_LLENO_AZUL,
-  ICONO_GRUPOS_AZUL,
-} from '../components/Icono';
 import { CompartirContacto } from '../components/chat/CompartirContacto';
 import { ContenidoDelMensaje } from '../components/chat/ContenidoDelMensaje';
 import { DELAY_PULSACION_LARGA_MS } from '../components/chat/MessageList';
@@ -95,19 +90,19 @@ export function GroupChatScreen() {
   // ya se está leyendo; al minimizar la app la marca se borra y el aviso vuelve.
   useConversacionVista(urlDeLaConversacion('grupo', groupId));
   const { session } = useAuth();
-  const { members, loadGroupMembers, groups, toggleFavoriteGroup, setRole } = useMockStore();
+  const { members, loadGroupMembers, groups, setRole } = useMockStore();
 
   /** La ventana de «Compartir un contacto» (20-09-2026). */
   const [compartirContacto, setCompartirContacto] = useState(false);
 
+  /** El grupo tal como lo tiene el almacén: de ahí salen la foto y el nombre de la cabecera. */
+  const grupo = useMemo(() => groups.find((g) => g.id === groupId), [groups, groupId]);
+
   /**
-   * ¿Este grupo es favorito mío? El corazón de la cabecera lo enciende y lo apaga (venía de la
-   * tarjeta de Mis grupos; el usuario lo mudó aquí el 20-09-2026).
+   * El nombre que se enseña: el del almacén manda sobre el de la ruta, porque en los ajustes se
+   * puede cambiar el nombre y al volver al chat tiene que verse el nuevo (23-09-2026).
    */
-  const esFavorito = useMemo(
-    () => groups.find((g) => g.id === groupId)?.favorite === true,
-    [groups, groupId]
-  );
+  const nombreDelGrupo = grupo?.name || groupName;
 
   /**
    * Abrir el chat del grupo lo marca como leído: el globo del contador del apartado «Mis grupos»
@@ -276,7 +271,7 @@ export function GroupChatScreen() {
     [agregarSiEsNuevo, reemplazarSiExiste, releerConversacion, cargarLecturas]
   );
 
-  useRealtimeMessages(groupId, callbacksTiempoReal, { miId: userId, nombreDelGrupo: groupName });
+  useRealtimeMessages(groupId, callbacksTiempoReal, { miId: userId, nombreDelGrupo: nombreDelGrupo });
 
   /**
    * ¿El mensaje que se quedó sin respuesta está ya guardado? Se lee el grupo y se busca
@@ -663,33 +658,34 @@ export function GroupChatScreen() {
           <TouchableOpacity onPress={volverAtras} accessibilityLabel="Volver">
             <Text style={styles.headerArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {groupName}
-          </Text>
-          {/* El corazón (favorito) y el engrane (ajustes del grupo: integrantes y el silenciar
-              de los avisos) se mudaron aquí desde la tarjeta de Mis grupos (20-09-2026); antes
-              este hueco lo ocupaba el avatar de Cuenta, que el usuario mandó retirar.
-              Van en AZUL porque la cabecera es oscura: el negro institucional con el que venían
-              se perdía en el fondo. */}
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={() => toggleFavoriteGroup(groupId)}
-              style={styles.headerBtn}
-              accessibilityLabel={esFavorito ? 'Quitar de favoritos' : 'Marcar como favorito'}
-            >
-              <Icono
-                fuente={esFavorito ? ICONO_CORAZON_LLENO_AZUL : ICONO_CORAZON_BORDE_AZUL}
-                tamano={22}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('GroupMembers', { groupId, groupName })}
-              style={styles.headerBtn}
-              accessibilityLabel="Ajustes del grupo"
-            >
-              <Icono fuente={ICONO_GRUPOS_AZUL} tamano={22} />
-            </TouchableOpacity>
-          </View>
+          {/*
+            El título ENTERO es el botón de los ajustes del grupo (23-09-2026): la IMAGEN del grupo a
+            la izquierda, el NOMBRE a la derecha, los dos juntos y centrados. El usuario mandó retirar
+            de aquí el corazón (fijar) y el engrane (ajustes): el corazón ahora es el botón «fijar» de
+            los ajustes, y los ajustes se abren tocando este título.
+          */}
+          <TouchableOpacity
+            style={styles.tituloDelGrupo}
+            onPress={() =>
+              navigation.navigate('GroupMembers', { groupId, groupName: nombreDelGrupo })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Ajustes del grupo ${nombreDelGrupo}`}
+            accessibilityHint="Abre los ajustes: foto, nombre, integrantes y los botones del grupo."
+          >
+            {grupo?.avatarUrl ? (
+              <Image source={{ uri: grupo.avatarUrl }} style={styles.avatarDelTitulo} />
+            ) : (
+              <View style={styles.avatarDelTitulo}>
+                <Text style={styles.avatarDelTituloTexto}>{nombreDelGrupo.charAt(0)}</Text>
+              </View>
+            )}
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {nombreDelGrupo}
+            </Text>
+          </TouchableOpacity>
+          {/* El mismo ancho que la flecha, para que el título quede centrado de verdad. */}
+          <View style={styles.headerSpacer} />
         </View>
 
         {loading ? (
@@ -787,14 +783,25 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   /** Los dos botones de la derecha: corazón y engrane, del mismo cuerpo (22). */
-  headerActions: {
+  /* El título (imagen + nombre) es un botón: los dos van juntos y centrados. */
+  tituloDelGrupo: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerBtn: {
-    padding: 6,
-    marginLeft: 4,
+  avatarDelTitulo: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#1A1A1A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
   },
+  avatarDelTituloTexto: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  /* El hueco de la flecha: sin él el título no queda centrado. */
+  headerSpacer: { width: 26 },
   headerTitle: {
     color: '#fff',
     fontSize: 17,

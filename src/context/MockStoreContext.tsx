@@ -40,6 +40,8 @@ import {
   fetchServicesForProvider,
   fetchServiceAlertById,
   postularAServicio,
+  cambiarFotoDelGrupo,
+  cambiarNombreDelGrupo,
   insertGroup,
   insertGroupMember,
   insertServiceAlert,
@@ -230,6 +232,8 @@ type MockAction =
   | { type: 'ADVANCE_DRIVER_PROGRESS'; payload: { serviceId: string } }
   | { type: 'TOGGLE_FAVORITE_GROUP'; payload: { groupId: string } }
   | { type: 'ADD_GROUP'; payload: GroupItem }
+  /** Cambió el nombre y/o la foto del grupo (0044, creador o administrador). */
+  | { type: 'EDIT_GROUP'; payload: { groupId: string; name?: string; avatarUrl?: string | null } }
   | { type: 'ADD_MEMBER'; payload: GroupMember }
   | {
       type: 'UPDATE_MEMBER_ROLE';
@@ -539,6 +543,22 @@ function mockReducer(state: MockState, action: MockAction): MockState {
         groups: [action.payload, ...state.groups],
       };
 
+    case 'EDIT_GROUP':
+      return {
+        ...state,
+        groups: state.groups.map((g) =>
+          g.id === action.payload.groupId
+            ? {
+                ...g,
+                ...(action.payload.name !== undefined ? { name: action.payload.name } : {}),
+                ...(action.payload.avatarUrl !== undefined
+                  ? { avatarUrl: action.payload.avatarUrl }
+                  : {}),
+              }
+            : g
+        ),
+      };
+
     case 'ADD_MEMBER':
       return {
         ...state,
@@ -671,7 +691,17 @@ interface MockContextValue extends MockState {
   resolverDeclaracionDePago: (serviceId: string, aceptar: boolean) => Promise<boolean>;
   confirmarPagoRecibido: (serviceId: string) => Promise<boolean>;
   toggleFavoriteGroup: (groupId: string) => void;
-  addGroup: (group: GroupItem) => Promise<void>;
+  /** Crea el grupo y devuelve el grupo creado (su id hace falta para meter a los integrantes). */
+  addGroup: (group: GroupItem) => Promise<GroupItem>;
+  /**
+   * Cambia el nombre y/o la foto del grupo (23-09-2026). Puede el creador o un administrador: lo
+   * decide la función `cambiar_nombre_del_grupo` / `cambiar_foto_del_grupo` de la 0044.
+   * Devuelve true si la base lo guardó.
+   */
+  editarGrupo: (
+    groupId: string,
+    cambios: { nombre?: string; avatarUrl?: string | null }
+  ) => Promise<boolean>;
   /** Elimina el grupo entero (solo su creador). Devuelve false si la base no lo borró. */
   eliminarGrupo: (groupId: string) => Promise<boolean>;
   addMember: (member: GroupMember) => void;
@@ -1641,22 +1671,47 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
           // La foto (0038) se manda solo si el usuario eligió una: es opcional de principio a fin.
           group.avatarUrl || null
         );
-        dispatch({
-          type: 'ADD_GROUP',
-          payload: {
-            id: dbGroup.id,
-            name: dbGroup.name,
-            role: member.role as GroupItem['role'],
-            favorite: member.favorite,
-            ownerId: dbGroup.owner_id,
-            // Si la migración 0038 no está aplicada, `insertGroup` guardó el grupo sin foto y aquí
-            // no habrá nada: la tarjeta pinta la inicial, que es el respaldo de siempre.
-            avatarUrl: dbGroup.avatar_url ?? group.avatarUrl ?? null,
-          },
-        });
+        const creado: GroupItem = {
+          id: dbGroup.id,
+          name: dbGroup.name,
+          role: member.role as GroupItem['role'],
+          favorite: member.favorite,
+          ownerId: dbGroup.owner_id,
+          // Si la migración 0038 no está aplicada, `insertGroup` guardó el grupo sin foto y aquí
+          // no habrá nada: la tarjeta pinta la inicial, que es el respaldo de siempre.
+          avatarUrl: dbGroup.avatar_url ?? group.avatarUrl ?? null,
+        };
+        dispatch({ type: 'ADD_GROUP', payload: creado });
+        return creado;
       } catch (err) {
         console.error('[MockStore] addGroup error:', err);
         throw err;
+      }
+    },
+    /**
+     * Cambiar el nombre y/o la foto del grupo (23-09-2026).
+     *
+     * Va por las funciones de la 0044 porque la política de `groups` solo deja escribir al creador y
+     * aquí también puede un administrador. Si la base no lo acepta, se explica el motivo y el grupo
+     * se queda como estaba (nada de pintar un nombre que no se guardó).
+     */
+    editarGrupo: async (groupId, cambios) => {
+      try {
+        let nombre: string | undefined;
+        if (cambios.nombre !== undefined) {
+          nombre = await cambiarNombreDelGrupo(groupId, cambios.nombre);
+        }
+        let avatarUrl: string | null | undefined;
+        if (cambios.avatarUrl !== undefined) {
+          await cambiarFotoDelGrupo(groupId, cambios.avatarUrl);
+          avatarUrl = cambios.avatarUrl;
+        }
+        dispatch({ type: 'EDIT_GROUP', payload: { groupId, name: nombre, avatarUrl } });
+        return true;
+      } catch (err) {
+        console.error('[MockStore] editarGrupo error:', err);
+        Alert.alert('No se pudo cambiar el grupo', textoDeErrorParaElUsuario(err));
+        return false;
       }
     },
     eliminarGrupo: async (groupId) => {

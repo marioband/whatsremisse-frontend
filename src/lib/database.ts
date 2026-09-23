@@ -2209,6 +2209,91 @@ export async function silenciarGrupo(groupId: string, silenciado: boolean): Prom
  * que solo integro se ordenen según cuál recibió el último mensaje (pedido del usuario,
  * 20-09-2026). Se devuelve en milisegundos para poder ordenar sin volver a parsear fechas.
  */
+/**
+ * El resumen de cada grupo para las tarjetas de **Mis grupos** (23-09-2026, migración 0044).
+ *
+ * Trae, por grupo: el último mensaje (texto, tipo y quién lo escribió) y —para ordenar— cuándo llegó
+ * el último RECIBIDO, que es lo que ya hacía `grupos_ultimo_mensaje` (0036). Sin la 0044 la lista se
+ * queda como estaba (nombre y, si acaso, la hora que sí traía la 0036): se avisa por consola y no se
+ * rompe nada.
+ */
+export interface ResumenDeGrupoDeLaLista {
+  /** Cuándo llegó el último mensaje que NO escribí yo (ordena la lista). */
+  ultimoRecibidoAt: number | null;
+  /** Cuándo se escribió el último mensaje, sea mío o no (es la hora de la tarjeta). */
+  ultimoAt: number | null;
+  ultimoTexto: string | null;
+  ultimoTipo: string | null;
+  /** Primer nombre de quien escribió, o null si lo escribí yo. */
+  ultimoAutor: string | null;
+  ultimoEsMio: boolean;
+}
+
+export async function fetchResumenDeMisGrupos(): Promise<Record<string, ResumenDeGrupoDeLaLista>> {
+  if (!isSupabaseConfigured) return {};
+  const { data, error } = await supabase.rpc('resumen_de_mis_grupos');
+  if (error) {
+    if (esFuncionAusente(error) || esColumnaAusente(error)) {
+      console.warn(
+        '[database] sin el resumen de los grupos: falta aplicar 0044_resumen_de_mis_grupos_y_editar_el_grupo.sql'
+      );
+      return {};
+    }
+    throw error;
+  }
+  const resumen: Record<string, ResumenDeGrupoDeLaLista> = {};
+  for (const fila of (data ?? []) as {
+    group_id: string;
+    ultimo_recibido_at: string | null;
+    ultimo_at: string | null;
+    ultimo_texto: string | null;
+    ultimo_tipo: string | null;
+    ultimo_autor: string | null;
+    ultimo_es_mio: boolean | null;
+  }[]) {
+    if (!fila.group_id) continue;
+    const marca = (valor: string | null) => {
+      const ms = valor ? Date.parse(valor) : NaN;
+      return Number.isFinite(ms) ? ms : null;
+    };
+    resumen[fila.group_id] = {
+      ultimoRecibidoAt: marca(fila.ultimo_recibido_at),
+      ultimoAt: marca(fila.ultimo_at),
+      ultimoTexto: fila.ultimo_texto ?? null,
+      ultimoTipo: fila.ultimo_tipo ?? null,
+      ultimoAutor: fila.ultimo_autor ?? null,
+      ultimoEsMio: fila.ultimo_es_mio === true,
+    };
+  }
+  return resumen;
+}
+
+/**
+ * Cambiar el nombre del grupo (23-09-2026, migración 0044).
+ *
+ * Puede el creador O un administrador: la política de `groups` (0002) solo deja al creador, así que
+ * esto va por la función autorizada de la 0044, que comprueba el rol por dentro y devuelve el nombre
+ * guardado (o el error con su motivo).
+ */
+export async function cambiarNombreDelGrupo(groupId: string, nombre: string): Promise<string> {
+  const { data, error } = await supabase.rpc('cambiar_nombre_del_grupo', {
+    p_group_id: groupId,
+    p_nombre: nombre,
+  });
+  if (error) throw error;
+  return String(data ?? nombre);
+}
+
+/** Cambiar (o quitar, con null) la foto del grupo. Creador o administrador (0044). */
+export async function cambiarFotoDelGrupo(groupId: string, avatarUrl: string | null): Promise<string> {
+  const { data, error } = await supabase.rpc('cambiar_foto_del_grupo', {
+    p_group_id: groupId,
+    p_avatar_url: avatarUrl,
+  });
+  if (error) throw error;
+  return String(data ?? '');
+}
+
 export async function fetchUltimoMensajePorGrupo(): Promise<Record<string, number>> {
   if (!isSupabaseConfigured) return {};
   const { data, error } = await supabase.rpc('grupos_ultimo_mensaje');
