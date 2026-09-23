@@ -104,7 +104,7 @@ import { textoParaCopiar, DatosPublicos, datosDesdePerfilPublico } from '../lib/
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
 
-type ChatNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings'>;
+type ChatNav = StackNavigationProp<RootStackParamList, 'Chat' | 'Settings' | 'PaymentDetails'>;
 type ChatRoute = RouteProp<RootStackParamList, 'Chat'>;
 
 /** Sondeo de respaldo por si el tiempo real del proyecto no está activado. */
@@ -188,6 +188,11 @@ export function ChatScreen() {
     yape?: string;
     bcpAccount?: string;
     bcpCci?: string;
+    // 0039: el tipo de billetera y el banco viajan desde 0039; sin ellos el rótulo del bloque de pago
+    // cae al texto genérico aunque el número esté.
+    billeteraTipo?: string;
+    billeteraNombre?: string;
+    bancoNombre?: string;
   } | null>(null);
   // Caso A ("Yo pago"): el conductor necesita los medios de pago del proveedor.
   const [datosDelProveedor, setDatosDelProveedor] = useState<{
@@ -195,6 +200,10 @@ export function ChatScreen() {
     bcpAccount?: string;
     bcpCci?: string;
     nombre?: string;
+    // 0039: lo mismo que arriba, para el lado del proveedor.
+    billeteraTipo?: string;
+    billeteraNombre?: string;
+    bancoNombre?: string;
   } | null>(null);
   const isAdvancingRef = useRef(false);
   // El aviso de rechazo se muestra UNA vez por visita al chat.
@@ -1341,6 +1350,9 @@ export function ChatScreen() {
             onResolver={handleResolverDeclaracion}
             onConfirmar={handleConfirmarPago}
             onCopiar={handleCopyBank}
+            // 22-09-2026: si los datos que se están viendo son míos y les falta el tipo de billetera
+            // o el banco, el aviso del bloque de pago lleva aquí a declararlos.
+            onCompletarDatos={() => navigation.navigate('PaymentDetails')}
           />
         )}
 

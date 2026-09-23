@@ -180,7 +180,6 @@ export function MyServicesScreen() {
             <View style={[styles.rolTag, { backgroundColor: rol === 'CONDUCTOR' ? AZUL : OSCURO }]}>
               <Text style={styles.rolTexto}>{rol === 'CONDUCTOR' ? 'Conductor' : 'Proveedor'}</Text>
             </View>
-            <Text style={styles.abrirTexto}>Ver ›</Text>
           </View>
         </View>
 
@@ -192,6 +191,9 @@ export function MyServicesScreen() {
           <Text style={styles.amount}>S/ {service.fare}</Text>
           <Text style={styles.paymentTerm}>{service.payment_term || 'Al término'}</Text>
           <Text style={styles.paymentMethod}>{service.payment_method || 'BCP'}</Text>
+          {/* El «Ver ›» va en su renglón, pegado al borde derecho de la tarjeta (debajo de la tarifa):
+              es lo que pidió el usuario el 22-09-2026 al corregir la alineación. */}
+          <Text style={styles.abrirTexto}>Ver ›</Text>
         </View>
       </TouchableOpacity>
     );
@@ -344,9 +346,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 6,
   },
-  /* La etiqueta del rol y el «Ver ›» van uno debajo del otro, los dos pegados al borde izquierdo
-     del texto de arriba (pedido del usuario, 22-09-2026): antes el «Ver ›» quedaba empujado al
-     borde derecho de la tarjeta, lejos del resto de la información. */
+  /* Solo la etiqueta del rol (el «Ver ›» vive en la columna derecha, debajo de la tarifa).
+     22-09-2026: primero se pidió a la izquierda y el mismo día se corrigió a la derecha. */
   rolFila: {
     flexDirection: 'column',
     alignItems: 'flex-start',
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   rolTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  abrirTexto: { color: AZUL, fontSize: 11, fontWeight: '700', marginTop: 4 },
+  abrirTexto: { color: AZUL, fontSize: 11, fontWeight: '700', marginTop: 8 },
   routeRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -7,7 +7,12 @@
  *
  * Las DOS listas viven aquí y solo aquí: la pantalla de datos de pago las pinta como botones y el
  * chat las usa para poner el nombre correcto («Número Plin», «Cuenta Interbank») en vez del
- * rótulo genérico de antes («Yape / Plin», «Cuenta bancaria»).
+ * rótulo que dice la verdad («Billetera sin declarar», «Cuenta sin declarar»).
+ *
+ * 22-09-2026 — el usuario vio esos rótulos genéricos («Yape / Plin», «Cuenta bancaria») y los llamó
+ * «congelados»: se leían como si el dato estuviera, y quien tiene que transferir no sabía a dónde.
+ * Como el tipo solo puede enseñarse si su dueño lo declaró, cuando falta se dice que falta (y desde el
+ * chat hay un aviso que lleva a declararlo).
  *
  * Reglas que no se ven:
  *   - En la base, la billetera se guarda como CÓDIGO (`billetera_tipo`: YAPE, PLIN, BIM, OTRO) más
@@ -89,25 +94,25 @@ export function nombreDeBanco(banco?: string | null): string {
   return (banco || '').trim();
 }
 
-/** Rótulo de la cuenta: «Cuenta Interbank» / «Cuenta bancaria» cuando no se sabe el banco. */
+/** Rótulo de la cuenta: «Cuenta Interbank» o «Cuenta sin declarar» si el banco no se declaró. */
 export function etiquetaDeLaCuenta(banco?: string | null): string {
   const nombre = nombreDeBanco(banco);
-  return nombre ? `Cuenta ${nombre}` : 'Cuenta bancaria';
+  return nombre ? `Cuenta ${nombre}` : 'Cuenta sin declarar';
 }
 
-/** Rótulo del CCI: «CCI Scotiabank» / «CCI» cuando no se sabe el banco. */
+/** Rótulo del CCI: «CCI Scotiabank» o «CCI sin declarar» si el banco no se declaró. */
 export function etiquetaDelCci(banco?: string | null): string {
   const nombre = nombreDeBanco(banco);
-  return nombre ? `CCI ${nombre}` : 'CCI';
+  return nombre ? `CCI ${nombre}` : 'CCI sin declarar';
 }
 
-/** Rótulo de la billetera en el chat: «Yape», «Plin»… o el genérico de antes si no se sabe. */
+/** Rótulo de la billetera en el chat: «Yape», «Plin»… o «Billetera sin declarar» si no se sabe. */
 export function etiquetaDeLaBilletera(datos: {
   billeteraTipo?: string | null;
   billeteraNombre?: string | null;
 }): string {
   const chip = chipDeBilletera(datos.billeteraTipo, datos.billeteraNombre);
-  return nombreDeBilletera(chip, datos.billeteraNombre) || 'Yape / Plin';
+  return nombreDeBilletera(chip, datos.billeteraNombre) || 'Billetera sin declarar';
 }
 
 /**

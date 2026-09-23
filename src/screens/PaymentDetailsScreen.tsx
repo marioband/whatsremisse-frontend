@@ -46,8 +46,18 @@ const BLUE = '#3F51B5';
  * dinero veía el rótulo equivocado. Ahora se elige con botones y las etiquetas se arman con lo
  * elegido; «Otro» pide el nombre para poder enseñarlo.
  *
- * Nada de esto bloquea el guardado: sin elegir nada se guarda igual (y los rótulos del chat caen al
- * texto genérico de siempre). Los números siguen en las mismas columnas de la base.
+ * 22-09-2026 — el usuario vio en el chat los títulos genéricos («Yape / Plin», «Cuenta bancaria»)
+ * en vez del sistema que la otra parte declaró. La causa estaba aquí: esta pantalla arrancaba con
+ * «Yape» y «BCP» YA marcados, así que el tipo nunca se guardaba (en la base queda vacío, y el rótulo
+ * solo puede decir lo que se guardó) y el guardado tampoco lo pedía.
+ *
+ * Ahora se impide el estado imposible en el momento, no al final:
+ *   - sin nada guardado no hay ningún botón marcado (nadie «declara» sin querer),
+ *   - si hay número, hay que decir de qué billetera es; si hay cuenta o CCI, de qué banco,
+ *   - «Otro» exige el nombre (sin él la etiqueta volvía al texto genérico),
+ *   - el botón Guardar queda bloqueado mientras falte algo, con el motivo escrito en su campo.
+ *
+ * Los números siguen en las mismas columnas de la base.
  */
 export function PaymentDetailsScreen() {
   const navigation = useNavigation<PaymentNav>();
@@ -55,10 +65,12 @@ export function PaymentDetailsScreen() {
   const { userProfile, persistUserProfile } = useMockStore();
   const fromOnboarding = route.params?.fromOnboarding ?? false;
 
-  const [billetera, setBilletera] = useState<Billetera>('Yape');
+  // Sin nada guardado NO hay nada marcado: antes venía marcado «Yape»/«BCP» y parecía que el usuario
+  // ya lo había elegido, así que el tipo no se guardaba nunca.
+  const [billetera, setBilletera] = useState<Billetera | null>(null);
   const [billeteraOtro, setBilleteraOtro] = useState('');
   const [numeroDeBilletera, setNumeroDeBilletera] = useState('');
-  const [banco, setBanco] = useState<Banco>('BCP');
+  const [banco, setBanco] = useState<Banco | null>(null);
   const [bancoOtro, setBancoOtro] = useState('');
   const [cuenta, setCuenta] = useState('');
   const [cci, setCci] = useState('');
@@ -68,16 +80,16 @@ export function PaymentDetailsScreen() {
   // Los datos de pago llegan desde Supabase después del primer render.
   useEffect(() => {
     if (!userProfile || hydratedFields) return;
-    // Con lo guardado se marca el botón que toca; si no hay tipo (perfiles de antes de la 0039),
-    // se arranca en Yape/BCP, que es como se leían siempre esos dos campos.
-    setBilletera(chipDeBilletera(userProfile.billeteraTipo, userProfile.billeteraNombre) ?? 'Yape');
+    // Con lo guardado se marca el botón que toca. Si el perfil es de antes de la 0039 (o nunca se
+    // declaró) queda SIN marcar: así se ve que falta, y al guardar se pide.
+    setBilletera(chipDeBilletera(userProfile.billeteraTipo, userProfile.billeteraNombre));
     setBilleteraOtro(
       chipDeBilletera(userProfile.billeteraTipo, userProfile.billeteraNombre) === 'Otro'
         ? userProfile.billeteraNombre || ''
         : ''
     );
     setNumeroDeBilletera(userProfile.yapeNumber || '');
-    setBanco(chipDeBanco(userProfile.bancoNombre) ?? 'BCP');
+    setBanco(chipDeBanco(userProfile.bancoNombre));
     setBancoOtro(
       chipDeBanco(userProfile.bancoNombre) === 'Otro' ? userProfile.bancoNombre || '' : ''
     );
@@ -85,6 +97,38 @@ export function PaymentDetailsScreen() {
     setCci(userProfile.bcpCci || '');
     setHydratedFields(true);
   }, [userProfile, hydratedFields]);
+
+  // ---------------------------------------------------------------- lo que falta para poder guardar
+  //
+  // Regla del usuario (22-09-2026): la app impide el estado imposible en el momento, no lo avisa al
+  // final. Un número sin su billetera (o una cuenta sin su banco) es exactamente eso: quien tiene que
+  // transferir no sabe a dónde, y el rótulo del chat se queda en el texto genérico para siempre.
+  const numeroLimpio = numeroDeBilletera.trim();
+  const cuentaLimpia = cuenta.trim();
+  const cciLimpio = cci.trim();
+  const nombreDeBilleteraPropio = billeteraOtro.trim();
+  const nombreDeBancoPropio = bancoOtro.trim();
+
+  /** Declarada de verdad: hay tipo y, si es «Otro», también el nombre (sin él no hay qué enseñar). */
+  const billeteraDeclarada =
+    billetera !== null && (billetera !== 'Otro' || nombreDeBilleteraPropio !== '');
+  const bancoDeclarado = banco !== null && (banco !== 'Otro' || nombreDeBancoPropio !== '');
+
+  /** Hay número de billetera y no se sabe de qué billetera es. */
+  const faltaBilletera = numeroLimpio !== '' && !billeteraDeclarada;
+  /** Hay cuenta o CCI y no se sabe de qué banco son. */
+  const faltaBanco = (cuentaLimpia !== '' || cciLimpio !== '') && !bancoDeclarado;
+
+  const motivoParaNoGuardar = faltaBilletera
+    ? billetera === 'Otro'
+      ? 'Escribe el nombre de tu billetera'
+      : 'Elige de qué billetera es tu número'
+    : faltaBanco
+      ? banco === 'Otro'
+        ? 'Escribe el nombre de tu banco'
+        : 'Elige de qué banco es tu cuenta'
+      : '';
+  const puedeGuardar = motivoParaNoGuardar === '' && !saving;
 
   const handleSave = async () => {
     if (!userProfile) {
@@ -95,6 +139,9 @@ export function PaymentDetailsScreen() {
       return;
     }
 
+    // El botón ya está bloqueado mientras falte algo; esto es la red de seguridad.
+    if (motivoParaNoGuardar) return;
+
     setSaving(true);
     try {
       // Persiste en Supabase (profiles.bcp_*/yape_number + 0039 para el tipo de billetera y banco);
@@ -104,8 +151,8 @@ export function PaymentDetailsScreen() {
         yapeNumber: numeroDeBilletera,
         bcpAccount: cuenta,
         bcpCci: cci,
-        billeteraTipo: codigoDeBilletera(billetera) || undefined,
-        billeteraNombre: billetera === 'Otro' ? billeteraOtro.trim() : undefined,
+        billeteraTipo: billetera ? codigoDeBilletera(billetera) || undefined : undefined,
+        billeteraNombre: billetera === 'Otro' ? nombreDeBilleteraPropio : undefined,
         bancoNombre: bancoAGuardar(banco, bancoOtro) || undefined,
       });
       Alert.alert('Guardado', 'Tus datos de pago han sido actualizados.');
@@ -144,7 +191,7 @@ export function PaymentDetailsScreen() {
   /** Fila de botones (mismo dibujo que el «Tipo de pago» de Nuevo servicio). */
   const botones = <Opcion extends string>(
     opciones: readonly Opcion[],
-    elegida: Opcion,
+    elegida: Opcion | null,
     alElegir: (opcion: Opcion) => void
   ) => (
     <View style={styles.optionsRow}>
@@ -205,6 +252,13 @@ export function PaymentDetailsScreen() {
             onChangeText={setNumeroDeBilletera}
             keyboardType="phone-pad"
           />
+          {faltaBilletera && (
+            <Text style={styles.falta}>
+              {billetera === 'Otro'
+                ? 'Escribe el nombre de tu billetera: es lo que verá quien te transfiera.'
+                : 'Elige arriba de qué billetera es este número.'}
+            </Text>
+          )}
         </View>
 
         {/* ---------------------------------------------------------------- banco */}
@@ -243,11 +297,22 @@ export function PaymentDetailsScreen() {
             onChangeText={setCci}
           />
         </View>
+        {faltaBanco && (
+          <Text style={styles.falta}>
+            {banco === 'Otro'
+              ? 'Escribe el nombre de tu banco: es lo que verá quien te transfiera.'
+              : 'Elige arriba de qué banco es esta cuenta.'}
+          </Text>
+        )}
+
+        {motivoParaNoGuardar !== '' && (
+          <Text style={styles.motivoBloqueo}>Para guardar: {motivoParaNoGuardar.toLowerCase()}</Text>
+        )}
 
         <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          style={[styles.saveButton, !puedeGuardar && styles.saveButtonDisabled]}
           onPress={handleSave}
-          disabled={saving}
+          disabled={!puedeGuardar}
         >
           <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar'}</Text>
         </TouchableOpacity>
@@ -330,6 +395,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
   },
-  saveButtonDisabled: { opacity: 0.6 },
+  saveButtonDisabled: { opacity: 0.5 },
+  /* El motivo, en rojo y en el campo que falta: un aviso al final obliga a buscar qué pasó. */
+  falta: { fontSize: 12, color: '#C62828', marginTop: 6, fontWeight: '600' },
+  motivoBloqueo: { fontSize: 12, color: '#C62828', fontWeight: '600', marginTop: 12 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

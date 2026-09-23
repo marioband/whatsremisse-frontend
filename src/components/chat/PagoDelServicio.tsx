@@ -33,6 +33,8 @@ import {
 } from '../../lib/pagoServicio';
 import { ServiceAlert } from '../../types';
 import {
+  chipDeBanco,
+  chipDeBilletera,
   etiquetaDeLaBilletera,
   etiquetaDeLaCuenta,
   etiquetaDelCci,
@@ -81,6 +83,12 @@ interface Props {
   onResolver: (aceptar: boolean) => void;
   onConfirmar: () => void;
   onCopiar: (label: string, value: string) => void;
+  /**
+   * Ir a «Datos de pago» (Cuenta). Se usa cuando los datos que se están viendo son los PROPIOS y les
+   * falta el tipo de billetera o el banco: sin eso, el rótulo del chat solo puede decir el texto
+   * genérico («Yape / Plin», «Cuenta bancaria») y quien tiene que transferir no sabe a dónde.
+   */
+  onCompletarDatos?: () => void;
   /** Hay una operación en curso: se bloquean los botones. */
   ocupado?: boolean;
   /**
@@ -98,6 +106,30 @@ interface Props {
  *   - Quien debe pagar ve los datos de pago de quien debe recibir.
  *   - La confirmación final la da siempre quien recibe el dinero.
  */
+/**
+ * Qué le falta declarar a unos datos de pago PROPIOS, ya elegido el tipo.
+ *
+ * Un número sin su billetera (o una cuenta sin su banco) no se puede enseñar con su nombre: el rótulo
+ * cae al texto genérico. Devuelve las palabras para el aviso («tu billetera», «tu banco»).
+ */
+function faltanPorDeclarar(d: {
+  yape?: string;
+  cuenta?: string;
+  cci?: string;
+  billeteraTipo?: string;
+  billeteraNombre?: string;
+  bancoNombre?: string;
+}): string[] {
+  const faltan: string[] = [];
+  if (!!d.yape && chipDeBilletera(d.billeteraTipo, d.billeteraNombre) === null) {
+    faltan.push('tu billetera');
+  }
+  if ((!!d.cuenta || !!d.cci) && chipDeBanco(d.bancoNombre) === null) {
+    faltan.push('tu banco');
+  }
+  return faltan;
+}
+
 export function PagoDelServicio({
   service,
   rol,
@@ -108,6 +140,7 @@ export function PagoDelServicio({
   onResolver,
   onConfirmar,
   onCopiar,
+  onCompletarDatos,
   ocupado = false,
   cerrando = false,
 }: Props) {
@@ -162,6 +195,8 @@ export function PagoDelServicio({
   const datosDelReceptor = () => {
     if (recibeDe(direccionEfectiva) === 'PROVEEDOR') {
       return {
+        // ¿Estos datos son de quien está mirando? Entonces, si les falta el tipo, puede completarlos.
+        esMio: rol === 'PROVEEDOR',
         titulo: 'Datos de pago del proveedor',
         nota: datosDelProveedor?.nombre
           ? `Transfiere a ${datosDelProveedor.nombre} y luego él confirma la recepción.`
@@ -175,6 +210,7 @@ export function PagoDelServicio({
       };
     }
     return {
+      esMio: rol === 'CONDUCTOR',
       titulo: 'Datos de pago del conductor',
       nota:
         rol === 'CONDUCTOR'
@@ -191,6 +227,8 @@ export function PagoDelServicio({
 
   /** Bloque de medios de pago, con el botón de copiar en cada uno. */
   const bloqueDatos = (d: {
+    /** Los datos son de quien está mirando (y por tanto puede completarlos). */
+    esMio?: boolean;
     titulo: string;
     nota: string;
     yape?: string;
@@ -241,6 +279,24 @@ export function PagoDelServicio({
         <Text style={styles.espera}>
           No hay medios de pago registrados en el perfil de quien debe recibir.
         </Text>
+      )}
+      {/*
+        Si los datos son míos y les falta el tipo, el rótulo de arriba se queda en el texto genérico
+        («Yape / Plin», «Cuenta bancaria») y quien tiene que transferir no sabe a dónde. En vez de
+        dejarlo así para siempre (es el caso de los perfiles guardados antes de la 0039), aquí se
+        dice y se lleva a la pantalla donde se declara (pedido del usuario, 22-09-2026).
+      */}
+      {!!d.esMio && !!(d.yape || d.cuenta || d.cci) && faltanPorDeclarar(d).length > 0 && (
+        <TouchableOpacity
+          style={styles.completar}
+          onPress={onCompletarDatos}
+          accessibilityRole="button"
+          accessibilityLabel="Completar datos de pago"
+        >
+          <Text style={styles.completarTexto}>
+            Falta declarar {faltanPorDeclarar(d).join(' y ')} · Completar ›
+          </Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -573,6 +629,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
+  /* El aviso para completar los datos propios: se toca y lleva a «Datos de pago». */
+  completar: { marginTop: 10, paddingVertical: 6 },
+  completarTexto: { fontSize: 12, fontWeight: '700', color: '#3F51B5' },
   espera: { color: TEXTO_SUAVE, fontSize: 13, textAlign: 'center' },
   cierre: { marginTop: 8 },
   historial: { color: VERDE_ACCION, fontSize: 13, fontWeight: '600', textAlign: 'center' },
