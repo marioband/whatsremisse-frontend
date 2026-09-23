@@ -34,6 +34,7 @@ import { DatosPublicos, datosDesdePerfilPublico } from '../lib/perfilPublico';
 import { esPremium } from '../lib/premium';
 import { hayApiDeRutas, Punto } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type ApplicantsNav = StackNavigationProp<
   RootStackParamList,
@@ -246,7 +247,7 @@ export function ApplicantsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Postulantes</Text>
         <View style={styles.headerIcons}>

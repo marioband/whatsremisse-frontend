@@ -69,6 +69,7 @@ import { abrirMenuDeMensaje } from '../lib/menuDeMensaje';
 import { displayName } from '../lib/names';
 import { AVISO_MIGRACION_0020, LecturaDeChat, estadoDePalomas } from '../lib/palomas';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type GroupChatNav = StackNavigationProp<
   RootStackParamList,
@@ -668,7 +669,7 @@ export function GroupChatScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={volverAtras} accessibilityLabel="Volver" style={styles.backBox}>
-            <Text style={styles.headerArrow}>←</Text>
+            <IconoDeAtras />
           </TouchableOpacity>
           {/*
             El título ENTERO es el botón de los ajustes del grupo (23-09-2026): la IMAGEN del grupo a

@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type PrivacyNav = StackNavigationProp<RootStackParamList, 'Privacy'>;
 
@@ -12,19 +13,13 @@ const DARK_BG = '#2D2D2D';
 interface PrivacyOption {
   id: string;
   label: string;
-  icon: string;
   route: keyof RootStackParamList;
 }
 
 const OPTIONS: PrivacyOption[] = [
-  { id: 'blocked-drivers', label: 'Conductores Bloqueados', icon: '🚗', route: 'BlockedDrivers' },
-  {
-    id: 'blocked-providers',
-    label: 'Proveedores Bloqueados',
-    icon: '🏢',
-    route: 'BlockedProviders',
-  },
-  { id: 'app-lock', label: 'Bloqueo de aplicación', icon: '🔒', route: 'AppLock' },
+  { id: 'blocked-drivers', label: 'Conductores Bloqueados', route: 'BlockedDrivers' },
+  { id: 'blocked-providers', label: 'Proveedores Bloqueados', route: 'BlockedProviders' },
+  { id: 'app-lock', label: 'Bloqueo de aplicación', route: 'AppLock' },
 ];
 
 export function PrivacyScreen() {
@@ -34,7 +29,7 @@ export function PrivacyScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Privacidad</Text>
         <View style={styles.headerSpacer} />
@@ -51,7 +46,6 @@ export function PrivacyScreen() {
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.optionIcon}>{option.icon}</Text>
             <Text style={styles.optionLabel}>{option.label}</Text>
             <Text style={styles.optionArrow}>&gt;</Text>
           </TouchableOpacity>
@@ -109,12 +103,6 @@ const styles = StyleSheet.create({
   optionBorder: {
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
-  },
-  optionIcon: {
-    fontSize: 20,
-    marginRight: 16,
-    width: 28,
-    textAlign: 'center',
   },
   optionLabel: {
     flex: 1,

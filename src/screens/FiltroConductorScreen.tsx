@@ -26,6 +26,7 @@ import {
   unidadesQuePuedeRecibir,
 } from '../lib/unidades';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type FiltroNav = StackNavigationProp<RootStackParamList, 'FiltroConductor'>;
 const DARK_BG = '#2D2D2D';
@@ -134,7 +135,7 @@ export function FiltroConductorScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} accessibilityLabel="Volver">
-          <Text style={styles.headerArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Filtro conductor</Text>
         {/* El hueco del otro lado, para que el título quede centrado. */}

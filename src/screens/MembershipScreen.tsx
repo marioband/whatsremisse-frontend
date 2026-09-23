@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type MembershipNav = StackNavigationProp<RootStackParamList, 'Membership'>;
 
@@ -29,7 +30,7 @@ export function MembershipScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Membresía</Text>
         <View style={styles.headerSpacer} />

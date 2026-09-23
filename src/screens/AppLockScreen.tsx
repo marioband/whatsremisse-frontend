@@ -1,15 +1,16 @@
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 
 import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
+import { InterruptorDeslizante } from '../components/InterruptorDeslizante';
 
 type AppLockNav = StackNavigationProp<RootStackParamList, 'AppLock'>;
 
 const DARK_BG = '#2D2D2D';
-const AZUL = '#3F51B5';
 
 export function AppLockScreen() {
   const navigation = useNavigation<AppLockNav>();
@@ -19,7 +20,7 @@ export function AppLockScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Bloqueo de aplicación</Text>
         <View style={styles.headerSpacer} />
@@ -30,17 +31,16 @@ export function AppLockScreen() {
           <View style={styles.optionInfo}>
             <Text style={styles.optionLabel}>Desbloquear con rasgos</Text>
           </View>
-          <Switch
-            value={enabled}
-            onValueChange={(value) => {
+          <InterruptorDeslizante
+            encendido={enabled}
+            onCambiar={(value) => {
               setEnabled(value);
               Alert.alert(
                 'Bloqueo de aplicación',
                 value ? 'Desbloqueo con rasgos activado.' : 'Desbloqueo con rasgos desactivado.'
               );
             }}
-            trackColor={{ false: '#ccc', true: AZUL }}
-            thumbColor={enabled ? '#fff' : '#f4f3f4'}
+            etiqueta="Desbloquear con rasgos"
           />
         </View>
 

@@ -28,6 +28,8 @@ import {
 } from '../lib/estadisticas';
 import { datosDesdePerfilPublico } from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type EstadisticasNav = StackNavigationProp<RootStackParamList, 'Estadisticas'>;
 
@@ -154,7 +156,7 @@ export function EstadisticasScreen() {
           onPress={() => setReferencia((actual) => moverPeriodo(periodo, actual, -1))}
           accessibilityLabel="Período anterior"
         >
-          <Text style={styles.flechaTexto}>←</Text>
+          <MaterialCommunityIcons name="chevron-left" size={22} color={TEXTO} />
         </TouchableOpacity>
 
         <View style={styles.centroNavegador}>
@@ -171,7 +173,7 @@ export function EstadisticasScreen() {
           onPress={() => setReferencia((actual) => moverPeriodo(periodo, actual, 1))}
           accessibilityLabel="Período siguiente"
         >
-          <Text style={styles.flechaTexto}>→</Text>
+          <MaterialCommunityIcons name="chevron-right" size={22} color={TEXTO} />
         </TouchableOpacity>
       </View>
 
@@ -221,7 +223,7 @@ export function EstadisticasScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Estadísticas</Text>
         <View style={styles.headerSpacer} />

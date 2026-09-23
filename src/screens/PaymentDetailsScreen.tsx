@@ -27,6 +27,7 @@ import {
   etiquetaDelNumeroDeBilletera,
 } from '../lib/billeterasYBancos';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type PaymentNav = StackNavigationProp<RootStackParamList, 'PaymentDetails'>;
 type PaymentRoute = RouteProp<RootStackParamList, 'PaymentDetails'>;
@@ -215,7 +216,7 @@ export function PaymentDetailsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={volver} accessibilityLabel="Volver">
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Datos de pago</Text>
         <View style={styles.headerSpacer} />

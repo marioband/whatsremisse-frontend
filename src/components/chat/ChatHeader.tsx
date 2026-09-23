@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 
 import { Icono, ICONO_AJUSTES, ICONO_BUSCAR } from '../Icono';
+import { IconoDeAtras } from '../../components/IconoDeAtras';
 
 interface ChatHeaderProps {
   title: string;
@@ -34,7 +35,7 @@ export function ChatHeader({
     <View style={styles.header}>
       <View style={styles.headerLado}>
         <TouchableOpacity onPress={onBack} accessibilityLabel="Volver">
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
       </View>
 

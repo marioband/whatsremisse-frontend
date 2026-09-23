@@ -19,6 +19,8 @@ import { Alert } from '../lib/alert';
 import { elegirFoto, fueCancelado, subirFoto, tomarFoto } from '../lib/adjuntos';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type CreateGroupNav = StackNavigationProp<RootStackParamList, 'CreateGroup'>;
 type CreateGroupRoute = RouteProp<RootStackParamList, 'CreateGroup'>;
@@ -152,7 +154,7 @@ export function CreateGroupScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nuevo grupo</Text>
         <View style={styles.headerSpacer} />
@@ -175,7 +177,7 @@ export function CreateGroupScreen() {
             ) : foto ? (
               <Image source={{ uri: foto }} style={styles.avatarImg} />
             ) : (
-              <Text style={styles.avatarText}>📷</Text>
+              <MaterialCommunityIcons name="camera" size={40} color="#9E9E9E" />
             )}
           </TouchableOpacity>
 

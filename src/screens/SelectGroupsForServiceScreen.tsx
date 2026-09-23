@@ -10,6 +10,7 @@ import { EstadoDeEnvio, estadoDelBotonDeEnvio, opacidadDelBotonDeEnvio } from '.
 import { gruposDeServicio } from '../lib/gruposDeServicio';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type SelectNav = StackNavigationProp<RootStackParamList, 'SelectGroupsForService' | 'Settings'>;
 type SelectRoute = RouteProp<RootStackParamList, 'SelectGroupsForService'>;
@@ -159,7 +160,7 @@ export function SelectGroupsForServiceScreen() {
           accessibilityRole="button"
           accessibilityLabel="Volver a editar el servicio"
         >
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           Selección de grupos

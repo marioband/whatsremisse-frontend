@@ -20,6 +20,7 @@ import { AZUL, ROJO_ACCION } from '../lib/colors';
 import { registrarResumenEnConsola, reiniciarContadores, textoDelResumen } from '../lib/medidor';
 import { limpiarCacheDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type SettingsNav = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -193,7 +194,7 @@ export function SettingsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cuenta</Text>
         <View style={styles.headerSpacer} />

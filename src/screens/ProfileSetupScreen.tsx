@@ -21,6 +21,8 @@ import { Alert } from '../lib/alert';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { alternarUnidad, UNIDADES, UNIDADES_GRANDES, UNIDAD_POR_DEFECTO } from '../lib/unidades';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type SetupNav = StackNavigationProp<RootStackParamList, 'ProfileSetup'>;
 
@@ -225,7 +227,7 @@ export function ProfileSetupScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backArrow}>←</Text>
+            <IconoDeAtras />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Mi perfil</Text>
           <View style={styles.headerSpacer} />
@@ -238,7 +240,7 @@ export function ProfileSetupScreen() {
               <Image source={{ uri: driverPhotoUrl }} style={styles.avatar} />
             ) : (
               <View style={styles.avatar}>
-                <Text style={styles.avatarIcon}>📷</Text>
+                <MaterialCommunityIcons name="camera" size={48} color="#9E9E9E" />
               </View>
             )}
             <Text style={styles.changePhotoText}>
@@ -337,7 +339,7 @@ export function ProfileSetupScreen() {
                 />
               ) : (
                 <View style={styles.providerPhotoPlaceholder}>
-                  <Text style={styles.avatarIcon}>🏢</Text>
+                  <MaterialCommunityIcons name="camera" size={48} color="#9E9E9E" />
                 </View>
               )}
               <Text style={styles.changePhotoText}>

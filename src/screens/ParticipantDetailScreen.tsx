@@ -24,6 +24,7 @@ import {
 } from '../lib/names';
 import { textoDeUnidades } from '../lib/unidades';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type DetailNav = StackNavigationProp<RootStackParamList, 'ParticipantDetail'>;
 type DetailRoute = RouteProp<RootStackParamList, 'ParticipantDetail'>;
@@ -164,7 +165,7 @@ export function ParticipantDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {shownName}

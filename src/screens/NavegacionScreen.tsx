@@ -12,6 +12,7 @@ import {
   nuevaSeleccion,
 } from '../lib/navegacion';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type NavegacionNav = StackNavigationProp<RootStackParamList, 'Navegacion'>;
 
@@ -51,7 +52,7 @@ export function NavegacionScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Navegación</Text>
         <View style={styles.headerSpacer} />

@@ -20,6 +20,7 @@ import { countVisibleProfiles, searchProfiles } from '../lib/database';
 import { describeError, textoDeErrorParaElUsuario } from '../lib/errors';
 import { initialOf } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type AddNav = StackNavigationProp<RootStackParamList, 'AddParticipant'>;
 type AddRoute = RouteProp<RootStackParamList, 'AddParticipant'>;
@@ -283,7 +284,7 @@ export function AddParticipantScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {paraGrupoNuevo ? 'Elegir integrantes' : 'Añadir participante'}

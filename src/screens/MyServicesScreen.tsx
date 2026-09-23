@@ -16,6 +16,7 @@ import { nombreParaMostrar } from '../lib/nombreDelProveedor';
 import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type MyServicesNav = StackNavigationProp<RootStackParamList, 'MyServices'>;
 
@@ -213,7 +214,7 @@ export function MyServicesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Mis servicios</Text>
         {/* Sin el icono del auto (el usuario pidió quitarlo, 18-09-2026): el espaciador

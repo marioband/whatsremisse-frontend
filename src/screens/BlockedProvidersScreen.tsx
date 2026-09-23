@@ -7,6 +7,8 @@ import { Fab } from '../components/Fab';
 import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { BlockedUser } from '../types';
+import { IconoDeAtras } from '../components/IconoDeAtras';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type BlockedNav = StackNavigationProp<RootStackParamList, 'BlockedProviders'>;
 
@@ -41,7 +43,7 @@ export function BlockedProvidersScreen() {
       </View>
       <Text style={styles.name}>{item.name}</Text>
       <TouchableOpacity style={styles.removeBtn} onPress={() => handleUnblock(item.id, item.name)}>
-        <Text style={styles.removeText}>✕</Text>
+        <MaterialCommunityIcons name="close" size={16} color="#fff" />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -51,12 +53,10 @@ export function BlockedProvidersScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Proveedores bloqueados</Text>
-        <TouchableOpacity style={styles.headerIconBtn}>
-          <Text style={styles.headerIcon}>🏢</Text>
-        </TouchableOpacity>
+        <View style={styles.headerIconBtn} />
       </View>
 
       <FlatList

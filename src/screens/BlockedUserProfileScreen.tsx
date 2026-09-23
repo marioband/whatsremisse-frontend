@@ -13,6 +13,8 @@ import {
 
 import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type ProfileNav = StackNavigationProp<RootStackParamList, 'BlockedUserProfile'>;
 type ProfileRoute = RouteProp<RootStackParamList, 'BlockedUserProfile'>;
@@ -52,7 +54,7 @@ export function BlockedUserProfileScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {user.name}
@@ -67,7 +69,7 @@ export function BlockedUserProfileScreen() {
           onPress={() => Alert.alert('Avatar', 'Selección de avatar simulada.')}
         >
           <View style={styles.avatar}>
-            <Text style={styles.avatarIcon}>📷</Text>
+            <MaterialCommunityIcons name="camera" size={48} color="#9E9E9E" />
           </View>
           <Text style={styles.changePhotoText}>Cambiar foto de perfil</Text>
         </TouchableOpacity>

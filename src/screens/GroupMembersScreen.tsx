@@ -24,6 +24,7 @@ import { OSCURO, ROJO_ACCION, TEXTO_SUAVE } from '../lib/colors';
 import { silenciarGrupo } from '../lib/database';
 import { displayName, groupRoleBadgeLabel, initialOf, sortMembersByRole } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { IconoDeAtras } from '../components/IconoDeAtras';
 
 type MembersNav = StackNavigationProp<RootStackParamList, 'GroupMembers'>;
 type MembersRoute = RouteProp<RootStackParamList, 'GroupMembers'>;
@@ -370,7 +371,7 @@ export function GroupMembersScreen() {
       {/* Cabecera: flecha, nombre y el lápiz para cambiarlo (creador o administrador). */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
+          <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {nombreDelGrupo}
