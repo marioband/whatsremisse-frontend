@@ -16,6 +16,7 @@ import {
 
 import { BotonDeNavegacion } from '../components/BotonDeNavegacion';
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
+import { Icono, ICONO_COPIAR } from '../components/Icono';
 import { ServiceCard } from '../components/ServiceCard';
 import { SwipeStatusButton } from '../components/SwipeStatusButton';
 import {
@@ -1218,10 +1219,11 @@ export function ChatScreen() {
                     onPress={() => copiarDatosRef.current()}
                     activeOpacity={0.85}
                   >
-                    {/* 23-09-2026: el proveedor copia los datos DEL CONDUCTOR, así que el botón
-                        lo dice (antes «Copiar datos», que no decía de quién). Este botón solo lo ve
-                        el proveedor: el conductor no lo tiene. */}
-                    <Text style={styles.copyDataBtnText}>Copiar conductor</Text>
+                    {/* 23-09-2026: el botón dice «Datos conductor» y lleva al lado el MISMO icono de
+                        copiar que usan las filas de pago (Yape, BCP…), así se entiende que copia sin
+                        tener que leerlo. Solo lo ve el proveedor: el conductor no lo tiene. */}
+                    <Icono fuente={ICONO_COPIAR} tamano={16} estilo={styles.copyDataBtnIcono} />
+                    <Text style={styles.copyDataBtnText}>Datos conductor</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1502,8 +1504,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 28,
     minWidth: 180,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
+  /** El icono de copiar va pegado al texto, con un respiro de 8 px (23-09-2026). */
+  copyDataBtnIcono: { marginRight: 8 },
   copyDataBtnText: {
     color: '#fff',
     fontSize: 14,
