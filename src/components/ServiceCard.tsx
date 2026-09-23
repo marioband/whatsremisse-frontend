@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { FilaDeslizable, FilaDeslizableRef } from './FilaDeslizable';
 
 import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
@@ -71,7 +71,7 @@ export function ServiceCard({
   groupName,
   sinDatosDePago = false,
 }: Props) {
-  const swipeableRef = useRef<Swipeable>(null);
+  const swipeableRef = useRef<FilaDeslizableRef>(null);
   // El nombre lo configura el proveedor en su perfil; si no lo configuró, van su
   // primer nombre y su primer apellido (nunca "Empresa").
   const nombreDelProveedor = useNombreDelProveedor(service);
@@ -111,11 +111,11 @@ export function ServiceCard({
   };
 
   const handleAction = () => {
-    swipeableRef.current?.close();
+    swipeableRef.current?.cerrar();
     action.handler?.();
   };
 
-  const renderRightActions = (_progress: any, _dragX: any) => {
+  const renderRightActions = () => {
     return (
       <TouchableOpacity
         style={[styles.actionButton, { backgroundColor: action.color }]}
@@ -262,16 +262,18 @@ export function ServiceCard({
       {disableSwipe || !action.handler ? (
         cardContent
       ) : (
-        <Swipeable
+        /* Deslizable propio y no el `Swipeable` de react-native-gesture-handler: ese marca la
+           vista con `touch-action: none` y en el iPhone dejaba la lista sin poder desplazarse
+           (22-09-2026). Ver el porqué completo en `FilaDeslizable`. */
+        <FilaDeslizable
           ref={swipeableRef}
-          renderRightActions={renderRightActions}
-          friction={2}
-          rightThreshold={40}
-          overshootRight={false}
-          onSwipeableOpen={handleAction}
+          accion={renderRightActions}
+          anchoAccion={92}
+          umbral={40}
+          alAbrir={handleAction}
         >
           {cardContent}
-        </Swipeable>
+        </FilaDeslizable>
       )}
 
       {/* Globo de notificación del proveedor (fuera del card para evitar clipping) */}

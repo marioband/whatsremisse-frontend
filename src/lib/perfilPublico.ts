@@ -12,6 +12,8 @@
  */
 
 import { VehicleData } from '../types';
+import { formatoDeCelular } from './celular';
+import { textoDeUnidades } from './unidades';
 
 export interface DatosPublicos {
   nombres: string;
@@ -22,6 +24,8 @@ export interface DatosPublicos {
   modelo: string;
   color: string;
   placa: string;
+  /** Tipo de unidad del postulante, tal como se pinta («Auto», «Camioneta 3 filas»). */
+  unidad?: string;
   /** URL de la foto del conductor o del proveedor, si la subió. */
   foto: string;
 }
@@ -80,7 +84,10 @@ export function datosDesdePerfilPublico(fila: FilaPerfilPublico | null): DatosPu
   return {
     nombres: delVehiculo.nombres || deducido.nombres,
     apellidos: delVehiculo.apellidos || deducido.apellidos,
-    telefono: texto(fila?.phone),
+    // Con el código de país delante, también para las cuentas viejas que lo guardaron sin él:
+    // es lo que ve el proveedor en la tarjeta y en los datos que copia (22-09-2026).
+    telefono: formatoDeCelular(texto(fila?.phone)),
+    unidad: textoDeUnidades(vehiculo.vehicle_type),
     dni: texto(vehiculo.dni),
     marca: texto(vehiculo.brand),
     modelo: texto(vehiculo.model),

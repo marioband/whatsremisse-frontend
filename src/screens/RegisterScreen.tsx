@@ -14,6 +14,7 @@ import {
 
 import logoWhatsRemisse from '../../assets/logo-whatsremisse.png';
 import { useAuth } from '../context/AuthContext';
+import { CODIGO_POR_DEFECTO, celularCompleto, formatoDeCelular } from '../lib/celular';
 import { Alert } from '../lib/alert';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -29,21 +30,27 @@ const PLACEHOLDER = '#B5B5B5';
 export function RegisterScreen() {
   const navigation = useNavigation<RegisterNav>();
   const { requestOtp, signIn, requireSmsVerification } = useAuth();
-  const [phone, setPhone] = useState('');
+  // El código de país va en su propio campo y viene con +51 puesto (se puede editar); el número, en
+  // el suyo. A la base de cuentas viaja el número COMPLETO (código + número), que es la identidad.
+  const [codigo, setCodigo] = useState<string>(CODIGO_POR_DEFECTO);
+  const [numero, setNumero] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSend = async () => {
-    if (!phone || phone.length < 9) {
+    const soloDigitos = numero.replace(/\D/g, '');
+    if (soloDigitos.length < 9) {
       setError('Ingresa un número de celular válido.');
       return;
     }
 
+    // Con el código delante: es la identidad (y la contraseña) con la que entra o se crea la cuenta.
+    const completo = celularCompleto(codigo, soloDigitos);
     setLoading(true);
     setError(null);
     try {
       if (!requireSmsVerification) {
-        const success = await signIn(phone, '');
+        const success = await signIn(completo, '');
         // eslint-disable-next-line no-console
         console.log('[Register] signIn result:', success);
         if (!success) {
@@ -52,9 +59,9 @@ export function RegisterScreen() {
         return;
       }
 
-      await requestOtp(phone);
-      Alert.alert('Código enviado', `Se envió el código al ${phone}.`);
-      navigation.navigate('Login', { phone });
+      await requestOtp(completo);
+      Alert.alert('Código enviado', `Se envió el código al ${formatoDeCelular(completo)}.`);
+      navigation.navigate('Login', { phone: completo });
     } catch (err) {
       const message = textoDeErrorParaElUsuario(err);
       setError(message);
@@ -75,16 +82,29 @@ export function RegisterScreen() {
         <Text style={styles.brand}>WhatsRemisse</Text>
       </View>
 
-      {/* Campo de número */}
-      <TextInput
-        style={styles.input}
-        placeholder="Número Celular"
-        placeholderTextColor={PLACEHOLDER}
-        keyboardType="phone-pad"
-        value={phone}
-        onChangeText={setPhone}
-        maxLength={12}
-      />
+      {/* Campo de número, con su código de país (pedido del usuario, 22-09-2026): el código viene
+          con +51 puesto y se puede editar; el número va al lado. */}
+      <View style={styles.phoneRow}>
+        <TextInput
+          style={[styles.input, styles.inputCodigo]}
+          placeholder="+51"
+          placeholderTextColor={PLACEHOLDER}
+          keyboardType="phone-pad"
+          value={codigo}
+          onChangeText={setCodigo}
+          maxLength={5}
+          accessibilityLabel="Código de país"
+        />
+        <TextInput
+          style={[styles.input, styles.inputNumero]}
+          placeholder="Número Celular"
+          placeholderTextColor={PLACEHOLDER}
+          keyboardType="phone-pad"
+          value={numero}
+          onChangeText={setNumero}
+          maxLength={12}
+        />
+      </View>
 
       <View style={styles.spacer} />
 
@@ -126,15 +146,29 @@ const styles = StyleSheet.create({
     marginTop: 8,
     letterSpacing: 0.2,
   },
+  /* Código de país y número, en la misma fila. */
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 36,
+  },
   input: {
     backgroundColor: FIELD_BG,
     borderRadius: 8,
     height: 36,
-    marginTop: 36,
     paddingHorizontal: 14,
     fontSize: 18,
     color: '#333',
     textAlign: 'center',
+  },
+  /** El código necesita poco ancho; el número se queda con el resto. */
+  inputCodigo: {
+    width: 78,
+    marginRight: 10,
+    fontWeight: 'bold',
+  },
+  inputNumero: {
+    flex: 1,
   },
   spacer: {
     flex: 1,

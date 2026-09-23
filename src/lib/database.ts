@@ -1479,6 +1479,46 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
   throw new Error(await describirBloqueoDeFila(groupId, userId, 'eliminar al integrante'));
 }
 
+/**
+ * Salir de un grupo: borra MI fila de `group_members` (migración 0043).
+ *
+ * No se usa `removeGroupMember` porque ese es para que el creador o un administrador saquen a OTRO
+ * (y rechazaría justamente a quien se quiere ir). Va por la función `salir_del_grupo`, que además
+ * impide que el creador se vaya, y si esa migración todavía no está aplicada, por el DELETE directo,
+ * que la política «Members can leave» también permite.
+ */
+export async function salirDeUnGrupo(groupId: string, userId: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+
+  try {
+    const { data, error } = await supabase.rpc('salir_del_grupo', { p_group_id: groupId });
+    if (error) throw error;
+    if (Number(data ?? 0) > 0) return; // la base confirmó el borrado
+    if (!(await sigueLaFila(groupId, userId))) return; // ya no estaba
+  } catch (err) {
+    // El rechazo de la función (soy el creador, el grupo no existe) es la respuesta: se muestra.
+    if (!esFuncionAusente(err)) throw err;
+    // eslint-disable-next-line no-console
+    console.warn('[database] RPC salir_del_grupo no instalada, uso DELETE directo:', err);
+  }
+
+  const { data, error } = await supabase
+    .from('group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('user_id', userId)
+    .select('user_id');
+  if (error) throw error;
+  if (data && data.length > 0) return;
+  if (!(await sigueLaFila(groupId, userId))) return;
+  // Si llegamos aquí, la base dijo que sí y la fila sigue: lo más probable es que falte aplicar la
+  // 0043 (es la que da permiso para salir por tu cuenta). Se dice con el comando exacto.
+  throw new Error(
+    'La base respondió OK pero tu fila sigue en el grupo. Suele ser que falte aplicar la migración 0043. ' +
+      'Aplícala con: cat supabase/migrations/0043_salir_del_grupo.sql | docker exec -i supabase-db psql -U supabase_admin -d postgres'
+  );
+}
+
 export async function fetchMessagesForGroup(groupId: string): Promise<ChatMessage[]> {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase

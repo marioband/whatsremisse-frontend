@@ -15,6 +15,7 @@ import { conGuion, DatosPublicos, inicialDe } from '../lib/perfilPublico';
 /**
  * Tarjeta de un postulante, con la estructura de la referencia del usuario:
  *
+ *   [        tipo de unidad del postulante (centrado)                 ]
  *   [        tiempo y distancia al punto de origen (centrado)        ]
  *   (avatar)  Nombres: …        Marca: …
  *             Apellidos: …      Modelo: …
@@ -44,6 +45,9 @@ export function ApplicantCard({
 }: ApplicantCardProps) {
   return (
     <View style={styles.card}>
+      {/* El tipo de unidad del postulante, en el primer renglón (referencia del usuario,
+          22-09-2026: en su dibujo ese renglón dice «Auto»). Si no lo tenemos, no se pinta. */}
+      {!!datos.unidad && <Text style={styles.unidadTop}>{datos.unidad}</Text>}
       {!!estimacion && <Text style={styles.estimateTop}>{estimacion}</Text>}
 
       <View style={styles.topRow}>
@@ -105,6 +109,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 14,
     marginBottom: 16,
+  },
+  /** Tipo de unidad del postulante: el primer renglón de la tarjeta, centrado. */
+  unidadTop: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: OSCURO,
+    textAlign: 'center',
+    marginBottom: 2,
   },
   /** Tiempo y distancia al punto de origen, centrado arriba (referencia del usuario). */
   estimateTop: {

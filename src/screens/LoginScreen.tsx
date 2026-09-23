@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { formatoDeCelular } from '../lib/celular';
 import { Alert } from '../lib/alert';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -66,8 +67,8 @@ export function LoginScreen() {
         <Text style={styles.title}>{requireSmsVerification ? 'Validación' : 'Ingresar'}</Text>
         <Text style={styles.subtitle}>
           {requireSmsVerification
-            ? `Ingresa el código enviado a ${phone || 'tu celular'}`
-            : `Bienvenido ${phone || ''}`}
+            ? `Ingresa el código enviado a ${formatoDeCelular(phone) || 'tu celular'}`
+            : `Bienvenido ${formatoDeCelular(phone)}`}
         </Text>
 
         {requireSmsVerification && (

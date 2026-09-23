@@ -33,6 +33,7 @@ export function GroupMembersScreen() {
     loadGroupMembers,
     reloadGroups,
     eliminarGrupo,
+    salirDelGrupo,
     setRole,
   } = useMockStore();
   const { session } = useAuth();
@@ -111,6 +112,32 @@ export function GroupMembersScreen() {
     );
   };
 
+  /**
+   * Salir del grupo (pedido del usuario, 22-09-2026).
+   *
+   * Cualquier integrante —o un administrador— puede irse: se borra SU fila de `group_members`
+   * (migración 0043). El creador no tiene este botón: su salida dejaría al grupo sin dueño, así que
+   * para él está «Eliminar grupo». Se confirma una vez y, al salir, el grupo desaparece de Mis grupos.
+   */
+  const handleSalirDelGrupo = () => {
+    Alert.alert(
+      'Salir del grupo',
+      `¿Seguro que quieres salir de «${groupName}»? Dejarás de verlo en Mis grupos y no te llegarán sus avisos.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Salir',
+          style: 'destructive',
+          onPress: async () => {
+            const salido = await salirDelGrupo(groupId);
+            // Si la base no lo borró, el aviso con el motivo ya se mostró: se queda donde está.
+            if (!salido) return;
+            navigation.navigate('Main');
+          },
+        },
+      ]
+    );
+  };
   // Orden pedido: propietario, luego los administradores que él asignó y al
   // final los integrantes. Dentro de cada rol, por nombre.
   const groupMembers = useMemo(() => sortMembersByRole(members[groupId] || []), [members, groupId]);
@@ -279,6 +306,23 @@ export function GroupMembersScreen() {
           <Text style={styles.deleteNota}>
             Solo el creador puede eliminar el grupo. Se borran también sus integrantes y sus
             mensajes.
+          </Text>
+        </View>
+      )}
+      {/* Salir del grupo: para quien NO es el creador (pedido del usuario, 22-09-2026). El creador
+          tiene «Eliminar grupo»: su salida dejaría el grupo sin dueño y la base no la permite. */}
+      {viewerGroupRole !== 'owner' && (
+        <View style={styles.zonaDeEliminar}>
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={handleSalirDelGrupo}
+            accessibilityLabel="Salir del grupo"
+          >
+            <Text style={styles.deleteBtnText}>Salir del grupo</Text>
+          </TouchableOpacity>
+          <Text style={styles.deleteNota}>
+            Dejarás de verlo en Mis grupos y no te llegarán sus avisos. Tus mensajes ya enviados se
+            quedan en el chat del grupo.
           </Text>
         </View>
       )}

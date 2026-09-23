@@ -344,10 +344,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 6,
   },
+  /* La etiqueta del rol y el «Ver ›» van uno debajo del otro, los dos pegados al borde izquierdo
+     del texto de arriba (pedido del usuario, 22-09-2026): antes el «Ver ›» quedaba empujado al
+     borde derecho de la tarjeta, lejos del resto de la información. */
   rolFila: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     marginTop: 8,
   },
   rolTag: {
@@ -356,7 +358,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   rolTexto: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  abrirTexto: { color: AZUL, fontSize: 11, fontWeight: '700' },
+  abrirTexto: { color: AZUL, fontSize: 11, fontWeight: '700', marginTop: 4 },
   routeRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 
 import { usuarioParaPintarSinRed, debeTaparConElLogo } from '../lib/arranque';
 import { configurarAlmacen, limpiarCacheCompleta } from '../lib/cache';
+import { candidatosDeCelular } from '../lib/celular';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
 
@@ -209,34 +210,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithoutOtp = async (inputPhone: string): Promise<boolean> => {
-    const password = inputPhone;
+    // El número es también la contraseña, así que se prueban TODAS sus formas antes de crear nada:
+    // las cuentas de antes del 22-09-2026 están guardadas sin el código de país (999888777) y las
+    // nuevas con él (+51999888777). Sin esta vuelta, la primera forma que no coincidiera crearía una
+    // cuenta nueva y vacía, y esa persona perdería sus servicios y sus grupos.
+    for (const candidato of candidatosDeCelular(inputPhone)) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        phone: candidato,
+        password: candidato,
+      });
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      phone: inputPhone,
-      password,
-    });
-
-    if (!signInError) {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setSession(data.session);
-        await loadProfile(data.session.user.id);
-        return true;
+      if (!signInError) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          setSession(data.session);
+          await loadProfile(data.session.user.id);
+          return true;
+        }
+        return false;
       }
-      return false;
-    }
 
-    // Si el usuario no existe, lo creamos automáticamente
-    if (!isInvalidCredentialsError(signInError)) {
       // Cualquier otro fallo (401 del gateway de Supabase, red caída, etc.) debe
       // llegar a la pantalla con su mensaje real en lugar de devolver un error
       // genérico que oculta la causa.
-      throw signInError;
+      if (!isInvalidCredentialsError(signInError)) throw signInError;
     }
 
+    // Ninguna forma existe: la cuenta es nueva, y se crea ya con el formato nuevo (con el código).
+    const nuevo = candidatosDeCelular(inputPhone)[0];
     const { error: signUpError } = await supabase.auth.signUp({
-      phone: inputPhone,
-      password,
+      phone: nuevo,
+      password: nuevo,
     });
 
     if (signUpError) throw signUpError;

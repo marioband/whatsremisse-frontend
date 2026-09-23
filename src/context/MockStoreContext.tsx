@@ -46,6 +46,7 @@ import {
   rejectApplicationInDb,
   rejectApplicationFromDb,
   removeGroupMember,
+  salirDeUnGrupo,
   deleteGroup,
   saveProfileData,
   updateApplication,
@@ -677,6 +678,8 @@ interface MockContextValue extends MockState {
   updateMemberRole: (groupId: string, memberId: string, role: 'owner' | 'admin' | 'member') => void;
   /** Devuelve false si la base no confirmó el borrado (para no navegar como si hubiera funcionado). */
   removeMember: (groupId: string, memberId: string) => Promise<boolean>;
+  /** Irse del grupo por mi cuenta (borra MI fila); el creador no puede: para él está eliminar. */
+  salirDelGrupo: (groupId: string) => Promise<boolean>;
   /**
    * Relee SOLO los contadores de sin leer (grupos y conversaciones de servicio). Lo usan las
    * pantallas que necesitan el número al instante —Mis grupos al volver y al llegar un mensaje en
@@ -1705,6 +1708,27 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('[MockStore] removeMember error:', err);
         Alert.alert('No se pudo eliminar al integrante', textoDeErrorParaElUsuario(err));
+        return false;
+      }
+    },
+    /**
+     * Salir del grupo (pedido del usuario, 22-09-2026): borra MI fila de `group_members`.
+     *
+     * El creador no puede salir —su grupo quedaría sin dueño y la base no lo permite—: para él está
+     * «Eliminar grupo». Al salir, el grupo desaparece de Mis grupos en el acto y sus avisos dejan de
+     * llegarle (los destinatarios salen de `group_members`).
+     */
+    salirDelGrupo: async (groupId) => {
+      const userId = session?.user?.id;
+      if (!userId) return false;
+      try {
+        await salirDeUnGrupo(groupId, userId);
+        dispatch({ type: 'REMOVE_MEMBER', payload: { groupId, memberId: userId } });
+        dispatch({ type: 'REMOVE_GROUP', payload: { groupId } });
+        return true;
+      } catch (err) {
+        console.error('[MockStore] salirDelGrupo error:', err);
+        Alert.alert('No se pudo salir del grupo', textoDeErrorParaElUsuario(err));
         return false;
       }
     },

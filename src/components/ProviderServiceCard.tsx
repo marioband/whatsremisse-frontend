@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { FilaDeslizable } from './FilaDeslizable';
 
 import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
@@ -27,7 +27,9 @@ export function ProviderServiceCard({ service, onArchive }: Props) {
   );
 
   return (
-    <Swipeable renderRightActions={renderRightActions} friction={2} rightThreshold={40}>
+    /* Deslizable propio (no el de react-native-gesture-handler): ese marca la vista con
+       `touch-action: none` y en el iPhone dejaba la lista sin poder desplazarse (22-09-2026). */
+    <FilaDeslizable accion={renderRightActions} anchoAccion={92} umbral={40}>
       <View style={styles.card}>
         {/* Columna izquierda: nombre + avatar */}
         <View style={styles.leftColumn}>
@@ -84,7 +86,7 @@ export function ProviderServiceCard({ service, onArchive }: Props) {
           <Text style={styles.paymentMethod}>{service.payment_method || 'BCP'}</Text>
         </View>
       </View>
-    </Swipeable>
+    </FilaDeslizable>
   );
 }
 
