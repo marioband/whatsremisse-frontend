@@ -222,7 +222,7 @@ export function EstadisticasScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Estadísticas</Text>
@@ -246,10 +246,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: OSCURO,
+    backgroundColor: '#2D2D2D',
     paddingTop: 50,
-    paddingBottom: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
   backArrow: { color: '#fff', fontSize: 24, marginRight: 12 },
   headerTitle: {
@@ -260,6 +261,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: { width: 36 },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   lista: { paddingBottom: 40 },
   periodos: { flexDirection: 'row', paddingHorizontal: 12, paddingTop: 16 },
   periodoPill: {

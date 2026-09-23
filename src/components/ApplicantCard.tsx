@@ -11,6 +11,11 @@ import {
   VERDE_ACCION,
 } from '../lib/colors';
 import { conGuion, DatosPublicos, inicialDe, lineaDeDos } from '../lib/perfilPublico';
+import {
+  copiarOCompartirImagen,
+  mensajeDeCopiarImagen,
+} from '../lib/copiarImagen';
+import { Alert } from '../lib/alert';
 
 /**
  * Tarjeta de un postulante, con la estructura de la referencia del usuario (22-09 y 23-09-2026):
@@ -57,7 +62,21 @@ export function ApplicantCard({
 
       <View style={styles.topRow}>
         {datos.foto ? (
-          <Image source={{ uri: datos.foto }} style={styles.avatar} />
+          /* La foto se toca y se copia (23-09-2026): en iPhone Safari no se puede escribir una
+             imagen en el portapapeles, así que ahí se abre la hoja de compartir con la foto
+             (Guardar en Fotos, WhatsApp…), que es el equivalente real. */
+          <TouchableOpacity
+            onPress={() => {
+              const nombre = [datos.nombres, datos.apellidos].filter(Boolean).join(' ') || 'conductor';
+              copiarOCompartirImagen(datos.foto, nombre).then((resultado) =>
+                Alert.alert('Foto del conductor', mensajeDeCopiarImagen(resultado))
+              );
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Copiar la foto del conductor"
+          >
+            <Image source={{ uri: datos.foto }} style={styles.avatar} />
+          </TouchableOpacity>
         ) : (
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{inicialDe(datos)}</Text>

@@ -215,7 +215,7 @@ export function PaymentDetailsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={volver} accessibilityLabel="Volver">
+        <TouchableOpacity onPress={volver} accessibilityLabel="Volver" style={styles.backBtn}>
           <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Datos de pago</Text>
@@ -330,8 +330,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: DARK_BG,
     paddingTop: 50,
-    paddingBottom: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
   backArrow: { color: '#fff', fontSize: 24, marginRight: 12 },
   headerTitle: {
@@ -340,6 +341,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     flex: 1,
     textAlign: 'center',
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerSpacer: { width: 36 },
   body: { flex: 1, backgroundColor: '#fff' },

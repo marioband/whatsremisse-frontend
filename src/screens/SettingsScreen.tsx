@@ -193,7 +193,7 @@ export function SettingsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cuenta</Text>
@@ -297,8 +297,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: DARK_BG,
     paddingTop: 50,
-    paddingBottom: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
   backArrow: {
     color: '#fff',
@@ -314,6 +315,12 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 36,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: {
     flex: 1,

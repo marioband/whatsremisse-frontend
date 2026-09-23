@@ -134,7 +134,7 @@ export function FiltroConductorScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityLabel="Volver">
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityLabel="Volver">
           <IconoDeAtras />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Filtro conductor</Text>
@@ -219,8 +219,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: DARK_BG,
     paddingTop: 50,
-    paddingBottom: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
   headerArrow: { color: '#fff', fontSize: 24 },
   headerTitle: {
@@ -230,7 +231,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  headerHueco: { width: 24 },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerHueco: { width: 36 },
   cuerpo: { padding: 20, paddingBottom: 40 },
   titulo: { fontSize: 18, fontWeight: 'bold', color: '#111', marginBottom: 8 },
   explicacion: { fontSize: 13, color: TEXTO_SUAVE, lineHeight: 19, marginBottom: 18 },

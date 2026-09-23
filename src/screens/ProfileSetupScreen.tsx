@@ -21,6 +21,7 @@ import { Alert } from '../lib/alert';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { alternarUnidad, UNIDADES, UNIDADES_GRANDES, UNIDAD_POR_DEFECTO } from '../lib/unidades';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { IconoDeAtras } from '../components/IconoDeAtras';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -240,7 +241,7 @@ export function ProfileSetupScreen() {
               <Image source={{ uri: driverPhotoUrl }} style={styles.avatar} />
             ) : (
               <View style={styles.avatar}>
-                <MaterialCommunityIcons name="camera" size={48} color="#9E9E9E" />
+                <Icono fuente={ICONO_AJUSTES} tamano={29} />
               </View>
             )}
             <Text style={styles.changePhotoText}>
@@ -339,7 +340,7 @@ export function ProfileSetupScreen() {
                 />
               ) : (
                 <View style={styles.providerPhotoPlaceholder}>
-                  <MaterialCommunityIcons name="camera" size={48} color="#9E9E9E" />
+                  <Icono fuente={ICONO_AJUSTES} tamano={29} />
                 </View>
               )}
               <Text style={styles.changePhotoText}>
@@ -386,10 +387,9 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
-  backBtn: {
-    padding: 4,
-  },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   backArrow: {
     color: '#fff',
     fontSize: 24,
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 20,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#2D2D2D',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#2D2D2D',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,

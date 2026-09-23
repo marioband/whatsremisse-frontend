@@ -87,15 +87,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: DARK_HEADER,
     paddingTop: 50,
-    paddingBottom: 12,
+    paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
   backArrow: { color: '#fff', fontSize: 24, marginRight: 12 },
   /* Los dos laterales miden lo mismo: así el nombre de la contraparte queda
      centrado de verdad en la pantalla (con anchos distintos se desplazaba). */
-  headerLado: { width: 68, justifyContent: 'center' },
+  headerLado: { width: 36, justifyContent: 'center', height: 36, alignItems: 'center' },
   headerInfo: { flex: 1, alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  headerTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', flex: 1 },
   headerSubtitle: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
@@ -126,5 +127,5 @@ const styles = StyleSheet.create({
     // lo quiere (en nativo no existe).
     ...Platform.select({ web: { outlineStyle: 'none' } as object }),
   },
-  searchCount: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginLeft: 6 },
+  searchCount: { color: 'rgba(255, 255, 0.7)', fontSize: 11, marginLeft: 6 },
 });

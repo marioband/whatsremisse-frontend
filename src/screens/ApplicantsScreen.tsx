@@ -329,14 +329,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: OSCURO,
+    backgroundColor: '#2D2D2D',
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
-  backBtn: {
-    padding: 4,
-  },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   backArrow: {
     color: '#fff',
     fontSize: 24,

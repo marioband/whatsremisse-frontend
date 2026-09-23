@@ -81,10 +81,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: DARK_BG,
     paddingTop: 50,
-    paddingBottom: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
-  backBtn: { padding: 4 },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   backArrow: { color: '#fff', fontSize: 24 },
   headerTitle: {
     color: '#fff',
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 12,
   },
-  headerIconBtn: { padding: 4 },
+  headerIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerIcon: { fontSize: 22 },
   list: { padding: 16, paddingBottom: 100 },
   card: {

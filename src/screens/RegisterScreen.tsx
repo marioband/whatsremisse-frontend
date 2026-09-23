@@ -151,6 +151,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
   input: {
     backgroundColor: FIELD_BG,
@@ -160,16 +162,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#333',
     textAlign: 'center',
+    outlineStyle: 'none',
+    borderWidth: 0,
   },
   /** El código necesita poco ancho; el número se queda con el resto. */
   inputCodigo: {
-    width: 78,
+    width: 64,
     marginRight: 10,
-    fontWeight: 'bold',
   },
-  inputNumero: {
-    flex: 1,
-  },
+  inputNumero: { width: 210 },
   spacer: {
     flex: 1,
   },

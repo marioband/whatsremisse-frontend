@@ -796,6 +796,7 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
   headerArrow: {
     color: '#fff',
@@ -822,11 +823,13 @@ const styles = StyleSheet.create({
   avatarDelTituloTexto: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   /** La flecha vive en una caja FIJA: el hueco de la derecha mide lo mismo y el título centra exacto. */
   backBox: {
-    width: TAMANO_DEL_HUECO_DE_LA_FLECHA,
-    alignItems: 'flex-start',
+    width: 36,
+    alignItems: 'center',
+    height: 36,
+    justifyContent: 'center',
   },
   /* El hueco de la flecha, del MISMO ancho que ella: sin esto el título se va a un lado. */
-  headerSpacer: { width: TAMANO_DEL_HUECO_DE_LA_FLECHA },
+  headerSpacer: { width: 36 },
   /** La fila que va DENTRO del botón: imagen + nombre, juntos y centrados. */
   tituloContenido: {
     flexDirection: 'row',
@@ -838,7 +841,7 @@ const styles = StyleSheet.create({
     // El tamaño sale de la constante: el círculo de la imagen se calcula desde él (nombre × 1,5).
     fontSize: TAMANO_DEL_NOMBRE_EN_EL_TITULO,
     fontWeight: 'bold',
-    // NO lleva `flex: 1`: así el nombre mide lo suyo y queda PEGADO a la imagen. Solo se encoge
+    // NO lleva ``: así el nombre mide lo suyo y queda PEGADO a la imagen. Solo se encoge
     // (`flexShrink`) si es larguísimo, para no salirse de la cabecera.
     flexShrink: 1,
   },

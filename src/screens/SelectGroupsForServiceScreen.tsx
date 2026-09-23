@@ -209,15 +209,13 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    minHeight: 102,
   },
   /**
    * Los dos extremos miden lo MISMO (44 px) para que el título quede en el centro exacto de la
    * pantalla, no centrado dentro de lo que sobra a los lados (el atrás es más ancho que el icono).
    */
-  headerLado: {
-    width: 44,
-    justifyContent: 'center',
-  },
+  headerLado: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerLadoDerecho: {
     alignItems: 'flex-end',
   },
