@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  Image,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,6 +18,7 @@ import {
 import { BotonDeNavegacion } from '../components/BotonDeNavegacion';
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
 import { Icono, ICONO_COPIAR } from '../components/Icono';
+import { copiarOCompartirImagen, mensajeDeCopiarImagen } from '../lib/copiarImagen';
 import { ServiceCard } from '../components/ServiceCard';
 import { SwipeStatusButton } from '../components/SwipeStatusButton';
 import {
@@ -46,7 +48,7 @@ import {
 } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
 import { marcarAvisoPropio } from '../lib/avisos';
-import { AZUL } from '../lib/colors';
+import { AZUL, OSCURO } from '../lib/colors';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import { urlDeLaConversacion } from '../lib/conversacionVista';
 import { textoDelContacto } from '../lib/contactosDelTelefono';
@@ -101,7 +103,7 @@ import {
   paradasDelServicio,
   totalDePasos,
 } from '../lib/paradasDelServicio';
-import { textoParaCopiar, DatosPublicos, datosDesdePerfilPublico } from '../lib/perfilPublico';
+import { textoParaCopiar, DatosPublicos, datosDesdePerfilPublico, inicialDe } from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
 
@@ -1214,6 +1216,36 @@ export function ChatScreen() {
               )}
               {isProvider && currentStep === 'IN_PROGRESS' && (
                 <View style={styles.copyDataRow}>
+                  {/*
+                    23-09-2026: la foto del conductor va PEGADA al botón «Datos conductor», a su
+                    izquierda, y se toca para copiarla (el usuario la quiere para pegarla en otro
+                    lado). Si el conductor no tiene foto se pinta su inicial sobre el mismo negro
+                    institucional, como en las demás tarjetas de la app, para que el hueco no
+                    aparezca y desaparezca.
+                  */}
+                  {datosParaCopiar.foto ? (
+                    <TouchableOpacity
+                      style={styles.copyDataFoto}
+                      onPress={() => {
+                        const nombre =
+                          [datosParaCopiar.nombres, datosParaCopiar.apellidos]
+                            .filter(Boolean)
+                            .join(' ') || 'conductor';
+                        copiarOCompartirImagen(datosParaCopiar.foto, nombre).then((resultado) =>
+                          Alert.alert('Foto del conductor', mensajeDeCopiarImagen(resultado))
+                        );
+                      }}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel="Copiar la foto del conductor"
+                    >
+                      <Image source={{ uri: datosParaCopiar.foto }} style={styles.copyDataFotoImg} />
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.copyDataFoto}>
+                      <Text style={styles.copyDataFotoInicial}>{inicialDe(datosParaCopiar)}</Text>
+                    </View>
+                  )}
                   <TouchableOpacity
                     style={styles.copyDataBtn}
                     onPress={() => copiarDatosRef.current()}
@@ -1491,13 +1523,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginVertical: 10,
   },
-  /** Pie de la tarjeta del servicio: los botones van centrados. */
+  /** Pie de la tarjeta del servicio: la foto del conductor y el botón, juntos y centrados. */
   copyDataRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 14,
     paddingBottom: 14,
     paddingTop: 12,
   },
+  /** La foto del conductor (36×36, recortada): se toca y se copia. */
+  copyDataFoto: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: OSCURO,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  copyDataFotoImg: { width: 36, height: 36 },
+  copyDataFotoInicial: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   copyDataBtn: {
     backgroundColor: AZUL,
     borderRadius: 12,

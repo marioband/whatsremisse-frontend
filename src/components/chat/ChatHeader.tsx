@@ -34,7 +34,7 @@ export function ChatHeader({
   return (
     <View style={styles.header}>
       <View style={styles.headerLado}>
-        <TouchableOpacity onPress={onBack} accessibilityLabel="Volver">
+        <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Volver">
           <IconoDeAtras />
         </TouchableOpacity>
       </View>
@@ -92,9 +92,13 @@ const styles = StyleSheet.create({
     minHeight: 102,
   },
   backArrow: { color: '#fff', fontSize: 24, marginRight: 12 },
-  /* Los dos laterales miden lo mismo: así el nombre de la contraparte queda
-     centrado de verdad en la pantalla (con anchos distintos se desplazaba). */
-  headerLado: { width: 36, justifyContent: 'center', height: 36, alignItems: 'center' },
+  /* Los DOS laterales miden lo mismo (68 = 68) para que el nombre de la contraparte quede
+     centrado de verdad en la pantalla (con anchos distintos se desplazaba 16 px). El botón de
+     atrás va en su caja de 36×36 pegada a la izquierda del hueco, así la flecha cae en el mismo
+     sitio que en las otras 21 pantallas (16 + 18 = 34) aunque el hueco haga 68 para igualar los
+     dos iconos de la derecha (36 = 68 no caben). 23-09-2026. */
+  headerLado: { width: 68, flexDirection: 'row', alignItems: 'center' },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerInfo: { flex: 1, alignItems: 'center' },
   headerTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', flex: 1 },
   headerSubtitle: {
