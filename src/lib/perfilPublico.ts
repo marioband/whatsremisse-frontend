@@ -98,6 +98,20 @@ export function datosDesdePerfilPublico(fila: FilaPerfilPublico | null): DatosPu
 }
 
 /** Valor para pantalla: el dato o "—" si no lo tenemos. */
+/**
+ * Dos datos en una sola línea, como en la referencia del usuario (23-09-2026): «Mario André, Baldeón
+ * Andía» y «Mitsubishi, Lancer».
+ *
+ * Se juntan SOLO los que hay —un postulante sin modelo no deja una coma suelta— y, si no hay ninguno,
+ * sale el guion de siempre. Es puro para poder probarlo sin montar la tarjeta.
+ */
+export function lineaDeDos(primero: string, segundo: string): string {
+  const partes = [primero, segundo]
+    .map((parte) => (parte || '').trim())
+    .filter((parte) => parte !== '');
+  return partes.length > 0 ? partes.join(', ') : conGuion('');
+}
+
 export function conGuion(valor: string): string {
   return valor && valor.length > 0 ? valor : '—';
 }

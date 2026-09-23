@@ -10,22 +10,27 @@ import {
   TEXTO_SUAVE,
   VERDE_ACCION,
 } from '../lib/colors';
-import { conGuion, DatosPublicos, inicialDe } from '../lib/perfilPublico';
+import { conGuion, DatosPublicos, inicialDe, lineaDeDos } from '../lib/perfilPublico';
 
 /**
- * Tarjeta de un postulante, con la estructura de la referencia del usuario:
+ * Tarjeta de un postulante, con la estructura de la referencia del usuario (22-09 y 23-09-2026):
  *
  *   [        tipo de unidad del postulante (centrado)                 ]
  *   [        tiempo y distancia al punto de origen (centrado)        ]
- *   (avatar)  Nombres: …        Marca: …
- *             Apellidos: …      Modelo: …
- *             DNI: …            Color: …
- *             Celular: …        Placa: …
+ *   (avatar)      Mario André, Baldeón Andía
+ *                 Mitsubishi, Lancer
+ *                 Color: Rojo Metálico
  *   [ Aceptar ]  [ Conversar ]  [ Rechazar ]
  *
- * Sin títulos de sección: los datos del conductor van en la columna izquierda y los
- * del vehículo en la derecha, al lado. Vive en su propio componente para poder
- * renderizarse y medirse en las pruebas (la pantalla solo le pasa los datos).
+ * 23-09-2026 — el usuario confirmó recortar la tarjeta a su dibujo: los nombres y apellidos van
+ * JUNTOS, la marca y el modelo también, y **fuera el DNI, el celular y la placa** (el dibujo no los
+ * tiene). «Color:» conserva su etiqueta, como en el dibujo. Los tres datos van en UNA columna
+ * centrada, con el avatar a la izquierda.
+ *
+ * OJO: los botones NO cambiaron. El dibujo dice «Chatear» y lo pone primero, pero el usuario fijó que
+ * las capturas son referencia de ESTRUCTURA y los textos de la app se conservan («Conversar»).
+ *
+ * Vive en su propio componente para poder renderizarse y medirse en las pruebas.
  */
 export interface ApplicantCardProps {
   datos: DatosPublicos;
@@ -59,19 +64,12 @@ export function ApplicantCard({
           </View>
         )}
 
-        <View style={styles.dataColumns}>
-          <View style={[styles.dataColumn, styles.dataColumnAncha]}>
-            <Text style={styles.fieldText}>Nombres: {conGuion(datos.nombres)}</Text>
-            <Text style={styles.fieldText}>Apellidos: {conGuion(datos.apellidos)}</Text>
-            <Text style={styles.fieldText}>DNI: {conGuion(datos.dni)}</Text>
-            <Text style={styles.fieldText}>Celular: {conGuion(datos.telefono)}</Text>
-          </View>
-          <View style={styles.dataColumn}>
-            <Text style={styles.fieldText}>Marca: {conGuion(datos.marca)}</Text>
-            <Text style={styles.fieldText}>Modelo: {conGuion(datos.modelo)}</Text>
-            <Text style={styles.fieldText}>Color: {conGuion(datos.color)}</Text>
-            <Text style={styles.fieldText}>Placa: {conGuion(datos.placa)}</Text>
-          </View>
+        {/* 23-09-2026: nombres y apellidos juntos, marca y modelo juntos, y nada de DNI, celular ni
+            placa (el dibujo del usuario no los tiene). Todo en una columna centrada. */}
+        <View style={styles.dataColumna}>
+          <Text style={styles.fieldText}>{lineaDeDos(datos.nombres, datos.apellidos)}</Text>
+          <Text style={styles.fieldText}>{lineaDeDos(datos.marca, datos.modelo)}</Text>
+          <Text style={styles.fieldText}>Color: {conGuion(datos.color)}</Text>
         </View>
       </View>
 
@@ -129,36 +127,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  /** El círculo del avatar: en el dibujo del usuario es grande, con el texto a su derecha. */
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: OSCURO,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   avatarText: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
   },
-  /** Dos columnas de datos: conductor | vehículo, sin títulos. */
-  dataColumns: {
+  /** Una sola columna de datos, centrada (23-09-2026: antes eran dos, una por lado). */
+  dataColumna: {
     flex: 1,
-    flexDirection: 'row',
-  },
-  /** El conductor a la izquierda ocupa algo más: sus campos son los más largos. */
-  dataColumn: {
-    flex: 1,
-  },
-  dataColumnAncha: {
-    flex: 1.35,
+    alignItems: 'center',
   },
   fieldText: {
-    fontSize: 12,
-    color: TEXTO_SUAVE,
-    marginBottom: 2,
+    fontSize: 13,
+    color: OSCURO,
+    textAlign: 'center',
+    marginBottom: 3,
   },
   actionsRow: {
     flexDirection: 'row',
