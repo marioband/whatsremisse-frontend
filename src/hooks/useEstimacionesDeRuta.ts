@@ -92,13 +92,45 @@ export function useEstimacionesDeRuta(
       const { candidatos, descartados } = elegirCandidatosPorCercania(posicion, entradas);
       if (descartados.length > 0) registrarAhorro('cercania', descartados.length);
 
+      /**
+       * QUÉ SE MIDE Y POR QUÉ (21-09-2026, pedido del usuario: «no veo el tiempo y distancia en las
+       * tarjetas que ve el conductor de los servicios disponibles»).
+       *
+       * Antes se medían SOLO los 3 más cercanos y de menos de 5 km, y los servicios sin coordenadas
+       * se descartaban sin medir: en la práctica la tarjeta salía sin tiempo ni distancia casi
+       * siempre. Ahora se separan las dos medidas, que no cuestan lo mismo:
+       *
+       *   - El VIAJE (origen→destino) no depende de dónde esté el conductor. Se mide para los que
+       *     se ven (hasta `MAXIMO_VIAJES_MEDIDOS`) y queda en caché 30 días: se paga UNA vez por
+       *     servicio y dispositivo, y así la tarjeta siempre enseña el viaje.
+       *   - «Cuánto tardo en llegar al origen» sí depende de él y se recalcula al moverse: solo
+       *     para los más cercanos, que es donde de verdad se decide aceptar el servicio.
+       */
+      const cercanos = new Set(candidatos.map(({ servicio }) => servicio.id));
+      const aMedir: ServiceAlert[] = [];
+      const vistos = new Set<string>();
+      [
+        ...servicios.slice(0, MAXIMO_VIAJES_MEDIDOS),
+        ...candidatos.map(({ servicio }) => servicio),
+      ].forEach((servicio) => {
+        if (vistos.has(servicio.id)) return;
+        vistos.add(servicio.id);
+        aMedir.push(servicio);
+      });
+
       const nuevas: Record<string, EstimacionesDeServicio> = {};
 
-      for (const { servicio } of candidatos) {
+      for (const servicio of aMedir) {
         if (!vigente) return;
-        const marca = `${servicio.id}|${servicio.origin_address}|${servicio.destination_address}`;
-        if (yaPedidos.current.has(marca)) continue;
-        yaPedidos.current.add(marca);
+        const baseDeLaMarca = `${servicio.id}|${servicio.origin_address}|${servicio.destination_address}`;
+        // Cada medida se pide una sola vez: el viaje y la llegada llevan marcas distintas porque la
+        // llegada puede pedirse más tarde (cuando ya se sabe dónde está el conductor).
+        const marcaViaje = `${baseDeLaMarca}|viaje`;
+        const marcaLlegada = `${baseDeLaMarca}|llegada`;
+        const haceFaltaViaje = !yaPedidos.current.has(marcaViaje);
+        const haceFaltaLlegada =
+          Boolean(posicion) && cercanos.has(servicio.id) && !yaPedidos.current.has(marcaLlegada);
+        if (!haceFaltaViaje && !haceFaltaLlegada) continue;
 
         const puntoOrigen = {
           address: servicio.origin_address,
@@ -111,10 +143,18 @@ export function useEstimacionesDeRuta(
           lng: servicio.destination_lng || null,
         };
 
-        const haciaDestino = formatearEstimacion(await medirRuta(puntoOrigen, puntoDestino));
-        const haciaOrigen = posicion
-          ? formatearEstimacion(await medirRuta(posicion, puntoOrigen))
+        // El viaje se mide SIEMPRE (es lo que hace que la tarjeta nunca salga vacía); la llegada,
+        // solo si el conductor está cerca y sabemos dónde está.
+        const haciaDestino = haceFaltaViaje
+          ? formatearEstimacion(await medirRuta(puntoOrigen, puntoDestino))
           : '';
+        if (haceFaltaViaje) yaPedidos.current.add(marcaViaje);
+
+        const haciaOrigen =
+          haceFaltaLlegada && posicion
+            ? formatearEstimacion(await medirRuta(posicion, puntoOrigen))
+            : '';
+        if (haceFaltaLlegada && posicion) yaPedidos.current.add(marcaLlegada);
 
         if (!vigente) return;
         if (haciaDestino || haciaOrigen) {
@@ -142,3 +182,10 @@ export function useEstimacionesDeRuta(
 
 /** Cuántos servicios como máximo se miden por pantalla (se exporta para probarlo). */
 export const MAXIMO_SERVICIOS_MEDIDOS = MAXIMO_CANDIDATOS_ETA;
+
+/**
+ * Cuántos VIAJES (origen→destino) se miden como mucho de una vez. Cada uno se paga una sola vez y
+ * queda 30 días en caché, pero con 40 alertas de golpe serían 40 llamadas seguidas: este tope las
+ * mantiene a raya y cubre de sobra lo que cabe en una pantalla.
+ */
+export const MAXIMO_VIAJES_MEDIDOS = 12;

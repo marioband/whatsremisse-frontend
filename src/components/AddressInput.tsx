@@ -57,6 +57,18 @@ interface Props {
    * gana la de abajo en el documento y el desplegable de la de arriba queda tapado.
    */
   onSugerenciasVisibles?: (visibles: boolean) => void;
+  /**
+   * Si este campo es el ORIGEN o un DESTINO. Solo cambia el color del punto de cada fila:
+   * azul institucional para el origen y oscuro para el destino, los MISMOS puntos que pinta la
+   * tarjeta del servicio (regla del usuario, 21-09-2026: «punto azul origen, punto negro destino»).
+   */
+  punto?: 'origen' | 'destino';
+  /**
+   * Avisa cuando el campo recibe o pierde el foco. Lo usa Nuevo servicio para esconder el pie
+   * (Anular · Guardar · Elegir grupos) mientras se escribe una dirección: con el desplegable de
+   * sugerencias abierto esos botones quitaban media pantalla.
+   */
+  onFoco?: (enfocado: boolean) => void;
 }
 
 const ESPERA_MS = 400;
@@ -84,11 +96,15 @@ export function AddressInput({
   estilo,
   ayuda,
   onSugerenciasVisibles,
+  punto = 'origen',
+  onFoco,
 }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [sugerencias, setSugerencias] = useState<SugerenciaDireccion[]>([]);
   const sesion = useRef(nuevaSesion());
+  /** El campo, para poder soltarle el teclado al cerrar las sugerencias. */
+  const campoDeTexto = useRef<TextInput>(null);
   const ultimaConsulta = useRef<string | null>(null);
 
   // Cada vez que el usuario elige algo (o se cierra el desplegable) se renueva
@@ -98,6 +114,10 @@ export function AddressInput({
     setSugerencias([]);
     ultimaConsulta.current = null;
     sesion.current = nuevaSesion();
+    // Se suelta el teclado: en la pantalla, el pie (Anular · Guardar · Elegir grupos) está escondido
+    // mientras se escribe una dirección, y en el móvil tocar el fondo del formulario NO siempre
+    // quita el foco: sin esto el usuario podría quedarse sin esos botones a la vista.
+    campoDeTexto.current?.blur();
   };
 
   useEffect(() => {
@@ -239,7 +259,9 @@ export function AddressInput({
           onPress={() => elegirLugarGuardado(lugar)}
           activeOpacity={0.7}
         >
-          <Text style={styles.icono}>📍</Text>
+          <View
+            style={[styles.punto, punto === 'destino' ? styles.puntoDestino : styles.puntoOrigen]}
+          />
           <View style={styles.filaTextos}>
             <Text style={styles.filaTitulo} numberOfLines={2}>
               {lugar.texto}
@@ -276,7 +298,9 @@ export function AddressInput({
         onPress={() => elegirSugerencia(fila.sugerencia)}
         activeOpacity={0.7}
       >
-        <Text style={styles.icono}>📍</Text>
+        <View
+          style={[styles.punto, punto === 'destino' ? styles.puntoDestino : styles.puntoOrigen]}
+        />
         <View style={styles.filaTextos}>
           <Text style={styles.filaTitulo} numberOfLines={1}>
             {fila.sugerencia.principal}
@@ -295,6 +319,7 @@ export function AddressInput({
     <View style={[styles.contenedor, estilo]}>
       <View style={styles.campo}>
         <TextInput
+          ref={campoDeTexto}
           style={styles.entrada}
           placeholder={placeholder}
           placeholderTextColor="#999"
@@ -303,7 +328,13 @@ export function AddressInput({
             onChangeText(texto);
             setAbierto(true);
           }}
-          onFocus={() => setAbierto(true)}
+          onFocus={() => {
+            setAbierto(true);
+            onFoco?.(true);
+          }}
+          // Al perder el foco NO se cierran las sugerencias: en web el toque en una sugerencia
+          // dispara antes el `blur`, y cerrarlas ahí haría imposible elegir una.
+          onBlur={() => onFoco?.(false)}
         />
         {valor.length > 0 && (
           <TouchableOpacity
@@ -431,6 +462,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#777',
     marginTop: 2,
+  },
+  /** El punto de la dirección: azul en el origen, oscuro en el destino (igual que la tarjeta). */
+  punto: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  puntoOrigen: {
+    backgroundColor: BLUE,
+  },
+  puntoDestino: {
+    backgroundColor: DARK_BG,
   },
   icono: {
     fontSize: 14,

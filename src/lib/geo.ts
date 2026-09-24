@@ -18,9 +18,16 @@ const RADIO_TIERRA_M = 6371008.8;
 const METROS_POR_GRADO = 111320;
 
 /** Configuración del filtro y de la reutilización de medidas. */
-export const RADIO_FILTRO_METROS = 5000; // descarta más lejos que esto
+/**
+ * Hasta dónde se le pide al conductor «cuánto tardas en llegar al origen». Antes 5 km: en una
+ * ciudad como Lima eso dejaba la tarjeta SIN tiempo ni distancia casi siempre (lo reportó el
+ * usuario el 21-09-2026). 15 km cubre la ciudad sin disparar las llamadas, porque ESTA es la
+ * medida que se recalcula cuando el conductor se mueve (la del viaje origen→destino se mide
+ * aparte y queda cacheada 30 días).
+ */
+export const RADIO_FILTRO_METROS = 15000;
 export const UMBRAL_MOVIMIENTO_METROS = 500; // "no se movió lo suficiente"
-export const MAXIMO_CANDIDATOS_ETA = 3; // a cuántos se les pide ETA exacta
+export const MAXIMO_CANDIDATOS_ETA = 5; // a cuántos se les pide ETA exacta
 export const TTL_RUTA_CON_POSICION_MS = 5 * 60 * 1000; // 5 min
 export const TTL_RUTA_ENTRE_DIRECCIONES_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
 

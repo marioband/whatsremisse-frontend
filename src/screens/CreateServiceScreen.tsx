@@ -92,6 +92,27 @@ export function CreateServiceScreen() {
   const editingService = route.params?.service;
   const isEditing = !!editingService;
 
+  /**
+   * Mientras se escribe una dirección, el pie (Anular · Guardar · Elegir grupos) se esconde: con el
+   * desplegable de sugerencias abierto esos tres botones quitaban media pantalla (pedido del
+   * usuario, 21-09-2026). Vuelve cuando el campo pierde el foco, con un respiro de 400 ms para que
+   * el toque en una sugerencia no se lo lleve por delante (en web el `blur` llega antes que el toque).
+   */
+  const [campoDeDireccionEnfocado, setCampoDeDireccionEnfocado] = useState<string | null>(null);
+  const volverElPie = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avisoDeFoco = (clave: string) => (enfocado: boolean) => {
+    if (volverElPie.current) {
+      clearTimeout(volverElPie.current);
+      volverElPie.current = null;
+    }
+    if (enfocado) {
+      setCampoDeDireccionEnfocado(clave);
+      return;
+    }
+    volverElPie.current = setTimeout(() => {
+      setCampoDeDireccionEnfocado((actual) => (actual === clave ? null : actual));
+    }, 400);
+  };
   /** Un solo "Guardar" efectivo por visita a esta pantalla (ver `handleGuardar`). */
   const guardandoRef = useRef(false);
 
@@ -261,6 +282,14 @@ export function CreateServiceScreen() {
   const avisoDeSugerencias = (campo: string) => (visibles: boolean) => {
     setCampoConSugerencias((actual) => (visibles ? campo : actual === campo ? null : actual));
   };
+
+  /**
+   * El pie (Anular · Guardar · Elegir grupos) se esconde mientras se escribe una dirección: con el
+   * desplegable de sugerencias abierto esos tres botones quitaban media pantalla (pedido del
+   * usuario, 21-09-2026). Basta con CUALQUIERA de las dos señales —la dirección en foco o las
+   * sugerencias abiertas—: avisan por caminos distintos y con las dos el espacio hace falta.
+   */
+  const escribiendoUnaDireccion = campoDeDireccionEnfocado !== null || campoConSugerencias !== null;
 
   // Bloqueo de coherencia: para hoy, la primera hora agendable es el siguiente
   // tramo de 5 minutos (a las 11:15 a.m. ya no se pueden elegir las 11:00 a.m.).
@@ -647,6 +676,9 @@ export function CreateServiceScreen() {
             }}
             onConfirmar={confirmarOrigen}
             onSugerenciasVisibles={avisoDeSugerencias(FILA_ORIGEN)}
+            // Punto azul: es el ORIGEN (la tarjeta usa el mismo).
+            punto="origen"
+            onFoco={avisoDeFoco('origen')}
           />
         </View>
         {!premium && (
@@ -684,6 +716,9 @@ export function CreateServiceScreen() {
                 }}
                 onConfirmar={(direccion) => confirmarDestino(index, direccion)}
                 onSugerenciasVisibles={avisoDeSugerencias(filaDestino(index))}
+                // Punto oscuro: es un DESTINO (la tarjeta usa el mismo).
+                punto="destino"
+                onFoco={avisoDeFoco(`destino-${index}`)}
               />
             </View>
             {destinations.length > 1 && (
@@ -938,19 +973,24 @@ export function CreateServiceScreen() {
       {/* Los botones llevan el hueco del borde inferior del iPhone: antes quedaban pegados al
           borde (reporte del usuario, 19-09-2026) y en los iPhone con barra de gestos el dedo
           caía fuera de la pantalla. */}
-      <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>
-        <TouchableOpacity style={[styles.footerBtn, styles.anularBtn]} onPress={handleAnular}>
-          <Text style={styles.anularText}>Anular</Text>
-        </TouchableOpacity>
+      {!escribiendoUnaDireccion && (
+        <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>
+          <TouchableOpacity style={[styles.footerBtn, styles.anularBtn]} onPress={handleAnular}>
+            <Text style={styles.anularText}>Anular</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.footerBtn, styles.guardarBtn]} onPress={handleGuardar}>
-          <Text style={styles.footerBtnText}>Guardar</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={[styles.footerBtn, styles.guardarBtn]} onPress={handleGuardar}>
+            <Text style={styles.footerBtnText}>Guardar</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.footerBtn, styles.gruposBtn]} onPress={handleElegirGrupos}>
-          <Text style={styles.footerBtnText}>Elegir grupos</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.footerBtn, styles.gruposBtn]}
+            onPress={handleElegirGrupos}
+          >
+            <Text style={styles.footerBtnText}>Elegir grupos</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <CalendarMonthPicker
         visible={abriendoCalendario}

@@ -254,6 +254,18 @@ export function ServiceCard({
         miPostulacion={miPostulacion}
         radius={RADIUS.xl}
       />
+
+      {/* Mensajes del proveedor sin leer: círculo OSCURO con el número, DENTRO de la tarjeta y
+          abajo a la derecha — el mismo contador que usa Mis grupos (pedido del usuario,
+          21-09-2026: «ya no usemos el círculo rojo fuera de la tarjeta»). El disparador es el
+          mismo de antes: el proveedor escribió en el chat del servicio. */}
+      {notificationCount > 0 && (
+        <View style={styles.globoDeMensajes} accessibilityLabel={`${notificationCount} mensajes`}>
+          <Text style={styles.globoDeMensajesTexto}>
+            {notificationCount > 99 ? '99+' : notificationCount}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
@@ -274,15 +286,6 @@ export function ServiceCard({
         >
           {cardContent}
         </FilaDeslizable>
-      )}
-
-      {/* Globo de notificación del proveedor (fuera del card para evitar clipping) */}
-      {notificationCount > 0 && (
-        <View style={styles.notificationBadge}>
-          <Text style={styles.notificationText}>
-            {notificationCount > 99 ? '99+' : notificationCount}
-          </Text>
-        </View>
       )}
     </View>
   );
@@ -484,23 +487,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  notificationBadge: {
+  globoDeMensajes: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: COLORS.danger,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
+    bottom: 10,
+    right: 10,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: COLORS.headerDark,
     alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#fff',
+    justifyContent: 'center',
   },
-  notificationText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
+  globoDeMensajesTexto: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
