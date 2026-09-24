@@ -13,7 +13,12 @@
  */
 
 export type ApiExterna =
-  'places:autocompletado' | 'places:detalle' | 'routes:computeRoutes' | 'google:geocode';
+  | 'places:autocompletado'
+  | 'places:detalle'
+  /** Rutas: se separan porque no cuestan lo mismo (con tráfico = Pro, sin tráfico = Essentials). */
+  | 'routes:computeRoutes:conTrafico'
+  | 'routes:computeRoutes:sinTrafico'
+  | 'google:geocode';
 
 export type MotivoDeAhorro = 'cache' | 'calculo-propio' | 'texto-del-usuario' | 'cercania';
 

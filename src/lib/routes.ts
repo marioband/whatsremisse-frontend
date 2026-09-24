@@ -17,6 +17,7 @@ import {
   TTL_RUTA_ENTRE_DIRECCIONES_MS,
 } from './geo';
 import { registrarAhorro, registrarLlamada, registrarResumenEnConsola } from './medidor';
+import { preferenciaDeRuta } from './horasPunta';
 import { claveDeGoogle, hayApiDeDirecciones } from './places';
 
 const URL_RUTA = 'https://routes.googleapis.com/directions/v2:computeRoutes';
@@ -41,13 +42,13 @@ export const CAMPOS_RUTA = 'routes.duration,routes.distanceMeters';
 
 /**
  * Preferencia de ruta: cambia el precio (y la calidad del dato).
- *  - 'TRAFFIC_UNAWARE' -> SKU **Essentials** (Compute Routes: $5 por 1000).
- *  - 'TRAFFIC_AWARE'   -> SKU **Pro** ($10 por 1000): tiene en cuenta el tráfico;
- *    la duración es realista y sirve para que el conductor elija servicio.
- * Con 10.000 llamadas/mes la diferencia es de unos $50 mensuales, así que es una
- * decisión de producto: aquí queda encendido el tráfico.
+ *  - 'TRAFFIC_UNAWARE' -> SKU **Essentials** (Compute Routes: $5 por 1000, 10.000 gratis).
+ *  - 'TRAFFIC_AWARE'   -> SKU **Pro** ($10 por 1000, 5.000 gratis): cuenta el tráfico real.
+ *
+ * DECISIÓN DEL USUARIO (24-09-2026): no se elige una para siempre — se pide la CARA solo cuando el
+ * tráfico decide (horas punta de Lima) y la BARATA el resto del día. Vive en `lib/horasPunta.ts`,
+ * que es donde se ajustan las franjas.
  */
-export const PREFERENCIA_DE_RUTA: 'TRAFFIC_UNAWARE' | 'TRAFFIC_AWARE' = 'TRAFFIC_AWARE';
 
 export function hayApiDeRutas(): boolean {
   return hayApiDeDirecciones();
@@ -82,23 +83,32 @@ function llevaPosicion(punto: Punto): boolean {
 }
 
 /** Cuerpo de la petición (aparte, para poder probarlo sin red). */
-export function cuerpoDeRuta(origen: Punto, destino: Punto): Record<string, unknown> {
+export function cuerpoDeRuta(
+  origen: Punto,
+  destino: Punto,
+  preferencia: 'TRAFFIC_UNAWARE' | 'TRAFFIC_AWARE' = preferenciaDeRuta()
+): Record<string, unknown> {
   return {
     origin: comoWaypoint(origen),
     destination: comoWaypoint(destino),
     travelMode: 'DRIVE',
-    routingPreference: PREFERENCIA_DE_RUTA,
+    routingPreference: preferencia,
     languageCode: 'es',
     units: 'METRIC',
   };
 }
 
-function claveDeCache(origen: Punto, destino: Punto): string {
+function claveDeCache(
+  origen: Punto,
+  destino: Punto,
+  preferencia: 'TRAFFIC_UNAWARE' | 'TRAFFIC_AWARE'
+): string {
   const p = (x: Punto) =>
     typeof x.lat === 'number' && typeof x.lng === 'number'
       ? `${x.lat.toFixed(5)},${x.lng.toFixed(5)}`
       : (x.address || '').trim().toLowerCase();
-  return `${p(origen)} -> ${p(destino)}`;
+  // La tarifa forma parte de la clave: `sin trafico|...` y `con trafico|...` son medidas distintas.
+  return `${preferencia}|${p(origen)} -> ${p(destino)}`;
 }
 
 /** "1800s" -> 1800 */
@@ -155,9 +165,14 @@ export async function medirRuta(
 
   const origenListo = normalizarPunto(origen);
   const destinoListo = normalizarPunto(destino);
-  const clave = claveDeCache(origenListo, destinoListo);
+  // La preferencia se decide AHORA (horas punta de Lima) y forma parte de la clave: una medida sin
+  // tráfico no puede reutilizarse en hora punta (el conductor vería un tiempo irreal).
+  const preferencia = preferenciaDeRuta();
+  const clave = claveDeCache(origenListo, destinoListo, preferencia);
+  // Un tiempo CON tráfico es un dato vivo: se guarda minutos. Sin tráfico es una ruta fija y
+  // aguanta el TTL largo de siempre (30 días si son dos direcciones).
   const ttl =
-    llevaPosicion(origenListo) || llevaPosicion(destinoListo)
+    preferencia === 'TRAFFIC_AWARE' || llevaPosicion(origenListo) || llevaPosicion(destinoListo)
       ? TTL_RUTA_CON_POSICION_MS
       : TTL_RUTA_ENTRE_DIRECCIONES_MS;
 
@@ -174,7 +189,13 @@ export async function medirRuta(
     return persistida;
   }
 
-  registrarLlamada('routes:computeRoutes');
+  // El contador de llamadas distingue las dos tarifas: así el gasto de rutas se puede mirar
+  // separado (con tráfico = Pro; sin tráfico = Essentials, la mitad).
+  registrarLlamada(
+    preferencia === 'TRAFFIC_AWARE'
+      ? 'routes:computeRoutes:conTrafico'
+      : 'routes:computeRoutes:sinTrafico'
+  );
   const controlador = new AbortController();
   const temporizador = setTimeout(() => controlador.abort(), timeoutMs);
   try {
@@ -186,7 +207,7 @@ export async function medirRuta(
         'X-Goog-Api-Key': claveDeGoogle(),
         'X-Goog-FieldMask': CAMPOS_RUTA,
       },
-      body: JSON.stringify(cuerpoDeRuta(origenListo, destinoListo)),
+      body: JSON.stringify(cuerpoDeRuta(origenListo, destinoListo, preferencia)),
     });
     if (!respuesta.ok) {
       const detalle = await respuesta.text().catch(() => '');
