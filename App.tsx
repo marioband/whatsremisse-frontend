@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AvisoDeActualizacion } from './src/components/AvisoDeActualizacion';
 import { AuthProvider } from './src/context/AuthContext';
 import { MockStoreProvider } from './src/context/MockStoreContext';
 import { ALTURA_VISIBLE, instalarAlturaVisible } from './src/lib/alturaVisible';
@@ -105,6 +106,9 @@ export default function App() {
             <RootNavigator />
           </MockStoreProvider>
         </AuthProvider>
+        {/* El aviso de actualización va ENCIMA de todo (24-09-2026): si la app está vieja, o sale
+            la banda mientras trabaja o la pantalla que no lo deja seguir hasta actualizar. */}
+        <AvisoDeActualizacion />
         <StatusBar
           // En Android el color de la barra de estado lo pinta la app: con `auto` no siempre
           // coincide con el negro institucional de la cabecera (reporte del usuario, 19-09-2026).

@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
-    "build:web": "expo export:web --clear && node scripts/recortar-fuente-de-iconos.mjs && node scripts/pwa-manifest.mjs && node scripts/copiar-service-worker.mjs"
+    "build:web": "expo export:web --clear && node scripts/recortar-fuente-de-iconos.mjs && node scripts/pwa-manifest.mjs && node scripts/copiar-service-worker.mjs && node scripts/version-del-build.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^13.0.0",

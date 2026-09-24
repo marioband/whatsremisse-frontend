@@ -4,6 +4,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 
+import { lineaDeVersion, versionEnEjecucion } from '../lib/actualizacion';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
@@ -16,7 +17,7 @@ import {
   EstadoDeAvisos,
 } from '../lib/avisosWeb';
 import { limpiarCacheCompleta } from '../lib/cache';
-import { AZUL, ROJO_ACCION } from '../lib/colors';
+import { AZUL, ROJO_ACCION, TEXTO_SUAVE } from '../lib/colors';
 import { registrarResumenEnConsola, reiniciarContadores, textoDelResumen } from '../lib/medidor';
 import { limpiarCacheDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -262,6 +263,11 @@ export function SettingsScreen() {
             <Text style={styles.menuArrow}>&gt;</Text>
           </TouchableOpacity>
         )}
+        {/* La versión de este teléfono, discreta: es lo que pedimos al probador cuando reporta un
+            fallo («dime la versión que te sale en Cuenta»). */}
+        <Text style={styles.versionDeLaApp}>
+          Versión {lineaDeVersion(versionEnEjecucion()) || 'desconocida'}
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -402,6 +408,13 @@ const styles = StyleSheet.create({
     marginRight: 16,
     width: 28,
     textAlign: 'center',
+  },
+  versionDeLaApp: {
+    marginTop: 18,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontSize: 12,
+    color: TEXTO_SUAVE,
   },
   cerrarSesion: {
     marginHorizontal: 20,
