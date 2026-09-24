@@ -89,5 +89,28 @@ export function textoDeErrorParaElUsuario(err: unknown): string {
   if (esFalloDeTransporte(err)) {
     return 'No hubo respuesta del servidor. Comprueba tu conexión y vuelve a intentarlo.';
   }
+  if (esFalloDeEnvioDeSms(err)) {
+    return 'No pudimos enviar el código al celular. Espera un minuto y vuelve a intentarlo.';
+  }
   return describeError(err);
+}
+
+/**
+ * ¿El error dice que el SMS no se pudo enviar? (24-09-2026)
+ *
+ * El servidor responde con el texto CRUDO del proveedor: «Error sending confirmation OTP to
+ * provider: primary compliance profile is not approved… HTTP 422 / Código: sms_send_failed».
+ * El usuario lo vio tal cual en el teléfono, en inglés y hablando de Twilio. Es un fallo
+ * nuestro/de la cuenta, no suyo, así que se le dice en español y en una línea; el detalle
+ * técnico sigue yendo a la consola para poder diagnosticarlo.
+ */
+export function esFalloDeEnvioDeSms(err: unknown): boolean {
+  const texto = describeError(err).toLowerCase();
+  return (
+    texto.includes('sms_send_failed') ||
+    texto.includes('error sending confirmation otp') ||
+    texto.includes('error sending sms') ||
+    texto.includes('error sending otp') ||
+    texto.includes('sms provider')
+  );
 }
