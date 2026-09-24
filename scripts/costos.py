@@ -51,7 +51,10 @@ DIAS = 30
 SERVICIOS_DISTINTOS_POR_CONDUCTOR_MES = 120   # el viaje se paga 1 vez por servicio y teléfono (caché 30 d)
 PASES_DEL_INICIO_POR_CONDUCTOR_DIA = 12       # cada vez que cambia su lista se miden los cercanos
 CERCANOS_POR_PASE = 5                         # MAXIMO_CANDIDATOS_ETA (hoy 5) dentro de 15 km
-APERTURAS_DE_TARJETA_POR_CONDUCTOR_DIA = 15   # escenario con la llegada solo al abrir
+# OJO (corrección del usuario, 24-09-2026): «el conductor no abre ningún chat a menos que el
+# proveedor le escriba». No entra a mirar tarjetas: decide desde la LISTA. Así que la llegada real se
+# pide ~1 vez al día (cuando entra a un servicio aceptado), no 15.
+APERTURAS_DE_TARJETA_POR_CONDUCTOR_DIA = 1
 POSICIONES_POR_DIA = 4                        # bloques de 500 m con caché de 15 min (escenario C)
 FACTOR_DE_REUSO = 0.4                         # cuánto acierta la caché de 5 min en las llegadas
 ABANDONOS = 0.30                              # sesiones que se escriben y no se cierran
