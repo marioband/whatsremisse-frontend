@@ -11,13 +11,16 @@
  * el aviso de que están bloqueadas (y no se llama a ninguna API).
  */
 
+import { LugarGuardado } from './lugaresFrecuentes';
 import { SugerenciaDireccion } from './places';
 
 export type FilaSugerencia =
   | { tipo: 'mi-texto'; texto: string; titulo: string; subtitulo: string }
   | { tipo: 'sugerencia'; sugerencia: SugerenciaDireccion }
   | { tipo: 'cargando' }
-  | { tipo: 'premium-bloqueado'; titulo: string; subtitulo: string };
+  | { tipo: 'premium-bloqueado'; titulo: string; subtitulo: string }
+  /** Lugar guardado (verificado o de los que repite el usuario): local, coste $0. */
+  | { tipo: 'lugar-guardado'; lugar: LugarGuardado };
 
 export const MINIMO_CARACTERES = 3;
 
@@ -27,6 +30,8 @@ export interface OpcionesDeFilas {
   texto: string;
   sugerencias: SugerenciaDireccion[];
   cargando: boolean;
+  /** Lugares guardados que corresponden a lo escrito (ver `lugaresFrecuentes.ts`). */
+  lugares?: readonly LugarGuardado[];
 }
 
 export function filasDeSugerencias({
@@ -35,18 +40,24 @@ export function filasDeSugerencias({
   texto,
   sugerencias,
   cargando,
+  lugares = [],
 }: OpcionesDeFilas): FilaSugerencia[] {
   const escrito = texto.trim();
-  if (!abierto || escrito.length < MINIMO_CARACTERES) return [];
+  if (!abierto) return [];
 
-  const filas: FilaSugerencia[] = [
-    {
-      tipo: 'mi-texto',
-      texto: escrito,
-      titulo: `Usar "${escrito}"`,
-      subtitulo: 'Mi dirección, tal como la escribí',
-    },
-  ];
+  // Primero los lugares guardados: con el campo recién abierto es el aeropuerto (y lo
+  // que el usuario repite), que es lo que más se pide. No cuestan ninguna llamada.
+  const filas: FilaSugerencia[] = lugares.map((lugar) => ({ tipo: 'lugar-guardado', lugar }));
+
+  // Sin texto suficiente no hay nada más que ofrecer (ni se llama a Google).
+  if (escrito.length < MINIMO_CARACTERES) return filas;
+
+  filas.push({
+    tipo: 'mi-texto',
+    texto: escrito,
+    titulo: `Usar "${escrito}"`,
+    subtitulo: 'Mi dirección, tal como la escribí',
+  });
 
   if (!premium) {
     filas.push({

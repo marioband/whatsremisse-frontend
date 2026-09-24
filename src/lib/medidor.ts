@@ -12,7 +12,8 @@
  * llamadas reales". No cuesta nada: es un contador en memoria.
  */
 
-export type ApiExterna = 'places:autocompletado' | 'places:detalle' | 'routes:computeRoutes';
+export type ApiExterna =
+  'places:autocompletado' | 'places:detalle' | 'routes:computeRoutes' | 'google:geocode';
 
 export type MotivoDeAhorro = 'cache' | 'calculo-propio' | 'texto-del-usuario' | 'cercania';
 

@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,7 @@ import {
   proximaHoraRedondeada,
 } from '../lib/datetime';
 import { filaDestino, FILA_ORIGEN, zIndexDeFila } from '../lib/desplegables';
+import { resolverDireccion } from '../lib/direcciones';
 import {
   estaVencido,
   AVISO_DE_CIERRE_MINUTOS,
@@ -59,6 +60,7 @@ import {
   UNIDADES_POR_DEFECTO,
   unidadesDeLaAlerta,
 } from '../lib/unidades';
+import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert, ServiceStatus } from '../types';
 import { IconoDeAtras } from '../components/IconoDeAtras';
@@ -85,7 +87,7 @@ export function CreateServiceScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<CreateNav>();
   const route = useRoute<CreateRoute>();
-  const { addService, updateService, deleteService } = useMockStore();
+  const { addService, updateService, deleteService, services } = useMockStore();
   const { session, profile } = useAuth();
   const editingService = route.params?.service;
   const isEditing = !!editingService;
@@ -306,24 +308,84 @@ export function CreateServiceScreen() {
     });
   };
 
+  /**
+   * Los servicios que este proveedor ya publicó: de ahí salen las direcciones que
+   * repite (ver `lib/lugaresFrecuentes.ts`). Es local: no llama a Google.
+   */
+  const misServicios = useMemo(
+    () => services.filter((servicio) => isVisibleAsProvider(servicio, session?.user?.id)),
+    [services, session?.user?.id]
+  );
+
+  /** Texto vigente de cada campo y si su resolución está en curso. */
+  const textoVigente = useRef<Record<string, string>>({});
+  const resolviendo = useRef<Record<string, boolean>>({});
+  /** Espejo de los destinos actuales: `removeDestination` mueve los índices. */
+  const destinosActuales = useRef<string[]>(destinations);
+  useEffect(() => {
+    destinosActuales.current = destinations;
+  }, [destinations]);
+
+  const claveDelOrigen = 'origen';
+  const claveDelDestino = (index: number) => `destino-${index}`;
+
+  /**
+   * Dirección escrita → punto exacto, UNA sola vez al crearla (24-09-2026).
+   *
+   * Sin este paso, un servicio escrito a mano nace sin coordenadas: el conductor
+   * premium no ve tiempos ni distancias de esa alerta, el orden por cercanía no puede
+   * funcionar y el botón «Ir a origen» navega por el texto (que la app de mapas
+   * interpreta a su manera). Si Google no encuentra la dirección con precisión de
+   * puerta, NO se guarda punto: mejor sin dato que con uno equivocado.
+   */
+  const resolverPunto = (
+    clave: string,
+    texto: string,
+    aplicar: (punto: { lat: number; lng: number } | null) => void
+  ) => {
+    if (resolviendo.current[clave]) return;
+    resolviendo.current[clave] = true;
+    resolverDireccion(texto)
+      .then((punto) => {
+        // Si el usuario cambió lo que había escrito, esta respuesta sobra.
+        if (textoVigente.current[clave] !== texto) return;
+        if (!punto) return;
+        aplicar({ lat: punto.lat, lng: punto.lng });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        resolviendo.current[clave] = false;
+      });
+  };
+
   const confirmarOrigen = (direccion: DireccionConfirmada) => {
+    textoVigente.current[claveDelOrigen] = direccion.texto;
     setOrigin(direccion.texto);
-    setCoordsOrigen(
-      direccion.lat !== null && direccion.lng !== null
-        ? { lat: direccion.lat, lng: direccion.lng }
-        : null
-    );
+    if (direccion.lat !== null && direccion.lng !== null) {
+      setCoordsOrigen({ lat: direccion.lat, lng: direccion.lng });
+      return;
+    }
+    setCoordsOrigen(null);
+    resolverPunto(claveDelOrigen, direccion.texto, setCoordsOrigen);
   };
 
   const confirmarDestino = (index: number, direccion: DireccionConfirmada) => {
     updateDestination(index, direccion.texto);
-    setCoordsDestinos((actuales) => ({
-      ...actuales,
-      [index]:
-        direccion.lat !== null && direccion.lng !== null
-          ? { lat: direccion.lat, lng: direccion.lng }
-          : null,
-    }));
+    const clave = claveDelDestino(index);
+    textoVigente.current[clave] = direccion.texto;
+    const { lat, lng } = direccion;
+    if (lat !== null && lng !== null) {
+      setCoordsDestinos((actuales) => ({ ...actuales, [index]: { lat, lng } }));
+      return;
+    }
+    setCoordsDestinos((actuales) => ({ ...actuales, [index]: null }));
+    resolverPunto(clave, direccion.texto, (punto) =>
+      setCoordsDestinos((actuales) => {
+        // Solo si ese hueco sigue siendo la misma dirección (las filas se borran y se mueven).
+        if (destinosActuales.current[index] !== direccion.texto) return actuales;
+        return { ...actuales, [index]: punto };
+      })
+    );
   };
 
   /** Valida lo que hay en pantalla y arma el servicio (null si falta algo). */
@@ -578,7 +640,11 @@ export function CreateServiceScreen() {
             valor={origin}
             placeholder="Dirección de origen"
             premium={premium}
-            onChangeText={setOrigin}
+            historial={misServicios}
+            onChangeText={(texto) => {
+              textoVigente.current[claveDelOrigen] = texto;
+              setOrigin(texto);
+            }}
             onConfirmar={confirmarOrigen}
             onSugerenciasVisibles={avisoDeSugerencias(FILA_ORIGEN)}
           />
@@ -611,7 +677,11 @@ export function CreateServiceScreen() {
                 valor={dest}
                 placeholder={`Destino ${index + 1}`}
                 premium={premium}
-                onChangeText={(texto) => updateDestination(index, texto)}
+                historial={misServicios}
+                onChangeText={(texto) => {
+                  textoVigente.current[claveDelDestino(index)] = texto;
+                  updateDestination(index, texto);
+                }}
                 onConfirmar={(direccion) => confirmarDestino(index, direccion)}
                 onSugerenciasVisibles={avisoDeSugerencias(filaDestino(index))}
               />

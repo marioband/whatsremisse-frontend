@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { convieneBuscar, filasDeSugerencias, FilaSugerencia } from '../lib/addressSuggestions';
+import { LugarGuardado, lugaresParaElCampo, ServicioDelHistorial } from '../lib/lugaresFrecuentes';
 import { registrarAhorro } from '../lib/medidor';
 import {
   detalleDeDireccion,
@@ -42,6 +43,11 @@ interface Props {
   onConfirmar: (direccion: DireccionConfirmada) => void;
   /** Posición del usuario para priorizar sugerencias cercanas. */
   ubicacion?: { lat: number; lng: number } | null;
+  /**
+   * Servicios ya publicados por este usuario: de ahí salen las direcciones que repite
+   * (lugares guardados). Es opcional y no cuesta ninguna llamada.
+   */
+  historial?: readonly ServicioDelHistorial[];
   estilo?: StyleProp<ViewStyle>;
   /** Texto de ayuda bajo el campo (por ejemplo, avisos de coherencia). */
   ayuda?: string;
@@ -62,6 +68,10 @@ const ESPERA_MS = 400;
  * escribió** (elegible, para quedarse con su propia dirección) y después las
  * sugerencias de la app — que son función Premium. Sin premium el campo sigue
  * funcionando: solo se avisa que las sugerencias requieren la membresía.
+ *
+ * Antes que todo eso van los **lugares guardados** (24-09-2026): el aeropuerto,
+ * con su punto exacto, y las direcciones que este usuario repite. Son locales —
+ * no llaman a Google— y aparecen ya al abrir el campo, sin teclear nada.
  */
 export function AddressInput({
   valor,
@@ -70,6 +80,7 @@ export function AddressInput({
   onChangeText,
   onConfirmar,
   ubicacion,
+  historial,
   estilo,
   ayuda,
   onSugerenciasVisibles,
@@ -114,9 +125,22 @@ export function AddressInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valor, abierto, premium]);
 
+  // Lugares guardados: el aeropuerto (verificado) y las direcciones que este usuario
+  // repite. Se calculan en local, sin llamar a Google. Mientras Google busca o ya trajo
+  // sugerencias, la lista local no se cuela (regla del usuario, 24-09-2026).
+  const lugares = useMemo(
+    () =>
+      lugaresParaElCampo({
+        texto: valor,
+        servicios: historial,
+        haySugerenciasDeGoogle: cargando || sugerencias.length > 0,
+      }),
+    [valor, historial, cargando, sugerencias]
+  );
+
   const filas = useMemo(
-    () => filasDeSugerencias({ abierto, premium, texto: valor, sugerencias, cargando }),
-    [abierto, premium, valor, sugerencias, cargando]
+    () => filasDeSugerencias({ abierto, premium, texto: valor, sugerencias, cargando, lugares }),
+    [abierto, premium, valor, sugerencias, cargando, lugares]
   );
 
   // El desplegable solo ocupa pantalla cuando tiene filas: eso es lo que avisa a la
@@ -139,6 +163,24 @@ export function AddressInput({
     onConfirmar({ texto, lat: null, lng: null, escritaPorElUsuario: true });
     // Elegir su propia escritura no gasta ninguna llamada: no hay que geocodificar.
     registrarAhorro('texto-del-usuario');
+    cerrar();
+  };
+
+  /**
+   * Elegir un lugar guardado (el aeropuerto, o una dirección que ya usó): el texto y el
+   * punto viajan juntos, así que el servicio nace CON coordenadas y no hay que resolver
+   * nada — ni gasta una llamada de direcciones.
+   */
+  const elegirLugarGuardado = (lugar: LugarGuardado) => {
+    onChangeText(lugar.texto);
+    onConfirmar({
+      texto: lugar.texto,
+      lat: lugar.lat,
+      lng: lugar.lng,
+      // Un lugar verificado (con punto) no es «mi escritura»; uno que repite sin punto, sí.
+      escritaPorElUsuario: !lugar.exacto,
+    });
+    registrarAhorro(lugar.exacto ? 'cache' : 'texto-del-usuario');
     cerrar();
   };
 
@@ -186,6 +228,27 @@ export function AddressInput({
             <Text style={styles.filaSubtitulo}>{fila.subtitulo}</Text>
           </View>
         </View>
+      );
+    }
+    if (fila.tipo === 'lugar-guardado') {
+      const { lugar } = fila;
+      return (
+        <TouchableOpacity
+          key={`lugar-${lugar.texto}`}
+          style={[styles.fila, styles.filaGuardada]}
+          onPress={() => elegirLugarGuardado(lugar)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.icono}>📍</Text>
+          <View style={styles.filaTextos}>
+            <Text style={styles.filaTitulo} numberOfLines={2}>
+              {lugar.texto}
+            </Text>
+            <Text style={styles.filaSubtitulo} numberOfLines={1}>
+              {lugar.exacto ? `${lugar.detalle} · punto exacto` : lugar.detalle}
+            </Text>
+          </View>
+        </TouchableOpacity>
       );
     }
     if (fila.tipo === 'mi-texto') {
@@ -343,6 +406,10 @@ const styles = StyleSheet.create({
   },
   filaMiTexto: {
     backgroundColor: '#F4F6FD',
+  },
+  /** Lugares guardados (aeropuerto, direcciones que repite): azul institucional rebajado. */
+  filaGuardada: {
+    backgroundColor: '#EDF0FA',
   },
   filaBloqueada: {
     backgroundColor: '#FAFAFA',
