@@ -26,6 +26,8 @@ import { ordenarEnProceso } from '../lib/apartadosDelInicio';
 import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
 import { AZUL, TEXTO_SUAVE } from '../lib/colors';
 import { esProgramado } from '../lib/datetime';
+import { distanciaLinealMetros, textoDeDistanciaAproximada } from '../lib/geo';
+import { ultimaUbicacion } from '../lib/geolocation';
 import {
   AVISO_CANCELACION_FALLIDA,
   AVISO_POSTULACION_CANCELADA,
@@ -558,10 +560,31 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
   // El conductor publica su última posición (como mucho cada 500 m o 5 minutos)
   // para que el proveedor pueda ver a qué distancia está de su punto de origen.
   usePosicionPublicada(role === 'DRIVER');
+  // `medirLlegada: false`: en la LISTA no se le pide a Google «cuánto tardo en llegar» (eso era el
+  // 85 % del gasto); se enseña la distancia en línea recta, que es gratis, y el tiempo real se mide
+  // al abrir la tarjeta. El viaje (origen→destino) ya viene guardado en el servicio (0043).
   const { estimaciones, avisoDeUbicacion, reintentar } = useEstimacionesDeRuta(
     displayServices,
-    premium && hayApiDeRutas()
+    premium && hayApiDeRutas(),
+    { medirLlegada: false }
   );
+
+  /**
+   * La distancia en línea recta de este conductor al punto de recogida («≈ 4.2 km»).
+   * La calcula el propio teléfono: no cuesta nada y sirve para ordenar y para decidir.
+   */
+  const distanciaAlOrigen = (servicio: ServiceAlert): string | undefined => {
+    const mia = ultimaUbicacion();
+    if (!mia || !servicio.origin_lat || !servicio.origin_lng) return undefined;
+    return (
+      textoDeDistanciaAproximada(
+        distanciaLinealMetros(
+          { lat: mia.lat, lng: mia.lng },
+          { lat: servicio.origin_lat, lng: servicio.origin_lng }
+        )
+      ) || undefined
+    );
+  };
 
   /**
    * Las tarjetas de servicio que se deslizan al cambiar de sitio (pedido del usuario,
@@ -686,7 +709,10 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
               <ServiceCard
                 service={{
                   ...item,
-                  origin_estimate: estimaciones[item.id]?.origen || item.origin_estimate,
+                  origin_estimate:
+                    estimaciones[item.id]?.origen ||
+                    item.origin_estimate ||
+                    distanciaAlOrigen(item),
                   destination_estimate: estimaciones[item.id]?.destino || item.destination_estimate,
                 }}
                 onPress={() => handleCardPress(item)}

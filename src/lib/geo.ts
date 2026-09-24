@@ -25,6 +25,20 @@ const METROS_POR_GRADO = 111320;
  * medida que se recalcula cuando el conductor se mueve (la del viaje origen→destino se mide
  * aparte y queda cacheada 30 días).
  */
+/**
+ * «≈ 4.2 km» / «≈ 800 m»: la distancia en LÍNEA RECTA, que calcula el propio teléfono.
+ *
+ * Se usa en la lista del conductor desde el 24-09-2026: el tiempo real de llegada (que se le pide a
+ * Google) se mide al ABRIR la tarjeta, no en cada refresco de la lista (decisión del usuario, por
+ * gasto). Va con «≈» porque es una aproximación, no un tiempo de ruta.
+ */
+export function textoDeDistanciaAproximada(metros: number): string {
+  if (!Number.isFinite(metros) || metros < 0) return '';
+  if (metros < 1000) return `≈ ${Math.round(metros / 10) * 10} m`;
+  const km = metros / 1000;
+  return `≈ ${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+}
+
 export const RADIO_FILTRO_METROS = 15000;
 export const UMBRAL_MOVIMIENTO_METROS = 500; // "no se movió lo suficiente"
 export const MAXIMO_CANDIDATOS_ETA = 5; // a cuántos se les pide ETA exacta

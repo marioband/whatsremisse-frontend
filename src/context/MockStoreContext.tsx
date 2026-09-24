@@ -69,6 +69,7 @@ import {
   esEmergenciaCercaDeMi,
   leerEmergenciasActivas,
 } from '../lib/emergencias';
+import { haceFaltaMedirElViaje, medirElViaje } from '../lib/viajeDelServicio';
 import { ultimaUbicacion } from '../lib/geolocation';
 import { esPremium } from '../lib/premium';
 import { registrarTokenDePush } from '../lib/pushToken';
@@ -831,13 +832,10 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const aceptacionesEnCurso = useRef<Map<string, number>>(new Map());
   /** Cuánto tapa la ventana: de sobra para la escritura (mediana ~200 ms) sin quedarse colgada. */
   const VENTANA_DE_ACEPTACION_MS = 6000;
-  const esAceptacionRecienEmpezada = useCallback(
-    (serviceId: string, driverId: string) => {
-      const cuando = aceptacionesEnCurso.current.get(`${serviceId}:${driverId}`);
-      return cuando !== undefined && Date.now() - cuando < VENTANA_DE_ACEPTACION_MS;
-    },
-    []
-  );
+  const esAceptacionRecienEmpezada = useCallback((serviceId: string, driverId: string) => {
+    const cuando = aceptacionesEnCurso.current.get(`${serviceId}:${driverId}`);
+    return cuando !== undefined && Date.now() - cuando < VENTANA_DE_ACEPTACION_MS;
+  }, []);
 
   /**
    * La caché del teléfono sirve para PINTAR al instante y refrescar por detrás (20-09-2026).
@@ -869,6 +867,29 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
    * Vive fuera de los efectos porque la usan dos: la carga inicial y el respaldo
    * periódico. Lo que trae se guarda en el teléfono para el próximo arranque.
    */
+  /**
+   * El viaje (origen → destino) se mide UNA vez aquí y se guarda EN EL SERVICIO (0043), para que
+   * los teléfonos de los conductores lo lean de la tarjeta en vez de preguntar cada uno a Google
+   * (decisión del usuario, 24-09-2026). Es «mejor esfuerzo»: si falla, el servicio ya está
+   * publicado y cada teléfono lo medirá por su cuenta, como antes.
+   */
+  const medirYGuardarElViaje = useCallback(
+    async (servicio: ServiceAlert, anteriores?: ServiceAlert | null) => {
+      try {
+        if (!haceFaltaMedirElViaje(servicio, anteriores)) return;
+        const viaje = await medirElViaje(servicio);
+        if (!viaje) return;
+        const guardado = await updateServiceAlert(servicio.id, viaje);
+        if (guardado) {
+          dispatch({ type: 'UPDATE_SERVICE', payload: { ...servicio, ...viaje } });
+        }
+      } catch (err) {
+        console.warn('[MockStore] no se pudo medir y guardar el viaje del servicio:', err);
+      }
+    },
+    []
+  );
+
   const load = useCallback(async () => {
     if (!isSupabaseConfigured || !session?.user || !profile) return;
     try {
@@ -1360,6 +1381,11 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
           return null;
         }
 
+        // El viaje (origen → destino) se mide y se GUARDA en el servicio: una sola vez y por el
+        // proveedor, para que los conductores lo lean de la tarjeta (0043). Va por detrás: no
+        // frena la publicación.
+        void medirYGuardarElViaje(insertado);
+
         // Compartida a varios grupos = UNA sola tarjeta (0018).
         if (!groupIds || groupIds.length === 0) {
           dispatch({ type: 'ADD_SERVICE', payload: insertado });
@@ -1411,8 +1437,11 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     },
     updateService: async (service) => {
       // Solo si la base lo guardó: la pantalla que llama anuncia el éxito después.
+      const anteriores = state.services.find((s) => s.id === service.id) || null;
       if (!(await persistService(service.id, service))) return false;
       dispatch({ type: 'UPDATE_SERVICE', payload: service });
+      // Si el proveedor cambió las direcciones (o nunca se midió), se vuelve a medir el viaje.
+      void medirYGuardarElViaje({ ...anteriores, ...service } as ServiceAlert, anteriores);
       return true;
     },
     deleteService: async (serviceId) => {

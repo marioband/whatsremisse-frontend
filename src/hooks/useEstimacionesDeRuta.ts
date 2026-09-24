@@ -46,8 +46,16 @@ const PAUSA_ENTRE_LLAMADAS_MS = 200;
 
 export function useEstimacionesDeRuta(
   servicios: ServiceAlert[],
-  habilitado: boolean
+  habilitado: boolean,
+  /**
+   * `medirLlegada: false` → NO se le pide a Google «cuánto tardo en llegar al origen». Es lo que usa
+   * la LISTA del inicio (decisión del usuario, 24-09-2026, por gasto): ahí se enseña la distancia en
+   * línea recta (gratis) y el tiempo real de llegada se mide al ABRIR la tarjeta, que es cuando se
+   * necesita para decidir. El chat sí lo pide (`medirLlegada` por defecto).
+   */
+  opciones: { medirLlegada?: boolean } = {}
 ): ResultadoEstimaciones {
+  const medirLlegada = opciones.medirLlegada !== false;
   const [estimaciones, setEstimaciones] = useState<Record<string, EstimacionesDeServicio>>({});
   const [avisoDeUbicacion, setAviso] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
@@ -127,9 +135,15 @@ export function useEstimacionesDeRuta(
         // llegada puede pedirse más tarde (cuando ya se sabe dónde está el conductor).
         const marcaViaje = `${baseDeLaMarca}|viaje`;
         const marcaLlegada = `${baseDeLaMarca}|llegada`;
-        const haceFaltaViaje = !yaPedidos.current.has(marcaViaje);
+        // El viaje suele venir YA medido y guardado en el servicio (0043): entonces no se pide (ni se
+        // paga) otra vez. Solo se mide si el servicio no lo trae (un despliegue sin la 0043, o un
+        // proveedor sin clave de Google al publicar).
+        const haceFaltaViaje = !servicio.destination_estimate && !yaPedidos.current.has(marcaViaje);
         const haceFaltaLlegada =
-          Boolean(posicion) && cercanos.has(servicio.id) && !yaPedidos.current.has(marcaLlegada);
+          medirLlegada &&
+          Boolean(posicion) &&
+          cercanos.has(servicio.id) &&
+          !yaPedidos.current.has(marcaLlegada);
         if (!haceFaltaViaje && !haceFaltaLlegada) continue;
 
         const puntoOrigen = {

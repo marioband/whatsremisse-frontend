@@ -131,6 +131,13 @@ export interface ServiceAlert {
   vehicle_type?: string;
   origin_estimate?: string;
   destination_estimate?: string;
+  /**
+   * El viaje del servicio (origen -> destino) medido por el proveedor y GUARDADO (0043): es lo que
+   * permite que la tarjeta del conductor lo muestre sin que cada teléfono pregunte a Google.
+   */
+  viajeSegundos?: number;
+  viajeMetros?: number;
+  viajeMedidoAt?: string;
   observations?: string[];
   payment_term?: string;
   payment_method?: string;

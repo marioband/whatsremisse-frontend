@@ -59,6 +59,12 @@ export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
     archived: row.archived ?? false,
     // Sin la 0041 la columna no viene: la tarjeta se comporta como un servicio normal.
     emergencia: row.emergencia === true,
+    // 0043: el viaje guardado. Si no está la migración, `destination_estimate` queda sin definir y
+    // cada teléfono lo mide por su cuenta (lo de antes).
+    destination_estimate: row.viaje_estimacion ?? undefined,
+    viajeMetros: row.viaje_metros ?? undefined,
+    viajeSegundos: row.viaje_segundos ?? undefined,
+    viajeMedidoAt: row.viaje_medido_at ?? undefined,
     provider_yape: row.provider_yape ?? undefined,
     provider_bcp_account: row.provider_bcp_account ?? undefined,
     provider_bcp_cci: row.provider_bcp_cci ?? undefined,
@@ -117,6 +123,13 @@ export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbS
   if (service.destinations !== undefined) mapped.destinations = service.destinations;
   // La emergencia (0041). Si falta la migración, el INSERT/UPDATE se reintenta sin ella.
   if (service.emergencia !== undefined) mapped.emergencia = service.emergencia;
+  // El viaje medido (0043): lo escribe el proveedor al publicar. Si falta la migración, se reintenta
+  // sin estas columnas (el viaje lo medirá cada teléfono, como antes).
+  if (service.destination_estimate !== undefined)
+    mapped.viaje_estimacion = service.destination_estimate;
+  if (service.viajeMetros !== undefined) mapped.viaje_metros = service.viajeMetros;
+  if (service.viajeSegundos !== undefined) mapped.viaje_segundos = service.viajeSegundos;
+  if (service.viajeMedidoAt !== undefined) mapped.viaje_medido_at = service.viajeMedidoAt;
   if (service.destination_lng !== undefined) mapped.destination_lng = service.destination_lng;
   if (service.vehicle_requirements !== undefined)
     mapped.vehicle_requirements = service.vehicle_requirements;
@@ -153,6 +166,16 @@ function sinCamposDeLa0027(mapped: Partial<DbServiceAlert>): Partial<DbServiceAl
   return copia;
 }
 
+/** Las columnas que añade la 0043 (el viaje guardado). */
+function sinCamposDeLa0043(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
+  const copia = { ...mapped };
+  delete copia.viaje_estimacion;
+  delete copia.viaje_metros;
+  delete copia.viaje_segundos;
+  delete copia.viaje_medido_at;
+  return copia;
+}
+
 /** La columna que añade la 0041 (emergencia), para poder reintentar sin ella. */
 function sinCamposDeLa0041(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
   const copia = { ...mapped };
@@ -176,34 +199,59 @@ export async function insertServiceAlert(service: Partial<ServiceAlert>): Promis
   const { data, error } = await supabase.from('service_alerts').insert(mapped).select().single();
   if (!error) return mapServiceAlertFromDb(data);
 
-  // Sin la 0024, el INSERT falla entero por las columnas que no existen: se reintenta sin
-  // ellas para que el proveedor no se quede sin publicar (la tarjeta mostrará los
-  // respaldos «BCP»/«Al término») y se avisa por consola de qué migración falta.
+  // Si falta alguna migración, el INSERT falla ENTERO por las columnas que no existen: se reintenta
+  // quitando CAPAS, de la más nueva a la más vieja, para que el proveedor nunca se quede sin
+  // publicar y la consola diga qué migración falta. Cada capa se aplica sobre la anterior.
   if (!esColumnaAusente(error)) throw error;
-  // Primero se prueba quitando solo las paradas (0027) y, si tampoco está la 0024, quitando las
-  // dos familias de columnas: siempre queda guardado el servicio.
-  let reintento = await supabase
-    .from('service_alerts')
-    .insert(sinCamposDeLa0027(mapped))
-    .select()
-    .single();
-  if (reintento.error && esColumnaAusente(reintento.error)) {
-    reintento = await supabase
-      .from('service_alerts')
-      .insert(sinCamposDeLa0024(sinCamposDeLa0027(mapped)))
-      .select()
-      .single();
-    if (reintento.error) throw reintento.error;
-    console.warn(
-      '[database] el servicio se publicó sin pago, observaciones, unidad ni paradas: falta aplicar 0024_pago_y_observaciones_del_servicio.sql y 0027_paradas_del_servicio.sql'
-    );
-    return mapServiceAlertFromDb(reintento.data);
+  return insertarPorCapas(mapped);
+}
+
+/** Las capas que se van quitando cuando la base no tiene alguna migración (de nueva a vieja). */
+function capasDelServicio(mapped: Partial<DbServiceAlert>): {
+  campos: Partial<DbServiceAlert>;
+  aviso: string;
+}[] {
+  const sinViaje = sinCamposDeLa0043(mapped);
+  const sinNuevas = sinCamposDeLa0041(sinViaje);
+  const sinParadas = sinCamposDeLa0027(sinNuevas);
+  const sinPago = sinCamposDeLa0024(sinParadas);
+  return [
+    {
+      campos: sinViaje,
+      aviso:
+        '[database] el servicio se publicó sin el viaje medido: falta aplicar 0043_el_viaje_guardado_en_el_servicio.sql',
+    },
+    {
+      campos: sinNuevas,
+      aviso:
+        '[database] el servicio se publicó sin emergencia: falta aplicar 0041_servicios_de_emergencia.sql',
+    },
+    {
+      campos: sinParadas,
+      aviso:
+        '[database] el servicio se publicó sin las paradas: falta aplicar 0027_paradas_del_servicio.sql',
+    },
+    {
+      campos: sinPago,
+      aviso:
+        '[database] el servicio se publicó sin pago, observaciones, unidad ni paradas: falta aplicar 0024_pago_y_observaciones_del_servicio.sql y 0027_paradas_del_servicio.sql',
+    },
+  ];
+}
+
+async function insertarPorCapas(mapped: Partial<DbServiceAlert>): Promise<ServiceAlert> {
+  const capas = capasDelServicio(mapped);
+  for (const capa of capas) {
+    const reintento = await supabase.from('service_alerts').insert(capa.campos).select().single();
+    if (!reintento.error) {
+      console.warn(capa.aviso);
+      return mapServiceAlertFromDb(reintento.data);
+    }
+    if (!esColumnaAusente(reintento.error)) throw reintento.error;
+    if (capa === capas[capas.length - 1]) throw reintento.error;
   }
-  if (reintento.error) throw reintento.error;
-  console.warn(
-    '[database] el servicio se publicó sin las paradas: falta aplicar 0027_paradas_del_servicio.sql'
-  );
-  return mapServiceAlertFromDb(reintento.data);
+  // Inalcanzable: la última capa lanza o devuelve.
+  throw new Error('No se pudo publicar el servicio.');
 }
 
 // ---------------------------------------------------------------------------
@@ -610,23 +658,24 @@ export async function updateServiceAlert(
     .update(mapped)
     .eq('id', serviceId)
     .select();
-  // Igual que al publicar: sin la 0024 aplicada el UPDATE falla por las columnas que no
-  // existen, así que se reintenta sin ellas (el resto del cambio sí se guarda).
+  // Igual que al publicar: si falta una migración, el UPDATE falla por las columnas que no existen.
+  // Se reintenta quitando capas (de la más nueva a la más vieja) para que el resto del cambio SÍ se
+  // guarde (p. ej. archivar, o el viaje medido por el proveedor).
   if (error && esColumnaAusente(error)) {
-    let reintento = await supabase
-      .from('service_alerts')
-      .update(sinCamposDeLa0027(mapped))
-      .eq('id', serviceId)
-      .select();
-    if (reintento.error && esColumnaAusente(reintento.error)) {
-      reintento = await supabase
+    for (const capa of capasDelServicio(mapped)) {
+      const reintento = await supabase
         .from('service_alerts')
-        .update(sinCamposDeLa0024(sinCamposDeLa0027(mapped)))
+        .update(capa.campos)
         .eq('id', serviceId)
         .select();
+      data = reintento.data;
+      error = reintento.error;
+      if (!error) {
+        console.warn(capa.aviso);
+        break;
+      }
+      if (!esColumnaAusente(error)) break;
     }
-    data = reintento.data;
-    error = reintento.error;
   }
   if (error) throw error;
 
@@ -2291,7 +2340,10 @@ export async function cambiarNombreDelGrupo(groupId: string, nombre: string): Pr
 }
 
 /** Cambiar (o quitar, con null) la foto del grupo. Creador o administrador (0044). */
-export async function cambiarFotoDelGrupo(groupId: string, avatarUrl: string | null): Promise<string> {
+export async function cambiarFotoDelGrupo(
+  groupId: string,
+  avatarUrl: string | null
+): Promise<string> {
   const { data, error } = await supabase.rpc('cambiar_foto_del_grupo', {
     p_group_id: groupId,
     p_avatar_url: avatarUrl,

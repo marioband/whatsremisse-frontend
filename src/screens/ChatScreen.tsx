@@ -33,6 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useAlVolverALaApp } from '../hooks/useAlVolverALaApp';
 import { useConversacionVista } from '../hooks/useConversacionVista';
+import { useEstimacionesDeRuta } from '../hooks/useEstimacionesDeRuta';
 import { useRealtimeServiceMessages } from '../hooks/useRealtimeServiceMessages';
 import { useServiceProgress } from '../hooks/useServiceProgress';
 import { useTecladoAbierto } from '../hooks/useTecladoAbierto';
@@ -49,6 +50,8 @@ import {
 import { Alert } from '../lib/alert';
 import { marcarAvisoPropio } from '../lib/avisos';
 import { AZUL, OSCURO } from '../lib/colors';
+import { hayApiDeRutas } from '../lib/routes';
+import { esPremium } from '../lib/premium';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
 import { urlDeLaConversacion } from '../lib/conversacionVista';
 import { textoDelContacto } from '../lib/contactosDelTelefono';
@@ -103,7 +106,12 @@ import {
   paradasDelServicio,
   totalDePasos,
 } from '../lib/paradasDelServicio';
-import { textoParaCopiar, DatosPublicos, datosDesdePerfilPublico, inicialDe } from '../lib/perfilPublico';
+import {
+  textoParaCopiar,
+  DatosPublicos,
+  datosDesdePerfilPublico,
+  inicialDe,
+} from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
 
@@ -146,7 +154,7 @@ export function ChatScreen() {
   // vista, el servidor no manda el aviso de lo que aquí ya se está leyendo; al minimizar la app
   // la marca se borra y el aviso vuelve a llegar.
   useConversacionVista(urlDeLaConversacion('servicio', serviceId));
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const {
     role,
     services,
@@ -1189,8 +1197,27 @@ export function ChatScreen() {
    * como "Proveedor" un instante para volver al nombre real: eso era el parpadeo que
    * reportó el usuario.
    */
-  const cabeceraDelChat = useMemo(() => {
+  /**
+   * El TIEMPO REAL DE LLEGADA se mide aquí, al abrir la tarjeta (decisión del usuario, 24-09-2026):
+   * en la lista del inicio eso era el 85 % del gasto de Google, porque se le preguntaba en cada
+   * refresco y a cada conductor. Aquí se pregunta UNA vez, cuando de verdad hace falta para decidir.
+   * El viaje (origen→destino) no se pide: viene guardado en el servicio (0043).
+   */
+  const soloEsteServicio = useMemo(() => (service ? [service] : []), [service]);
+  const { estimaciones } = useEstimacionesDeRuta(
+    soloEsteServicio,
+    Boolean(service) && isDriver && esPremium(profile) && hayApiDeRutas()
+  );
+  /** El servicio con el tiempo de llegada ya medido (si lo hay), para la tarjeta de la cabecera. */
+  const servicioDeLaCabecera = useMemo(() => {
     if (!service) return null;
+    const llegada = estimaciones[service.id]?.origen;
+    if (!llegada) return service;
+    return { ...service, origin_estimate: llegada };
+  }, [service, estimaciones]);
+
+  const cabeceraDelChat = useMemo(() => {
+    if (!service || !servicioDeLaCabecera) return null;
     return (
       <View>
         <Text style={styles.dateText}>
@@ -1201,7 +1228,7 @@ export function ChatScreen() {
           })}
         </Text>
         <ServiceCard
-          service={service}
+          service={servicioDeLaCabecera}
           disableSwipe
           // La tarjeta del chat va SIN tarifa, fecha de pago ni tipo de pago (pedido del usuario,
           // 20-09-2026): esta pantalla la ve el conductor con el pasajero delante. Las direcciones
@@ -1239,7 +1266,10 @@ export function ChatScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Copiar la foto del conductor"
                     >
-                      <Image source={{ uri: datosParaCopiar.foto }} style={styles.copyDataFotoImg} />
+                      <Image
+                        source={{ uri: datosParaCopiar.foto }}
+                        style={styles.copyDataFotoImg}
+                      />
                     </TouchableOpacity>
                   ) : (
                     <View style={styles.copyDataFoto}>
@@ -1266,6 +1296,7 @@ export function ChatScreen() {
     );
   }, [
     service,
+    servicioDeLaCabecera,
     isProvider,
     isDriver,
     isAssigned,

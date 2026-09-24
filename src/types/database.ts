@@ -36,6 +36,11 @@ export interface DbServiceAlert {
   destinations?: string[] | null;
   /** Servicio marcado como emergencia por su proveedor (0041). */
   emergencia?: boolean | null;
+  /** El viaje origen->destino medido UNA vez y guardado en el servicio (0043). */
+  viaje_estimacion?: string | null;
+  viaje_metros?: number | null;
+  viaje_segundos?: number | null;
+  viaje_medido_at?: string | null;
   vehicle_requirements: unknown | null;
   fare: number;
   status: string;
