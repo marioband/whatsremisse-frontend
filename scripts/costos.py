@@ -130,6 +130,11 @@ def escenario(nombre, usuarios, proveedores, servicios_dia, postulaciones_dia, c
 def main(usuarios=1000, proveedores=20, servicios_dia=200, postulaciones_dia=1000, concluidos_dia=200):
     conductores = usuarios - proveedores
     activos = int(conductores * 0.15)      # 15 % de los conductores trabajando cada día
+    print("QUIÉN ES PREMIUM cambia la factura: las funciones de pago (direcciones y rutas) solo se")
+    print("piden desde una cuenta premium. Hoy la app da premium a TODOS (etapa de pruebas):")
+    print(f"  · escenario 1: todos premium -> los {activos} conductores activos también miden rutas")
+    print(f"  · escenario 2: premium solo para los {proveedores} proveedores -> ningún conductor gasta")
+    print()
     print(f"Suposiciones (cámbialas en el script si no cuadran):")
     print(f"  conductores {conductores} · activos/día {activos} (15 %) · viajes 1 por servicio y teléfono al mes")
     print(f"  pases del inicio/día {PASES_DEL_INICIO_POR_CONDUCTOR_DIA} · cercanos medidos por pase {CERCANOS_POR_PASE}")
@@ -142,11 +147,16 @@ def main(usuarios=1000, proveedores=20, servicios_dia=200, postulaciones_dia=100
     b = escenario("B) con el viaje guardado en la base (1 medida por servicio, no por teléfono)",
                   usuarios, proveedores, servicios_dia, postulaciones_dia, concluidos_dia, conductores, activos,
                   False, True, False)
-    c = escenario("C) B + la llegada solo cuando el conductor abre la tarjeta",
+    c = escenario("C) B + la llegada solo cuando el conductor abre la tarjeta (LO QUE HAY HOY en el código)",
                   usuarios, proveedores, servicios_dia, postulaciones_dia, concluidos_dia, conductores, activos,
                   False, True, True)
+    print("=== y si el premium fuera SOLO para los proveedores (los conductores no gastan rutas) ===")
+    d = escenario("D) C con premium solo para los proveedores (0 conductores midiendo)",
+                  usuarios, proveedores, servicios_dia, postulaciones_dia, concluidos_dia, conductores, 0,
+                  False, True, True)
     print("Resumen:")
-    print(f"  A ${a:,.0f}/mes  ->  B ${b:,.0f}/mes  ->  C ${c:,.0f}/mes   (por proveedor: ${a/proveedores:,.2f} -> ${c/proveedores:,.2f})")
+    print(f"  A ${a:,.0f}/mes  ->  B ${b:,.0f}/mes  ->  C ${c:,.0f}/mes  ->  D ${d:,.0f}/mes (premium solo proveedores)")
+    print(f"  por proveedor: A ${a/proveedores:,.2f} -> C ${c/proveedores:,.2f} -> D ${d/proveedores:,.2f}")
     print("Antes de proponer el detalle en Essentials: suele salir MÁS CARO (pierde la absorción de las teclas).")
 
 
