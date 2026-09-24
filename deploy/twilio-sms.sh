@@ -53,12 +53,40 @@ SERVICIO="${MSG_SERVICE_SID:-}"
 
 echo "Stack: $DIR"
 echo "Deja en blanco lo que no tengas a mano (se puede volver a correr)."
-[ -n "$CUENTA" ] || read -r -p "Account SID  (AC...): " CUENTA
+# Mientras se piden los datos, Ctrl+C no cambia nada: se avisa (23-09-2026: el usuario pego
+# el Auth Token, no vio nada en pantalla, creyo que no habia funcionado y se corto con Ctrl+C).
+trap 'echo; echo "Cancelado: no se toco ningun archivo ni ningun contenedor."; exit 130' INT
+[ -n "$CUENTA" ] || read -r -p "Account SID  (AC...): " CUENTA || {
+  echo "Se cerro la entrada y no hay Account SID: no se toco ningun archivo."; exit 1;
+}
+
+# El Auth Token es INVISIBLE a proposito (`read -s`): asi no queda en el historial del terminal
+# ni a la vista. Pero eso mismo hizo que el 23-09-2026 el usuario creyera que el pegado habia
+# fallado: se pega, no aparece NADA, y hay que pulsar Enter. De ahi el aviso y los 3 intentos.
 if [ -z "$CLAVE" ]; then
-  read -r -s -p "Auth Token   (no se vera): " CLAVE
   echo
+  echo "Auth Token: pegalo con Ctrl+Shift+V (o clic derecho -> Pegar)."
+  echo "            No se ve NADA mientras pegas: es normal. Luego pulsa Enter."
+  intentos=0
+  while [ "${#CLAVE}" -lt 20 ] && [ "$intentos" -lt 3 ]; do
+    intentos=$((intentos + 1))
+    read -r -s -p "Auth Token   (no se vera): " CLAVE || CLAVE=""
+    echo
+    if [ "${#CLAVE}" -lt 20 ]; then
+      echo "   -> llegaron ${#CLAVE} caracteres y el token tiene unos 32."
+      echo "      Esta en Twilio: Console -> Account -> API keys & tokens -> Auth Token."
+      [ "$intentos" -lt 3 ] && echo "      Intento $intentos de 3."
+    fi
+  done
+  if [ "${#CLAVE}" -lt 20 ]; then
+    echo "Sin el Auth Token no se puede encender el SMS. No se toco ningun archivo."
+    exit 1
+  fi
 fi
-[ -n "$SERVICIO" ] || read -r -p "Messaging Service SID (MG...): " SERVICIO
+
+[ -n "$SERVICIO" ] || read -r -p "Messaging Service SID (MG...): " SERVICIO || {
+  echo "Se cerro la entrada y no hay Messaging Service SID: no se toco ningun archivo."; exit 1;
+}
 
 case "$CUENTA" in
   AC*) : ;;
@@ -82,6 +110,9 @@ cp -a "$ENV" "$ENV.bak-$SELLO"
 cp -a "$COMPOSE" "$COMPOSE.bak-$SELLO"
 echo "Copias: $ENV.bak-$SELLO"
 echo "        $COMPOSE.bak-$SELLO"
+
+# A partir de aqui SI hay cambios en disco: si se corta, el aviso dice la verdad y da el rollback.
+trap "echo; echo 'Cancelado: los archivos YA estan escritos (hay copia de seguridad).'; echo 'Para volver atras:'; echo \"  cp $ENV.bak-$SELLO $ENV\"; echo \"  cp $COMPOSE.bak-$SELLO $COMPOSE\"; echo '  y recrear: cd $DIR && bash run.sh recreate auth'; exit 130" INT
 
 poner_var() { # clave valor  (en .env: reemplaza la linea, este o no comentada)
   local clave="$1" valor="$2"
