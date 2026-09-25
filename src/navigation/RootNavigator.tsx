@@ -6,6 +6,8 @@ import { BrandLoader } from '../components/BrandLoader';
 import { useAuth } from '../context/AuthContext';
 import { AlertHost } from '../lib/alert';
 import { AddParticipantScreen } from '../screens/AddParticipantScreen';
+import { AdminGrupoScreen } from '../screens/AdminGrupoScreen';
+import { AdminGruposScreen } from '../screens/AdminGruposScreen';
 import { AdminScreen } from '../screens/AdminScreen';
 import { AdminUsuarioScreen } from '../screens/AdminUsuarioScreen';
 import { AdminUsuariosScreen } from '../screens/AdminUsuariosScreen';
@@ -96,6 +98,9 @@ export type RootStackParamList = {
   Administracion: undefined;
   AdministracionUsuarios: undefined;
   AdministracionUsuario: { usuario: UsuarioDelPanel };
+  /** Grupos: la lista y un grupo concreto (para cargarle integrantes desde el archivo). */
+  AdministracionGrupos: undefined;
+  AdministracionGrupo: { grupo: { id: string; nombre: string } };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -125,6 +130,7 @@ const ENLACES = {
       MyServices: 'mis-servicios',
       // El panel de administración: se entra por el enlace directo y no está en ningún menú.
       Administracion: 'administracion',
+      AdministracionGrupos: 'administracion/grupos',
       Splash: '',
     },
   },
@@ -294,6 +300,16 @@ export function RootNavigator() {
               <Stack.Screen
                 name="AdministracionUsuario"
                 component={AdminUsuarioScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="AdministracionGrupos"
+                component={AdminGruposScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="AdministracionGrupo"
+                component={AdminGrupoScreen}
                 options={{ headerShown: false }}
               />
             </>

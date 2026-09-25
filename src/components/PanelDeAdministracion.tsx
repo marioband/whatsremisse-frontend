@@ -1,9 +1,11 @@
 import { useNavigation } from '@react-navigation/native';
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 
 import { IconoDeAtras } from './IconoDeAtras';
 import { useAuth } from '../context/AuthContext';
+import { panelUsuarios } from '../lib/database';
+import { nombreDeUsuario, problemaDelPanel, telefonoBonito, UsuarioDelPanel } from '../lib/panel';
 
 /**
  * Piezas compartidas por las pantallas del panel de administración.
@@ -57,6 +59,88 @@ export function PantallaSoloAdministradores() {
   );
 }
 
+/**
+ * Buscar una cuenta y elegirla (por teléfono o nombre).
+ *
+ * Lo usan el «dueño del grupo» y el cambio de dueño: se escribe al menos 3 letras y aparece la lista
+ * de cuentas que coinciden, con su nombre y su teléfono para no confundir a dos personas.
+ */
+export function BuscadorDeCuenta({
+  etiqueta,
+  ayuda,
+  onElegir,
+  deshabilitado,
+}: {
+  etiqueta: string;
+  ayuda?: string;
+  onElegir: (usuario: UsuarioDelPanel) => void;
+  deshabilitado?: boolean;
+}) {
+  const [texto, setTexto] = useState('');
+  const [resultados, setResultados] = useState<UsuarioDelPanel[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [problema, setProblema] = useState<string | null>(null);
+
+  useEffect(() => {
+    const temporizador = setTimeout(async () => {
+      if (texto.trim().length < 3) {
+        setResultados([]);
+        return;
+      }
+      setBuscando(true);
+      setProblema(null);
+      try {
+        setResultados(await panelUsuarios(texto, 'TODAS', 8));
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[panel] no se pudo buscar cuentas:', err);
+        setProblema(problemaDelPanel(err));
+      } finally {
+        setBuscando(false);
+      }
+    }, 350);
+    return () => clearTimeout(temporizador);
+  }, [texto]);
+
+  return (
+    <View style={styles.buscador}>
+      <Text style={styles.buscadorEtiqueta}>{etiqueta}</Text>
+      <TextInput
+        style={styles.buscadorCampo}
+        placeholder="Teléfono o nombre (mínimo 3 letras)"
+        placeholderTextColor="#888888"
+        value={texto}
+        onChangeText={setTexto}
+        autoCorrect={false}
+        editable={!deshabilitado}
+        accessibilityLabel={etiqueta}
+      />
+      {!!ayuda && <Text style={styles.buscadorAyuda}>{ayuda}</Text>}
+      {buscando && <ActivityIndicator color={DARK_BG} style={{ marginTop: 8 }} />}
+      {!!problema && <Text style={styles.buscadorProblema}>{problema}</Text>}
+      {resultados.map((usuario) => (
+        <TouchableOpacity
+          key={usuario.id}
+          style={styles.buscadorFila}
+          onPress={() => {
+            setTexto('');
+            setResultados([]);
+            onElegir(usuario);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Elegir ${nombreDeUsuario(usuario)}`}
+        >
+          <Text style={styles.buscadorFilaNombre}>{nombreDeUsuario(usuario)}</Text>
+          <Text style={styles.buscadorFilaTelefono}>{telefonoBonito(usuario.phone)}</Text>
+        </TouchableOpacity>
+      ))}
+      {!buscando && texto.trim().length >= 3 && resultados.length === 0 && !problema && (
+        <Text style={styles.buscadorAyuda}>Ninguna cuenta coincide con eso.</Text>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
@@ -75,6 +159,30 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', flex: 1, textAlign: 'center' },
   headerSpacer: { width: 36 },
   sinPermiso: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  buscador: { marginTop: 4 },
+  buscadorEtiqueta: { fontSize: 13, fontWeight: '600', color: '#111111', marginBottom: 6 },
+  buscadorCampo: {
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111111',
+  },
+  buscadorAyuda: { fontSize: 12, color: '#888888', marginTop: 6, lineHeight: 18 },
+  buscadorProblema: { fontSize: 12, color: '#C2333F', marginTop: 6 },
+  buscadorFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F2',
+  },
+  buscadorFilaNombre: { fontSize: 15, color: '#111111', fontWeight: '600', flexShrink: 1 },
+  buscadorFilaTelefono: { fontSize: 13, color: '#444444' },
   sinPermisoTitulo: {
     fontSize: 17,
     fontWeight: 'bold',

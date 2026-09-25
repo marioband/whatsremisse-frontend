@@ -2,7 +2,14 @@ import { LIMITE_DE_EMERGENCIAS } from './emergencias';
 import { describeError, esColumnaAusente, esFalloDeTransporte } from './errors';
 import { conGrupos } from './gruposDeServicio';
 import { displayName } from './names';
-import type { AccionDelPanel, ResumenDelPanel, UsuarioDelPanel } from './panel';
+import type {
+  AccionDelPanel,
+  DetalleDelGrupo,
+  GrupoDelPanel,
+  ResultadoDeLaCarga,
+  ResumenDelPanel,
+  UsuarioDelPanel,
+} from './panel';
 import type { LecturaDeChat } from './palomas';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { GroupItem, GroupMember } from '../context/MockStoreContext';
@@ -2533,4 +2540,92 @@ export async function panelAcciones(limite = 50): Promise<AccionDelPanel[]> {
   const { data, error } = await supabase.rpc('panel_acciones', { p_limite: limite });
   if (error) throw error;
   return (data || []) as AccionDelPanel[];
+}
+
+// ============================================
+// Grupos desde el panel (migración 0047_grupos_desde_el_panel.sql)
+// ============================================
+// Crear un grupo, cargar sus integrantes desde el archivo de teléfonos y corregir a mano. Quien
+// todavía no tiene cuenta queda INVITADO: entra al grupo solo, la primera vez que entra a la app
+// con ese número (lo hace un disparador en la base).
+
+/** Los grupos de la plataforma, con lo que tiene cada uno. `busqueda` mira el nombre y el dueño. */
+export async function panelGrupos(busqueda = '', limite = 100): Promise<GrupoDelPanel[]> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_grupos', {
+    p_busqueda: busqueda.trim() ? busqueda.trim() : null,
+    p_limite: limite,
+  });
+  if (error) throw error;
+  return (data || []) as GrupoDelPanel[];
+}
+
+/** Un grupo con sus integrantes y sus invitados pendientes. */
+export async function panelGrupo(grupoId: string): Promise<DetalleDelGrupo> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_grupo', { p_grupo: grupoId });
+  if (error) throw error;
+  return data as DetalleDelGrupo;
+}
+
+/** Crea un grupo con su dueño (que queda como integrante con rol de dueño). */
+export async function panelCrearGrupo(
+  nombre: string,
+  duenoId: string
+): Promise<{ id: string; nombre: string }> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_crear_grupo', {
+    p_nombre: nombre,
+    p_dueno: duenoId,
+  });
+  if (error) throw error;
+  return data as { id: string; nombre: string };
+}
+
+/**
+ * Carga una lista de teléfonos en un grupo.
+ *
+ * Con `simular` en true NO escribe nada: devuelve exactamente lo que pasaría (cuántos entran, cuántos
+ * quedan invitados, cuántos no son celulares), para poder enseñarlo y confirmar antes.
+ */
+export async function panelCargarIntegrantes(
+  grupoId: string,
+  telefonos: string[],
+  simular = false
+): Promise<ResultadoDeLaCarga> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_cargar_integrantes', {
+    p_grupo: grupoId,
+    p_lineas: telefonos,
+    p_simular: simular,
+  });
+  if (error) throw error;
+  return data as ResultadoDeLaCarga;
+}
+
+/** Saca a alguien del grupo (el dueño no se puede sacar: primero se cambia el dueño). */
+export async function panelQuitarIntegrante(grupoId: string, usuarioId: string): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { error } = await supabase.rpc('panel_quitar_integrante', {
+    p_grupo: grupoId,
+    p_usuario: usuarioId,
+  });
+  if (error) throw error;
+}
+
+/** Quita una invitación pendiente (el teléfono deja de entrar al grupo cuando se registre). */
+export async function panelQuitarInvitacion(invitacionId: string): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { error } = await supabase.rpc('panel_quitar_invitacion', { p_invitacion: invitacionId });
+  if (error) throw error;
+}
+
+/** Cambia el dueño del grupo (el anterior se queda como integrante normal). */
+export async function panelCambiarDueno(grupoId: string, duenoId: string): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { error } = await supabase.rpc('panel_cambiar_dueno', {
+    p_grupo: grupoId,
+    p_dueno: duenoId,
+  });
+  if (error) throw error;
 }

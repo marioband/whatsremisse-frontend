@@ -414,3 +414,190 @@ export function resumenDeUsuario(usuario: UsuarioDelPanel): string {
   if (desde) partes.push(`cuenta desde ${desde}`);
   return partes.join(' · ');
 }
+
+// ============================================
+// Grupos: leer el archivo de teléfonos (reglas puras, probables sin app)
+// ============================================
+
+export interface TelefonosDelArchivo {
+  /** Los teléfonos normalizados a 9 dígitos, sin repetir, en el orden del archivo. */
+  telefonos: string[];
+  /** Líneas con algo escrito (sin contar vacías ni la cabecera). */
+  lineas: number;
+  /** Teléfonos que venían más de una vez. */
+  repetidos: number;
+  /** Las primeras líneas que no eran un celular (para poder enseñarlas). */
+  invalidas: string[];
+  total_invalidos: number;
+  /** Las que quedaron fuera por pasar el tope. */
+  sobrantes: number;
+  /** La primera línea, si parecía el título de la columna. */
+  cabecera: string | null;
+}
+
+/** Un celular peruano, como lo ve la base: los últimos 9 dígitos. */
+export function normalizarTelefono(valor?: string | null): string {
+  const digitos = String(valor || '').replace(/\D/g, '');
+  if (!digitos) return '';
+  return digitos.slice(-9);
+}
+
+/** ¿Es un celular de 9 dígitos que empieza por 9? */
+export function esCelular(valor: string): boolean {
+  return valor.length === 9 && valor.startsWith('9');
+}
+
+/**
+ * Lee el archivo de teléfonos tal como lo guarda Excel (CSV).
+ *
+ * Excel en español guarda con `;` entre columnas, saltos CRLF y a veces un BOM al principio; si el
+ * archivo trae más de una columna, el teléfono es la PRIMERA (las demás se ignoran). La primera
+ * línea que trae letras se toma como el título de la columna, no como un teléfono inválido.
+ */
+export function telefonosDelArchivo(texto: string, tope = 1000): TelefonosDelArchivo {
+  const limpio = String(texto || '').replace(/^\uFEFF/, '');
+  const crudas = limpio.split(/\r?\n/);
+
+  const telefonos: string[] = [];
+  const vistos = new Set<string>();
+  const invalidas: string[] = [];
+  let repetidos = 0;
+  let totalInvalidos = 0;
+  let lineas = 0;
+  let cabecera: string | null = null;
+  let sobrantes = 0;
+
+  for (const cruda of crudas) {
+    // Primera columna (Excel separa con `;` o con `,`) y sin comillas.
+    const primera = cruda.split(/[;,\t]/)[0].replace(/"/g, '').trim();
+    if (!primera) continue;
+
+    const normalizado = normalizarTelefono(primera);
+    const esLaPrimera = lineas === 0 && cabecera === null && invalidas.length === 0;
+
+    // Un título de columna: tiene letras y no es un teléfono.
+    if (!esCelular(normalizado) && /[a-zA-Z]/.test(primera) && esLaPrimera) {
+      cabecera = primera.slice(0, 40);
+      continue;
+    }
+
+    lineas += 1;
+    if (!esCelular(normalizado)) {
+      totalInvalidos += 1;
+      if (invalidas.length < 20) invalidas.push(primera.slice(0, 20));
+      continue;
+    }
+    if (vistos.has(normalizado)) {
+      repetidos += 1;
+      continue;
+    }
+    if (telefonos.length >= tope) {
+      sobrantes += 1;
+      continue;
+    }
+    vistos.add(normalizado);
+    telefonos.push(normalizado);
+  }
+
+  return { telefonos, lineas, repetidos, invalidas, total_invalidos: totalInvalidos, sobrantes, cabecera };
+}
+
+export interface ResultadoDeLaCarga {
+  simulado: boolean;
+  leidos: number;
+  con_cuenta: number;
+  ya_estaban: number;
+  invitados: number;
+  repetidos: number;
+  total_invalidos: number;
+  invalidos?: string[];
+}
+
+/**
+ * El parte de la carga, en una frase (lo que se enseña antes y después de aplicar).
+ *
+ * `previa` es el aviso de la primera línea del archivo, si la tenía.
+ */
+export function resumenDeLaCarga(resultado: ResultadoDeLaCarga): string {
+  const partes: string[] = [];
+  if (resultado.con_cuenta > 0) partes.push(`${numeroConMiles(resultado.con_cuenta)} entran al grupo ya`);
+  if (resultado.ya_estaban > 0) partes.push(`${numeroConMiles(resultado.ya_estaban)} ya estaban dentro`);
+  if (resultado.invitados > 0) partes.push(`${numeroConMiles(resultado.invitados)} quedan invitados`);
+  if (resultado.repetidos > 0) partes.push(`${numeroConMiles(resultado.repetidos)} repetidos en el archivo`);
+  if (resultado.total_invalidos > 0) partes.push(`${numeroConMiles(resultado.total_invalidos)} no son celulares`);
+  if (partes.length === 0) return 'No hay ningún teléfono que cargar.';
+  return partes.join(' · ');
+}
+
+/** Qué se le dice al administrador antes de aplicar la carga. */
+export function avisoAntesDeCargar(resultado: ResultadoDeLaCarga, nombreDelGrupo: string): string {
+  const lineas = [
+    `Vas a cargar ${numeroConMiles(resultado.con_cuenta + resultado.invitados)} celular(es) en «${nombreDelGrupo}».`,
+    resumenDeLaCarga(resultado),
+    resultado.invitados > 0
+      ? 'Los invitados entrarán al grupo solos la primera vez que entren a la app con su número.'
+      : '',
+  ].filter(Boolean);
+  return lineas.join('\n\n');
+}
+
+/** El aviso que queda escrito en el resultado, con nombre de archivo y hora. */
+export function textoDeResultado(resultado: ResultadoDeLaCarga, nombreDelGrupo: string): string {
+  return `${nombreDelGrupo}\n\n${resumenDeLaCarga(resultado)}`;
+}
+
+/** Los integrantes del grupo, ya listos para pintar. */
+export interface IntegranteDelGrupo {
+  user_id: string;
+  phone: string | null;
+  nombre: string | null;
+  rol: string;
+  es_dueno: boolean;
+  joined_at: string | null;
+}
+
+/** Los invitados de un grupo (teléfonos que todavía no tienen cuenta). */
+export interface InvitadoDelGrupo {
+  id: string;
+  phone: string;
+  telefono_escrito: string | null;
+  creado_at: string | null;
+}
+
+export interface GrupoDelPanel {
+  id: string;
+  name: string;
+  owner_id: string;
+  owner_phone: string | null;
+  owner_name: string | null;
+  integrantes: number;
+  invitados: number;
+  created_at: string | null;
+}
+
+export interface DetalleDelGrupo {
+  id: string;
+  nombre: string;
+  dueno_id: string;
+  dueno_phone: string | null;
+  dueno_nombre: string | null;
+  creado_at: string | null;
+  integrantes: IntegranteDelGrupo[];
+  invitados: InvitadoDelGrupo[];
+}
+
+/** El nombre del grupo con lo que tiene dentro, en una línea. */
+export function resumenDelGrupo(grupo: GrupoDelPanel): string {
+  const partes = [`${numeroConMiles(grupo.integrantes)} integrante(s)`];
+  if (grupo.invitados > 0) partes.push(`${numeroConMiles(grupo.invitados)} invitado(s)`);
+  partes.push(`dueño ${telefonoBonito(grupo.owner_phone) || 'sin teléfono'}`);
+  return partes.join(' · ');
+}
+
+/** El nombre del integrante, con su rol si no es un integrante normal. */
+export function etiquetaDelIntegrante(integrante: IntegranteDelGrupo): string {
+  const nombre = integrante.nombre?.trim() || `Cuenta ${telefonoBonito(integrante.phone) || 'sin teléfono'}`;
+  if (integrante.es_dueno) return `${nombre} · dueño`;
+  if (String(integrante.rol).toLowerCase() === 'admin') return `${nombre} · administrador`;
+  return nombre;
+}

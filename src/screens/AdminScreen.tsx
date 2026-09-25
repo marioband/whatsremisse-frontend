@@ -101,6 +101,15 @@ export function AdminScreen() {
           <Text style={styles.botonListaTexto}>Ver cuentas y membresías</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.botonLista}
+          onPress={() => navigation.navigate('AdministracionGrupos')}
+          accessibilityRole="button"
+          accessibilityLabel="Ver grupos"
+        >
+          <Text style={styles.botonListaTexto}>Grupos y carga de integrantes</Text>
+        </TouchableOpacity>
+
         {cargando && (
           <View style={styles.cargando}>
             <ActivityIndicator color={DARK_BG} />
