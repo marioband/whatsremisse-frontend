@@ -15,6 +15,7 @@
  * funcionando con lo que escribe el usuario: eso nunca se bloquea).
  */
 
+import { MINIMO_CARACTERES_PARA_GOOGLE } from './addressSuggestions';
 import { registrarLlamada } from './medidor';
 
 export interface SugerenciaDireccion {
@@ -123,6 +124,68 @@ export function nuevaSesion(): string {
   return `wr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Cuántas búsquedas de dirección terminan BIEN y cuántas se quedan a medias.
+ *
+ * Por qué existe: una sesión de Google se cobra según cómo termina. Si cierra con una
+ * elección, las letras de esa búsqueda son gratis; si se queda sin cerrar (el usuario
+ * escribió y no eligió nada), Google factura TODAS esas letras. El modelo de costes
+ * supone un 30 % de búsquedas abandonadas y ese número no se había medido nunca: es el
+ * que decide si un plan gana o pierde.
+ *
+ * Qué mide, con precisión: por cada token de sesión, si se escribió con él y si cerró
+ * con un detalle. La diferencia son las teclas que se facturan sin dar nada a cambio.
+ */
+const teclasPorSesion = new Map<string, number>();
+const sesionesCerradas = new Set<string>();
+
+export interface ResumenDeSesiones {
+  /** Sesiones en las que de verdad se escribió. */
+  conTecleo: number;
+  /** De esas, las que cerraron eligiendo una sugerencia. */
+  cerradas: number;
+  /** De esas, las que quedaron sin cerrar (se factura cada letra). */
+  abandonadas: number;
+  /** Letras que se facturan por esas sesiones abandonadas. */
+  teclasFacturadasPorAbandono: number;
+}
+
+/** Se llama en cada consulta de autocompletado (una letra más de esa sesión). */
+export function anotarTecleoDeSesion(token: string): void {
+  if (!token) return;
+  teclasPorSesion.set(token, (teclasPorSesion.get(token) || 0) + 1);
+}
+
+/** Se llama cuando la sesión cierra de verdad (el detalle devolvió la dirección). */
+export function anotarSesionCerrada(token: string): void {
+  if (!token) return;
+  sesionesCerradas.add(token);
+}
+
+export function resumenDeSesiones(): ResumenDeSesiones {
+  let cerradas = 0;
+  let abandonadas = 0;
+  let teclasFacturadasPorAbandono = 0;
+  teclasPorSesion.forEach((teclas, token) => {
+    if (sesionesCerradas.has(token)) cerradas += 1;
+    else {
+      abandonadas += 1;
+      teclasFacturadasPorAbandono += teclas;
+    }
+  });
+  return {
+    conTecleo: teclasPorSesion.size,
+    cerradas,
+    abandonadas,
+    teclasFacturadasPorAbandono,
+  };
+}
+
+export function reiniciarSesiones(): void {
+  teclasPorSesion.clear();
+  sesionesCerradas.clear();
+}
+
 /** Cuerpo de la petición de autocompletado (aparte, para poder probarlo). */
 export function cuerpoDeAutocompletado(
   input: string,
@@ -208,9 +271,10 @@ export async function sugerirDirecciones(
   ubicacion?: { lat: number; lng: number } | null
 ): Promise<SugerenciaDireccion[]> {
   const texto = input.trim();
-  if (!hayApiDeDirecciones() || texto.length < 4) return [];
+  if (!hayApiDeDirecciones() || texto.length < MINIMO_CARACTERES_PARA_GOOGLE) return [];
 
   registrarLlamada('places:autocompletado');
+  anotarTecleoDeSesion(sessionToken);
   const respuesta = await pedir(
     URL_AUTOCOMPLETADO,
     {
@@ -259,6 +323,8 @@ export async function detalleDeDireccion(
   } | null;
 
   if (!respuesta?.formattedAddress) return null;
+  // Aquí CIERRA la sesión de cobro: desde este momento las letras de esa búsqueda son gratis.
+  anotarSesionCerrada(sessionToken);
   return {
     texto: respuesta.formattedAddress,
     lat: respuesta.location?.latitude ?? null,

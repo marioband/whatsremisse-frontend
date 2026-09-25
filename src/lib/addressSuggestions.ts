@@ -24,6 +24,20 @@ export type FilaSugerencia =
 
 export const MINIMO_CARACTERES = 3;
 
+/**
+ * Desde cuántas letras se le pregunta a Google.
+ *
+ * Por qué 6 y no 3 (25-09-2026): cada tanda de escritura es una sesión de cobro. Si la
+ * sesión cierra con una elección, Google perdona TODAS las letras; si se queda sin cerrar
+ * (búsqueda abandonada), factura cada letra a $2,83/1.000. Las primeras letras son las más
+ * ambiguas: generan consultas que nadie elige. Con 6 letras la persona escribe una intención
+ * real y las consultas por dirección bajan (modelado: las abandonadas del 30 % al 10 % valen
+ * S/ 2.199 al mes con los volúmenes del usuario).
+ *
+ * El mínimo de la lista LOCAL sigue siendo 3: ofrecer los lugares guardados no cuesta nada.
+ */
+export const MINIMO_CARACTERES_PARA_GOOGLE = 6;
+
 export interface OpcionesDeFilas {
   abierto: boolean;
   premium: boolean;
@@ -89,10 +103,26 @@ export function convieneBuscar(
   sugerencias: SugerenciaDireccion[]
 ): boolean {
   const escrito = texto.trim();
-  if (!premium || escrito.length < MINIMO_CARACTERES) return false;
+  if (!premium || escrito.length < MINIMO_CARACTERES_PARA_GOOGLE) return false;
   if (escrito === ultimaConsulta) return false;
   const yaMostrada = sugerencias.some(
     (s) => s.texto.trim().toLowerCase() === escrito.toLowerCase()
   );
   return !yaMostrada;
+}
+
+/**
+ * ¿Lo escrito ya es un lugar guardado CON punto exacto? Entonces no hay que preguntarle a
+ * Google: elegirlo deja el servicio con coordenadas y no cuesta ninguna llamada (decisión del
+ * usuario, 25-09-2026: «que se usen más de 5 veces ya debería guardarse para no volver a hacer
+ * la consulta»). Sin punto (`exacto` en false) sí hay que resolverlo, y ahí manda Google.
+ */
+export function hayLugarGuardadoQueResuelve(lugares: readonly LugarGuardado[]): boolean {
+  return lugares.some(
+    (lugar) =>
+      lugar.exacto &&
+      typeof lugar.lat === 'number' &&
+      typeof lugar.lng === 'number' &&
+      !(lugar.lat === 0 && lugar.lng === 0)
+  );
 }

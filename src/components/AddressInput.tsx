@@ -9,7 +9,12 @@ import {
   ViewStyle,
 } from 'react-native';
 
-import { convieneBuscar, filasDeSugerencias, FilaSugerencia } from '../lib/addressSuggestions';
+import {
+  convieneBuscar,
+  filasDeSugerencias,
+  FilaSugerencia,
+  hayLugarGuardadoQueResuelve,
+} from '../lib/addressSuggestions';
 import { LugarGuardado, lugaresParaElCampo, ServicioDelHistorial } from '../lib/lugaresFrecuentes';
 import { registrarAhorro } from '../lib/medidor';
 import {
@@ -71,7 +76,15 @@ interface Props {
   onFoco?: (enfocado: boolean) => void;
 }
 
-const ESPERA_MS = 400;
+/**
+ * Cuánto se espera, tras la última letra, antes de preguntarle a Google.
+ *
+ * 400 → 800 ms (25-09-2026): cada pregunta es una oportunidad de que la búsqueda quede
+ * abandonada, y una búsqueda abandonada se factura por TODAS sus letras (una bien cerrada
+ * las perdona). Escribiendo rápido, con 400 ms salían 4 o 5 preguntas por dirección; con
+ * 800 ms salen 1 o 2, y la espera no se nota.
+ */
+const ESPERA_MS = 800;
 
 /**
  * Campo de dirección con sugerencias.
@@ -106,6 +119,15 @@ export function AddressInput({
   /** El campo, para poder soltarle el teclado al cerrar las sugerencias. */
   const campoDeTexto = useRef<TextInput>(null);
   const ultimaConsulta = useRef<string | null>(null);
+  /**
+   * El historial de servicios más reciente, sin que el efecto de búsqueda dependa de él:
+   * si la pantalla lo entrega como arreglo nuevo en cada render, meterlo en las dependencias
+   * volvería a disparar la búsqueda una y otra vez.
+   */
+  const historialRef = useRef(historial);
+  useEffect(() => {
+    historialRef.current = historial;
+  }, [historial]);
 
   // Cada vez que el usuario elige algo (o se cierra el desplegable) se renueva
   // el token de sesión: así Google cobra una sola unidad por búsqueda elegida.
@@ -123,6 +145,24 @@ export function AddressInput({
   useEffect(() => {
     if (!abierto || !premium) return;
     const texto = valor.trim();
+
+    // Antes de gastar una llamada: si lo escrito ya es un lugar guardado CON punto exacto
+    // (el aeropuerto, o una dirección que este usuario repite), no se pregunta a Google.
+    // Elegirlo deja el servicio con coordenadas y no cuesta nada. Se limpian las
+    // sugerencias de la letra anterior para que no tapen la lista local.
+    const guardados = lugaresParaElCampo({
+      texto,
+      servicios: historialRef.current,
+      haySugerenciasDeGoogle: false,
+    });
+    if (hayLugarGuardadoQueResuelve(guardados)) {
+      registrarAhorro('calculo-propio');
+      if (sugerencias.length > 0) setSugerencias([]);
+      if (cargando) setCargando(false);
+      ultimaConsulta.current = null;
+      return;
+    }
+
     if (!convieneBuscar(premium, texto, ultimaConsulta.current, sugerencias)) return;
 
     let vigente = true;
