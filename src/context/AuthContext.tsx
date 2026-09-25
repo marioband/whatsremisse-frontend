@@ -6,6 +6,7 @@ import { usuarioParaPintarSinRed, debeTaparConElLogo } from '../lib/arranque';
 import { configurarAlmacen, limpiarCacheCompleta } from '../lib/cache';
 import { candidatosDeCelular } from '../lib/celular';
 import { supabase } from '../lib/supabase';
+import { configurarModoDePruebasPremium } from '../lib/premium';
 import { Profile } from '../types';
 
 // El almacén del dispositivo se registra una sola vez al cargar la app: es lo que
@@ -182,6 +183,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line no-console
         console.log('[Auth] Perfil cargado:', mapped, 'isProfileComplete:', isProfileComplete);
         setRequiresProfileSetup(!isProfileComplete);
+        // El interruptor «modo pruebas / modo real» (0046): dice si las funciones de pago son de
+        // todos o solo de quien tiene membresía activa. No se espera (no puede retrasar el arranque).
+        void aplicarModoDePruebas();
       } else {
         setRequiresProfileSetup(true);
       }
@@ -197,6 +201,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const actual = session?.user?.id;
     if (!actual) return;
     await loadProfile(actual);
+  };
+
+  /**
+   * Lee el interruptor «modo pruebas / modo real» de la base (0046) y lo deja puesto.
+   *
+   * Si no se puede leer (migración sin aplicar, sin red), se queda como estaba: en modo pruebas.
+   * Una migración que falta no puede dejar a nadie sin las funciones de pago.
+   */
+  const aplicarModoDePruebas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('premium_para_todos')
+        .maybeSingle();
+      if (error) throw error;
+      const valor = (data as { premium_para_todos?: boolean } | null)?.premium_para_todos;
+      if (typeof valor === 'boolean') configurarModoDePruebasPremium(valor);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[Auth] no se pudo leer el modo de pruebas (¿falta aplicar 0046_panel_de_administracion.sql?); se queda encendido:',
+        err
+      );
+    }
   };
 
   const requestOtp = async (inputPhone: string) => {

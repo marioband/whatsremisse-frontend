@@ -6,6 +6,9 @@ import { BrandLoader } from '../components/BrandLoader';
 import { useAuth } from '../context/AuthContext';
 import { AlertHost } from '../lib/alert';
 import { AddParticipantScreen } from '../screens/AddParticipantScreen';
+import { AdminScreen } from '../screens/AdminScreen';
+import { AdminUsuarioScreen } from '../screens/AdminUsuarioScreen';
+import { AdminUsuariosScreen } from '../screens/AdminUsuariosScreen';
 import { AppLockScreen } from '../screens/AppLockScreen';
 import { ApplicantsScreen } from '../screens/ApplicantsScreen';
 import { BlockedDriversScreen } from '../screens/BlockedDriversScreen';
@@ -33,6 +36,7 @@ import { SelectGroupsForServiceScreen } from '../screens/SelectGroupsForServiceS
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { SplashScreen } from '../screens/SplashScreen';
 import { BlockedUser, ServiceAlert } from '../types';
+import type { UsuarioDelPanel } from '../lib/panel';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -84,6 +88,14 @@ export type RootStackParamList = {
   BlockedUserProfile: { user: BlockedUser };
   AppLock: undefined;
   Membership: undefined;
+  /**
+   * Panel de administración (25-09-2026). No aparece en ningún menú: se entra por el enlace
+   * directo `whatsremisse.tech/administracion`, y las pantallas no se pintan para quien no tenga
+   * `role = 'ADMIN'` (el permiso de verdad lo decide la base, migración 0046).
+   */
+  Administracion: undefined;
+  AdministracionUsuarios: undefined;
+  AdministracionUsuario: { usuario: UsuarioDelPanel };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -111,6 +123,8 @@ const ENLACES = {
       Chat: 'chat/:serviceId',
       GroupChat: 'grupo/:groupId',
       MyServices: 'mis-servicios',
+      // El panel de administración: se entra por el enlace directo y no está en ningún menú.
+      Administracion: 'administracion',
       Splash: '',
     },
   },
@@ -263,6 +277,23 @@ export function RootNavigator() {
               <Stack.Screen
                 name="Membership"
                 component={MembershipScreen}
+                options={{ headerShown: false }}
+              />
+              {/* Panel de administración: fuera de los menús, y cada pantalla se cierra sola si
+                  la cuenta no es administradora. */}
+              <Stack.Screen
+                name="Administracion"
+                component={AdminScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="AdministracionUsuarios"
+                component={AdminUsuariosScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="AdministracionUsuario"
+                component={AdminUsuarioScreen}
                 options={{ headerShown: false }}
               />
             </>

@@ -2,6 +2,7 @@ import { LIMITE_DE_EMERGENCIAS } from './emergencias';
 import { describeError, esColumnaAusente, esFalloDeTransporte } from './errors';
 import { conGrupos } from './gruposDeServicio';
 import { displayName } from './names';
+import type { AccionDelPanel, ResumenDelPanel, UsuarioDelPanel } from './panel';
 import type { LecturaDeChat } from './palomas';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { GroupItem, GroupMember } from '../context/MockStoreContext';
@@ -2435,4 +2436,101 @@ export async function borrarSuscripcionDeAvisos(endpoint: string): Promise<boole
     throw error;
   }
   return true;
+}
+
+// ============================================
+// Panel de administración (migración 0046_panel_de_administracion.sql)
+// ============================================
+// Todas estas funciones llaman a RPC de la base que empiezan por `panel_`, y TODAS pasan por el
+// mismo candado del servidor: si la cuenta no tiene `role = 'ADMIN'`, la base contesta «esta
+// sección es solo para administradores». Esconder el apartado de la interfaz es solo lo de fuera;
+// el permiso de verdad lo decide la base en cada llamada.
+//
+// Si la migración no está aplicada, PostgREST responde «Could not find the function … in the
+// schema cache» y la pantalla lo traduce con `problemaDelPanel` (lib/panel.ts).
+
+/** Los números del panel (cuentas, membresías, servicios, postulaciones). */
+export async function panelResumen(): Promise<ResumenDelPanel> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_resumen');
+  if (error) throw error;
+  return data as ResumenDelPanel;
+}
+
+/**
+ * Listado de cuentas para el panel.
+ *
+ * `filtro` es uno de los de `FILTROS` (lib/panel.ts): TODAS, POR_VENCER, VENCIDAS, SIN_MEMBRESIA
+ * o ACTIVAS. `busqueda` busca a la vez en el teléfono y en el nombre (lo hace la base).
+ */
+export async function panelUsuarios(
+  busqueda = '',
+  filtro = 'TODAS',
+  limite = 100
+): Promise<UsuarioDelPanel[]> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_usuarios', {
+    p_busqueda: busqueda.trim() ? busqueda.trim() : null,
+    p_filtro: filtro,
+    p_limite: limite,
+  });
+  if (error) throw error;
+  return (data || []) as UsuarioDelPanel[];
+}
+
+/**
+ * Activa (o extiende) la membresía de una cuenta.
+ *
+ * Si todavía no venció, la base SUMA los días a lo que le quedaba: activar nunca le quita días a
+ * nadie. Con `sinVencimiento` en true la cuenta queda premium sin fecha de corte.
+ */
+export async function panelActivarMembresia(
+  usuarioId: string,
+  dias: number,
+  sinVencimiento = false
+): Promise<{ subscription_expires_at: string | null }> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_activar_membresia', {
+    p_usuario: usuarioId,
+    p_dias: dias,
+    p_sin_vencimiento: sinVencimiento,
+  });
+  if (error) throw error;
+  return data as { subscription_expires_at: string | null };
+}
+
+/** Le quita la membresía a una cuenta (la cuenta sigue existiendo; deja de ser premium). */
+export async function panelQuitarMembresia(usuarioId: string): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { error } = await supabase.rpc('panel_quitar_membresia', { p_usuario: usuarioId });
+  if (error) throw error;
+}
+
+/** Cambia el rol de una cuenta (conductor, proveedor, dueño de grupo o administrador). */
+export async function panelCambiarRol(usuarioId: string, rol: string): Promise<void> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { error } = await supabase.rpc('panel_cambiar_rol', { p_usuario: usuarioId, p_rol: rol });
+  if (error) throw error;
+}
+
+/**
+ * Enciende o apaga el «modo pruebas» (todos premium) de toda la plataforma.
+ *
+ * Es la palanca que decide si mandan la etapa de pruebas (como hasta ahora) o `profiles.tier`.
+ * La app lee el mismo interruptor al entrar (AuthContext) y con él decide si las funciones de
+ * pago están disponibles para todos o solo para quien tenga membresía activa.
+ */
+export async function panelModoPruebas(activar: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_modo_pruebas', { p_activar: activar });
+  if (error) throw error;
+  return Boolean((data as { premium_para_todos?: boolean } | null)?.premium_para_todos);
+}
+
+/** El registro de lo que se ha hecho desde el panel (lo más reciente primero). */
+export async function panelAcciones(limite = 50): Promise<AccionDelPanel[]> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_acciones', { p_limite: limite });
+  if (error) throw error;
+  return (data || []) as AccionDelPanel[];
 }
