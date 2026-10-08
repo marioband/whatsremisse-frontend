@@ -42,7 +42,6 @@ interface Props {
    * como una capa sobre toda la tarjeta (azul al postularse, verde al ser aceptado).
    */
   miPostulacion?: MiPostulacionEnLaTarjeta;
-  notificationCount?: number;
   groupName?: string;
   /**
    * Sin la tarifa ni el plazo/medio de pago (pedido del usuario, 20-09-2026).
@@ -67,7 +66,6 @@ export function ServiceCard({
   vista = 'CONDUCTOR',
   pie,
   miPostulacion,
-  notificationCount = 0,
   groupName,
   sinDatosDePago = false,
 }: Props) {
@@ -128,10 +126,11 @@ export function ServiceCard({
   };
 
   // Regla en `lib/listaDelConductor.ts` (probada con node): solo se bloquea mientras mi
-  // postulación sigue PENDIENTE y el proveedor no escribió.
+  // postulación sigue PENDIENTE y el proveedor no escribió. El aviso sale del mismo dato
+  // que pinta la franja: no hay contador aparte desde el 08-10-2026.
   const pressDisabled = tarjetaBloqueadaDelConductor({
     isApplied,
-    notificationCount,
+    hayMensajeDelProveedor: !!miPostulacion?.hayMensajeDelProveedor,
     miEstado: miPostulacion?.estado,
   });
 
@@ -255,17 +254,10 @@ export function ServiceCard({
         radius={RADIUS.xl}
       />
 
-      {/* Mensajes del proveedor sin leer: círculo OSCURO con el número, DENTRO de la tarjeta y
-          abajo a la derecha — el mismo contador que usa Mis grupos (pedido del usuario,
-          21-09-2026: «ya no usemos el círculo rojo fuera de la tarjeta»). El disparador es el
-          mismo de antes: el proveedor escribió en el chat del servicio. */}
-      {notificationCount > 0 && (
-        <View style={styles.globoDeMensajes} accessibilityLabel={`${notificationCount} mensajes`}>
-          <Text style={styles.globoDeMensajesTexto}>
-            {notificationCount > 99 ? '99+' : notificationCount}
-          </Text>
-        </View>
-      )}
+      {/* El círculo oscuro con el número se quitó (08-10-2026, pedido del usuario): el aviso
+          de que el proveedor escribió lo lleva la FRANJA inferior —azul con
+          `AVISO_DEL_PROVEEDOR` en la postulación pendiente, y segunda línea cuando el
+          servicio ya es del conductor—, que además dice qué hacer (tocar para responder). */}
     </TouchableOpacity>
   );
 
@@ -486,22 +478,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
-  },
-  globoDeMensajes: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 6,
-    backgroundColor: COLORS.headerDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  globoDeMensajesTexto: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
   },
 });

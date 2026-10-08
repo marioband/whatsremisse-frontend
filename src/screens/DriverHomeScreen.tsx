@@ -218,6 +218,8 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
       ),
       numero: fila?.order ?? null,
       iniciado: inicioCumplido(service.id),
+      // El disparador del aviso de la franja (antes, del círculo con el número).
+      hayMensajeDelProveedor: getDriverNotification(service.id) > 0,
     };
   };
 
@@ -696,7 +698,6 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
           // En "En proceso" la tarjeta de una reserva se marca como tal (el resto son
           // viajes en curso o terminados con el pago abierto).
           const esReserva = inEnProceso && esProgramado(item);
-          const notificationCount = getDriverNotification(item.id);
           const displayGroupName = getDisplayGroupName(item.id);
 
           return (
@@ -724,7 +725,6 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
                 showReservaIndicator={esReserva}
                 isApplied={!!application}
                 miPostulacion={miPostulacionDe(item)}
-                notificationCount={notificationCount}
                 groupName={displayGroupName}
               />
             </Animated.View>

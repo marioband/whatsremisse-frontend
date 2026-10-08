@@ -196,10 +196,11 @@ export type PlanDelToqueDelConductor =
  */
 export function tarjetaBloqueadaDelConductor(datos: {
   isApplied: boolean;
-  notificationCount: number;
+  /** El proveedor ya escribió en el chat del servicio (aviso sin leer). */
+  hayMensajeDelProveedor: boolean;
   miEstado?: EstadoDeMiPostulacion;
 }): boolean {
-  return datos.isApplied && datos.notificationCount === 0 && datos.miEstado === 'PENDIENTE';
+  return datos.isApplied && !datos.hayMensajeDelProveedor && datos.miEstado === 'PENDIENTE';
 }
 
 export function planDelToqueDelConductor(datos: {

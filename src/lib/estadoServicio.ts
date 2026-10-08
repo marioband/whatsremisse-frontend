@@ -17,7 +17,10 @@ export interface EstadoServicio {
   compartido: boolean;
   /** La alerta está en sus últimos minutos: la franja avisa con cuenta atrás. */
   porCerrar?: boolean;
-  /** Segunda línea de la franja (p. ej. la cuenta atrás cuando mandan los postulantes). */
+  /**
+   * Segunda línea de la franja (p. ej. la cuenta atrás cuando mandan los postulantes,
+   * o el aviso del proveedor al conductor).
+   */
   aviso?: string;
 }
 
@@ -43,7 +46,22 @@ export interface MiPostulacionEnLaTarjeta {
    * ningún hito). La marca es local del dispositivo: `lib/inicioDelViaje.ts`.
    */
   iniciado?: boolean;
+  /**
+   * El proveedor ya escribió en el chat del servicio y el conductor no lo ha leído
+   * (el mismo disparador del círculo con el número, que se quitó el 08-10-2026). En
+   * la postulación pendiente la franja pasa a azul con `AVISO_DEL_PROVEEDOR`; cuando
+   * el servicio ya es suyo, ese aviso baja como segunda línea.
+   */
+  hayMensajeDelProveedor?: boolean;
 }
+
+/**
+ * La franja del conductor cuando el proveedor le escribió: es la etiqueta misma
+ * mientras la postulación sigue pendiente (franja azul) y la segunda línea cuando el
+ * servicio ya es suyo (aceptado, en camino, en proceso). Sustituye al círculo oscuro
+ * con el número de mensajes que el usuario quitó el 08-10-2026.
+ */
+export const AVISO_DEL_PROVEEDOR = 'El proveedor te escribió. Toca aquí para responder';
 
 /** El ciclo de pago terminó: el servicio está pagado y cerrado. */
 export function estaPagadoYCerrado(service: ServiceAlert): boolean {
@@ -90,6 +108,10 @@ export function estadoDeServicio(
   // Últimos minutos de vida de la alerta: la franja avisa con cuenta atrás real.
   const restante = minutosParaCerrar(service);
   const porCerrar = restante > 0 && restante <= AVISO_DE_CIERRE_MINUTOS;
+  // Aviso del proveedor para la SEGUNDA línea de la franja del conductor cuando el
+  // servicio ya es suyo; en la postulación pendiente no baja aquí: es la etiqueta.
+  const avisoDelProveedor =
+    soyConductor && miPostulacion?.hayMensajeDelProveedor ? AVISO_DEL_PROVEEDOR : undefined;
 
   if (service.status === 'STATUS_CANCELLED') {
     return { etiqueta: 'Servicio anulado', color: ROJO_ACCION, compartido };
@@ -104,8 +126,9 @@ export function estadoDeServicio(
   }
 
   // La situación del conductor frente a la alerta también se dice en la franja (ya no
-  // con una capa sobre la tarjeta): azul con su puesto, y rojo si quedó fuera —lo
-  // rechazó el proveedor o lo cubrió otro conductor, que la base marca igual—.
+  // con una capa sobre la tarjeta): negra con su puesto, azul si el proveedor le
+  // escribió, y rojo si quedó fuera —lo rechazó el proveedor o lo cubrió otro
+  // conductor, que la base marca igual—.
   if (soyConductor && miPostulacion?.estado === 'RECHAZADA') {
     return {
       etiqueta: 'Servicio rechazado o cubierto por otro conductor',
@@ -116,9 +139,16 @@ export function estadoDeServicio(
 
   if (soyConductor && miPostulacion?.estado === 'PENDIENTE') {
     const numero = miPostulacion.numero;
+    // El proveedor ya escribió: la franja azul pide la respuesta (antes el aviso era
+    // el círculo oscuro con el número de mensajes).
+    if (miPostulacion.hayMensajeDelProveedor) {
+      return { etiqueta: AVISO_DEL_PROVEEDOR, color: AZUL, compartido };
+    }
     return {
       etiqueta: numero ? `Postulante ${numero}` : 'Postulación enviada',
-      color: AZUL,
+      // Negra, no azul: el usuario pidió (08-10-2026) que el puesto de postulante no
+      // use la misma azul de "Buscando conductores"; la azul queda para el aviso.
+      color: OSCURO,
       compartido,
     };
   }
@@ -134,11 +164,14 @@ export function estadoDeServicio(
           : 'Servicio aceptado, toca para iniciar',
         color: VERDE_ACCION,
         compartido,
+        aviso: avisoDelProveedor,
       };
     }
-    if (paso === 1) return { etiqueta: 'Conductor ubicado', color: OSCURO, compartido };
-    if (paso === 2) return { etiqueta: 'Servicio en Proceso', color: OSCURO, compartido };
-    return { etiqueta: 'En camino', color: AZUL, compartido };
+    if (paso === 1)
+      return { etiqueta: 'Conductor ubicado', color: OSCURO, compartido, aviso: avisoDelProveedor };
+    if (paso === 2)
+      return { etiqueta: 'Servicio en Proceso', color: OSCURO, compartido, aviso: avisoDelProveedor };
+    return { etiqueta: 'En camino', color: AZUL, compartido, aviso: avisoDelProveedor };
   }
 
   if (!compartido) {
