@@ -32,13 +32,15 @@ export interface Punto {
 export interface MedidaRuta {
   segundos: number;
   metros: number;
+  /** 0049: el trazo de la ruta (encodedPolyline), para dibujarla en la página del cliente. */
+  trazo?: string;
 }
 
 /** Caché en memoria: la misma ruta no se vuelve a pedir mientras la app vive. */
 const cache = new Map<string, MedidaRuta>();
 
-/** Campos mínimos (menos campos, menos coste). */
-export const CAMPOS_RUTA = 'routes.duration,routes.distanceMeters';
+/** Campos mínimos (menos campos, menos coste). El trazo (0049) viaja en la MISMA llamada. */
+export const CAMPOS_RUTA = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline';
 
 /**
  * Preferencia de ruta: cambia el precio (y la calidad del dato).
@@ -122,13 +124,17 @@ export function segundosDeDuracion(duracion: unknown): number {
 /** Lee la primera ruta de la respuesta de Google. */
 export function leerRuta(respuesta: unknown): MedidaRuta | null {
   const datos = respuesta as
-    { routes?: { duration?: string; distanceMeters?: number }[] } | null | undefined;
+    { routes?: { duration?: string; distanceMeters?: number; polyline?: { encodedPolyline?: string } }[] }
+    | null
+    | undefined;
   const ruta = datos?.routes?.[0];
   if (!ruta) return null;
   const segundos = segundosDeDuracion(ruta.duration);
   const metros = Number(ruta.distanceMeters || 0);
   if (segundos <= 0 && metros <= 0) return null;
-  return { segundos, metros };
+  // El trazo solo viene si la migración 0049 está en uso; sin él, la medida sigue valiendo.
+  const trazo = (ruta.polyline?.encodedPolyline || '').trim();
+  return trazo ? { segundos, metros, trazo } : { segundos, metros };
 }
 
 /**

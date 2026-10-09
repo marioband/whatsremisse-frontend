@@ -24,6 +24,7 @@ import { SwipeStatusButton } from '../components/SwipeStatusButton';
 import {
   ChatHeader,
   CompartirContacto,
+  CompartirViaje,
   EvaluationBar,
   MessageList,
   PagoDelServicio,
@@ -1427,6 +1428,10 @@ export function ChatScreen() {
         />
 
         {decisionPendiente && <EvaluationBar onAccept={handleAccept} onReject={handleReject} />}
+
+        {/* El enlace del viaje para el cliente (0049): solo lo ve el proveedor con el viaje en curso
+            y solo hace algo cuando lo toca (crea o recupera el enlace y lo copia). */}
+        <CompartirViaje service={service} esProveedor={isProvider} />
 
         {showSlider ? (
           <SwipeStatusButton

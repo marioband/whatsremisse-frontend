@@ -73,6 +73,8 @@ export function mapServiceAlertFromDb(row: DbServiceAlert): ServiceAlert {
     viajeMetros: row.viaje_metros ?? undefined,
     viajeSegundos: row.viaje_segundos ?? undefined,
     viajeMedidoAt: row.viaje_medido_at ?? undefined,
+    // 0049: el trazo de la ruta para la página pública del viaje (si la migración no está, no viene).
+    trazoPolyline: row.trazo_polyline ?? undefined,
     provider_yape: row.provider_yape ?? undefined,
     provider_bcp_account: row.provider_bcp_account ?? undefined,
     provider_bcp_cci: row.provider_bcp_cci ?? undefined,
@@ -138,6 +140,8 @@ export function mapServiceAlertToDb(service: Partial<ServiceAlert>): Partial<DbS
   if (service.viajeMetros !== undefined) mapped.viaje_metros = service.viajeMetros;
   if (service.viajeSegundos !== undefined) mapped.viaje_segundos = service.viajeSegundos;
   if (service.viajeMedidoAt !== undefined) mapped.viaje_medido_at = service.viajeMedidoAt;
+  // El trazo de la ruta (0049). Si falta la migración, se reintenta sin él (capas, abajo).
+  if (service.trazoPolyline !== undefined) mapped.trazo_polyline = service.trazoPolyline;
   if (service.destination_lng !== undefined) mapped.destination_lng = service.destination_lng;
   if (service.vehicle_requirements !== undefined)
     mapped.vehicle_requirements = service.vehicle_requirements;
@@ -191,7 +195,14 @@ function sinCamposDeLa0041(mapped: Partial<DbServiceAlert>): Partial<DbServiceAl
   return copia;
 }
 
-/** Las columnas que añade la 0024, para poder reintentar sin ellas. */
+/** Las columnas que añade la 0049 (el trazo de la ruta). */
+function sinCamposDeLa0049(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
+  const copia = { ...mapped };
+  delete copia.trazo_polyline;
+  return copia;
+}
+
+/** Las columnas que añaden 0024 y 0027, para reintentar sin ellas. */
 function sinCamposDeLa0024(mapped: Partial<DbServiceAlert>): Partial<DbServiceAlert> {
   const copia = { ...mapped };
   delete copia.payment_method;
@@ -219,11 +230,17 @@ function capasDelServicio(mapped: Partial<DbServiceAlert>): {
   campos: Partial<DbServiceAlert>;
   aviso: string;
 }[] {
-  const sinViaje = sinCamposDeLa0043(mapped);
+  const sinTrazo = sinCamposDeLa0049(mapped);
+  const sinViaje = sinCamposDeLa0043(sinTrazo);
   const sinNuevas = sinCamposDeLa0041(sinViaje);
   const sinParadas = sinCamposDeLa0027(sinNuevas);
   const sinPago = sinCamposDeLa0024(sinParadas);
   return [
+    {
+      campos: sinTrazo,
+      aviso:
+        '[database] el servicio se publicó sin el trazo de la ruta: falta aplicar 0049_seguimiento_del_viaje.sql',
+    },
     {
       campos: sinViaje,
       aviso:
@@ -2238,6 +2255,63 @@ export async function publicarMiPosicion(lat: number, lng: number): Promise<bool
     if (esFuncionAusente(err)) return false;
     throw err;
   }
+}
+
+/**
+ * Publica la posición de la unidad para la página pública del viaje (0049).
+ *
+ * La manda el conductor asignado mientras el viaje está en curso (cada ~15 s). La base
+ * tiene su propio límite (12 s): lo que llegue antes se ignora sin error. Si la migración
+ * 0049 no está aplicada, devuelve false en silencio (como `publicarMiPosicion`).
+ */
+export async function publicarPosicionDelSeguimiento(
+  serviceId: string,
+  lat: number,
+  lng: number
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { data, error } = await supabase.rpc('publicar_posicion_del_seguimiento', {
+      p_service_id: serviceId,
+      p_lat: lat,
+      p_lng: lng,
+    });
+    if (error) throw error;
+    return data === true;
+  } catch (err) {
+    if (esFuncionAusente(err)) return false;
+    throw err;
+  }
+}
+
+/** El enlace público del viaje (0049), tal como lo devuelve la base. */
+export interface EnlaceDelSeguimiento {
+  token: string;
+  /** Ruta para el cliente ('/viaje/<token>'): el dominio lo pone la app. */
+  url: string;
+  expira_at?: string;
+  nuevo?: boolean;
+}
+
+/**
+ * Crea (o recupera, si ya existía) el enlace público del viaje de este servicio.
+ *
+ * Solo lo puede pedir el PROVEEDOR del servicio y solo con el viaje en curso; si el
+ * seguimiento no está activo para su cuenta, la base responde con un mensaje claro
+ * (y ese mensaje es el que se muestra en pantalla).
+ */
+export async function crearEnlaceDelSeguimiento(serviceId: string): Promise<EnlaceDelSeguimiento> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('seguimiento_crear', { p_service_id: serviceId });
+  if (error) {
+    if (esFuncionAusente(error)) {
+      throw new Error('El seguimiento del viaje todavía no está preparado en la base de datos.');
+    }
+    throw error;
+  }
+  const enlace = data as EnlaceDelSeguimiento | null;
+  if (!enlace?.token) throw new Error('La base no devolvió el enlace del viaje.');
+  return enlace;
 }
 
 /**

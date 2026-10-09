@@ -79,5 +79,8 @@ export async function medirElViaje(
     viajeMetros: medida.metros,
     viajeSegundos: medida.segundos,
     viajeMedidoAt: new Date().toISOString(),
+    // 0049: el trazo de la ruta, para que la página del cliente dibuje el recorrido
+    // (viaja en la MISMA medición; no es una llamada nueva a Google).
+    ...(medida.trazo ? { trazoPolyline: medida.trazo } : {}),
   };
 }

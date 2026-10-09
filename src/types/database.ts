@@ -41,6 +41,8 @@ export interface DbServiceAlert {
   viaje_metros?: number | null;
   viaje_segundos?: number | null;
   viaje_medido_at?: string | null;
+  /** 0049: el trazo de la ruta (encodedPolyline) para la página pública del viaje. */
+  trazo_polyline?: string | null;
   vehicle_requirements: unknown | null;
   fare: number;
   status: string;

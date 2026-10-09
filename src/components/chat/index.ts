@@ -1,6 +1,7 @@
 export { BankDetailsRow } from './BankDetailsRow';
 export { ChatHeader } from './ChatHeader';
 export { CompartirContacto } from './CompartirContacto';
+export { CompartirViaje } from './CompartirViaje';
 export { EvaluationBar } from './EvaluationBar';
 export { MessageList } from './MessageList';
 export { Palomas } from './Palomas';

@@ -138,6 +138,8 @@ export interface ServiceAlert {
   viajeSegundos?: number;
   viajeMetros?: number;
   viajeMedidoAt?: string;
+  /** 0049: el trazo de la ruta (encodedPolyline) para la página pública del viaje. */
+  trazoPolyline?: string;
   observations?: string[];
   payment_term?: string;
   payment_method?: string;
