@@ -45,6 +45,28 @@ function claveConPrefijo(clave: string): string {
   return `${PREFIJO}${clave}`;
 }
 
+/** Cuánto vale lo guardado en el teléfono (mismo plazo para el inicio y para el chat). */
+export const TTL_DE_LA_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * La clave de la conversación (08-10-2026): LLEVA EL ID DEL USUARIO y el del servicio, como el
+ * resto de la caché — los mensajes de una cuenta no se pintan en la de otra, y las conversaciones
+ * de un servicio no se mezclan con las de otro.
+ */
+export function claveDeMensajesDe(userId: string, serviceId: string): string {
+  return `mensajes:${userId}:${serviceId}`;
+}
+
+/**
+ * Lo que se guarda de una conversación: solo los ÚLTIMOS mensajes (por defecto 200). Un chat puede
+ * tener miles y el almacén del teléfono es pequeño; para pintar al volver sobran los últimos.
+ */
+export function mensajesParaGuardar<T>(mensajes: T[], limite = 200): T[] {
+  if (!Array.isArray(mensajes)) return [];
+  if (mensajes.length <= limite) return mensajes;
+  return mensajes.slice(mensajes.length - limite);
+}
+
 /** Lee una entrada si existe y no venció. Devuelve null en cualquier otro caso. */
 export async function leerCache<T>(clave: string, ttlMs: number): Promise<T | null> {
   const almacen = await obtenerAlmacen();

@@ -16,7 +16,7 @@ import { useRealtimeGroups } from '../hooks/useRealtimeGroups';
 import { useRealtimeServices } from '../hooks/useRealtimeServices';
 import { Alert } from '../lib/alert';
 import { avisarDePostulacion, avisarDeServicioNuevo } from '../lib/avisos';
-import { guardarCache, leerCache } from '../lib/cache';
+import { guardarCache, leerCache, TTL_DE_LA_CACHE_MS } from '../lib/cache';
 import {
   approveApplicationInDb,
   borrarMiPostulacion,
@@ -846,8 +846,6 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
    * verdad lo corrige un momento después. La clave lleva el id del usuario: los datos de una
    * cuenta nunca se pintan en la pantalla de otra.
    */
-  const TTL_DE_LA_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
-
   const claveDeCache = (nombre: string, userId: string) => `${nombre}:${userId}`;
 
   /** Pinta grupos, servicios y postulaciones de la última vez que se abrió la app. */

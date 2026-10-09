@@ -48,6 +48,13 @@ import {
   subirAudio,
 } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
+import {
+  claveDeMensajesDe,
+  guardarCache,
+  leerCache,
+  mensajesParaGuardar,
+  TTL_DE_LA_CACHE_MS,
+} from '../lib/cache';
 import { marcarAvisoPropio } from '../lib/avisos';
 import { AZUL, OSCURO } from '../lib/colors';
 import { hayApiDeRutas } from '../lib/routes';
@@ -554,6 +561,9 @@ export function ChatScreen() {
         const lista = await fetchServiceMessages(serviceId, effectiveDriverId);
         setMensajes(lista);
         setChatCompartido(true);
+        // Lo leído se guarda para el próximo arranque: volver del mapa recarga la app entera y, sin
+        // esto, el chat se quedaba con la rueda girando hasta que contestara la red (08-10-2026).
+        void guardarCache(claveDeMensajesDe(userId, serviceId), mensajesParaGuardar(lista));
         // Con la conversación a la vista se marca leído y se releen las marcas de
         // los demás: así las palomitas quedan al día en cada relectura.
         if (lista.length > 0) {
@@ -573,10 +583,37 @@ export function ChatScreen() {
     [serviceId, effectiveDriverId, marcarComoLeido, cargarLecturas]
   );
 
+  /**
+   * La conversación se pinta con lo ÚLTIMO GUARDADO antes de pedirla a la red (08-10-2026).
+   *
+   * Por qué: el botón «Ir a origen/destino» navega la MISMA pestaña al mapa (regla del 18-09), así
+   * que al volver la app se recarga entera. El arranque ya se pinta con el perfil y los datos
+   * guardados (20-09), pero el chat se quedaba con su rueda hasta que respondiera la red — y por
+   * ahí es donde el usuario veía «una carga del aplicativo muy larga». La consulta de verdad no se
+   * cambia: sale igual y reemplaza la lista en cuanto llega.
+   */
   useEffect(() => {
+    let vigente = true;
     setCargando(true);
-    cargarMensajes();
-  }, [cargarMensajes]);
+    (async () => {
+      try {
+        const guardados = await leerCache<ServiceMessage[]>(
+          claveDeMensajesDe(userId, serviceId),
+          TTL_DE_LA_CACHE_MS
+        );
+        if (vigente && guardados?.length) {
+          setMensajes(guardados);
+          setCargando(false);
+        }
+      } catch {
+        // Sin caché legible se sigue como siempre: la rueda hasta que conteste la red.
+      }
+      if (vigente) cargarMensajes();
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [cargarMensajes, serviceId, userId]);
 
   // Al abrir el chat se relee el servicio de la base: el ciclo de pago
   // (declaración → rechazo → confirmación) cambia en el OTRO dispositivo, así que
