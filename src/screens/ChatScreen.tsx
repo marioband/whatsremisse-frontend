@@ -115,7 +115,6 @@ import {
   textoParaCopiar,
   DatosPublicos,
   datosDesdePerfilPublico,
-  inicialDe,
 } from '../lib/perfilPublico';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { Message } from '../types';
@@ -1295,8 +1294,6 @@ export function ChatScreen() {
               {isProvider && currentStep === 'IN_PROGRESS' && (
                 <AccionesDeLaTarjeta
                   service={service}
-                  foto={datosParaCopiar.foto}
-                  inicial={inicialDe(datosParaCopiar)}
                   alCopiarDatos={() => copiarDatosRef.current()}
                   alCopiarImagen={copiarLaImagenDelConductor}
                 />

@@ -1,20 +1,22 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { OSCURO } from '../../lib/colors';
 import { ServiceAlert } from '../../types';
 import { CompartirViaje } from './CompartirViaje';
 
 /**
  * Las acciones del viaje DENTRO de la tarjeta del chat (diseño del usuario, 09-10-2026):
  *
- *     [ foto del conductor ]             ← se toca para copiar la imagen (23-09-2026, se mantiene)
  *     [ Compartir viaje ]                ← botón largo, azul institucional
  *     [ Copiar datos | Copiar imagen ]   ← mitad y mitad, gris del conmutador «sin seleccionar»
  *     [ Ver ubicación ]                  ← botón largo, gris — VISUAL por ahora (decisión del
  *                                          usuario: el proveedor verá ahí dónde va su conductor;
  *                                          la función detallada llega en otra etapa)
+ *
+ * La FOTO del conductor se quitó (2ª vuelta del usuario, 09-10-2026): su función de copiar la
+ * imagen la tiene ahora el botón «Copiar imagen». Los botones grises llevan un borde BLANCO
+ * fino para despegarse del fondo de la tarjeta (que es del mismo gris) y entre sí.
  *
  * El orden de la pareja es el de la imagen de referencia: datos a la IZQUIERDA, imagen a la
  * derecha. La barra inferior de la tarjeta NO se pinta en el chat (duplicaba la franja verde
@@ -22,40 +24,18 @@ import { CompartirViaje } from './CompartirViaje';
  */
 interface AccionesDeLaTarjetaProps {
   service: ServiceAlert;
-  /** La foto del conductor, si la tiene. */
-  foto?: string | null;
-  /** La inicial que se pinta cuando no hay foto. */
-  inicial: string;
   alCopiarDatos: () => void;
-  /** Copia (o comparte) la FOTO del conductor. La usan la foto de arriba y «Copiar imagen». */
+  /** Copia (o comparte) la FOTO del conductor. La usa el botón «Copiar imagen». */
   alCopiarImagen: () => void;
 }
 
 export function AccionesDeLaTarjeta({
   service,
-  foto,
-  inicial,
   alCopiarDatos,
   alCopiarImagen,
 }: AccionesDeLaTarjetaProps) {
   return (
     <View style={styles.zona}>
-      {foto ? (
-        <TouchableOpacity
-          style={styles.foto}
-          onPress={alCopiarImagen}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Copiar la foto del conductor"
-        >
-          <Image source={{ uri: foto }} style={styles.fotoImg} />
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.foto}>
-          <Text style={styles.fotoInicial}>{inicial}</Text>
-        </View>
-      )}
-
       <CompartirViaje service={service} esProveedor />
 
       <View style={styles.fila}>
@@ -89,18 +69,6 @@ export function AccionesDeLaTarjeta({
 
 const styles = StyleSheet.create({
   zona: { alignItems: 'center', paddingHorizontal: 12, paddingBottom: 2 },
-  foto: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: OSCURO,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    marginBottom: 10,
-  },
-  fotoImg: { width: 36, height: 36 },
-  fotoInicial: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   fila: { flexDirection: 'row', alignSelf: 'stretch', marginBottom: 10 },
   mitad: {
     flex: 1,
@@ -108,6 +76,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f0f2f5',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 14,
   },
@@ -118,6 +88,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f0f2f5',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
     borderRadius: 12,
     paddingVertical: 14,
   },
