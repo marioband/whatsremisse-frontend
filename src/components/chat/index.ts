@@ -1,3 +1,4 @@
+export { AccionesDeLaTarjeta } from './AccionesDeLaTarjeta';
 export { BankDetailsRow } from './BankDetailsRow';
 export { ChatHeader } from './ChatHeader';
 export { CompartirContacto } from './CompartirContacto';

@@ -10,21 +10,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
-  Image,
   TouchableOpacity,
   View,
 } from 'react-native';
 
 import { BotonDeNavegacion } from '../components/BotonDeNavegacion';
 import { ChatInputBar, AttachmentType } from '../components/ChatInputBar';
-import { Icono, ICONO_COPIAR } from '../components/Icono';
 import { copiarOCompartirImagen, mensajeDeCopiarImagen } from '../lib/copiarImagen';
 import { ServiceCard } from '../components/ServiceCard';
 import { SwipeStatusButton } from '../components/SwipeStatusButton';
 import {
+  AccionesDeLaTarjeta,
   ChatHeader,
   CompartirContacto,
-  CompartirViaje,
   EvaluationBar,
   MessageList,
   PagoDelServicio,
@@ -57,7 +55,6 @@ import {
   TTL_DE_LA_CACHE_MS,
 } from '../lib/cache';
 import { marcarAvisoPropio } from '../lib/avisos';
-import { AZUL, OSCURO } from '../lib/colors';
 import { hayApiDeRutas } from '../lib/routes';
 import { esPremium } from '../lib/premium';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
@@ -1223,6 +1220,21 @@ export function ChatScreen() {
   }, [handleCopyData]);
 
   /**
+   * «Copiar imagen»: la FOTO del conductor al portapapeles (o como archivo, si el navegador no lo
+   * deja copiar). La usan la foto de arriba (23-09-2026: se toca para copiarla) y el botón del
+   * mismo nombre del pie nuevo de la tarjeta (09-10-2026).
+   */
+  const copiarLaImagenDelConductor = useCallback(() => {
+    if (!datosParaCopiar.foto) return;
+    const nombre =
+      [datosParaCopiar.nombres, datosParaCopiar.apellidos].filter(Boolean).join(' ') ||
+      'conductor';
+    copiarOCompartirImagen(datosParaCopiar.foto, nombre).then((resultado) =>
+      Alert.alert('Foto del conductor', mensajeDeCopiarImagen(resultado))
+    );
+  }, [datosParaCopiar]);
+
+  /**
    * Cabecera del chat: la fecha y la MISMA tarjeta del inicio del conductor, con un pie
    * debajo de la franja (el botón azul de navegación para el conductor y, para el
    * proveedor, los datos a copiar).
@@ -1272,6 +1284,7 @@ export function ChatScreen() {
           // 20-09-2026): esta pantalla la ve el conductor con el pasajero delante. Las direcciones
           // ganan el ancho que ocupaba esa columna. En los inicios se siguen viendo.
           sinDatosDePago
+          sinFranja
           vista={isProvider ? 'PROVEEDOR' : 'CONDUCTOR'}
           miPostulacion={isDriver ? miPostulacionEnLaTarjeta : undefined}
           pie={
@@ -1280,52 +1293,13 @@ export function ChatScreen() {
                 <BotonDeNavegacion service={service} conductor={effectiveDriverId} />
               )}
               {isProvider && currentStep === 'IN_PROGRESS' && (
-                <View style={styles.copyDataRow}>
-                  {/*
-                    23-09-2026: la foto del conductor va PEGADA al botón «Datos conductor», a su
-                    izquierda, y se toca para copiarla (el usuario la quiere para pegarla en otro
-                    lado). Si el conductor no tiene foto se pinta su inicial sobre el mismo negro
-                    institucional, como en las demás tarjetas de la app, para que el hueco no
-                    aparezca y desaparezca.
-                  */}
-                  {datosParaCopiar.foto ? (
-                    <TouchableOpacity
-                      style={styles.copyDataFoto}
-                      onPress={() => {
-                        const nombre =
-                          [datosParaCopiar.nombres, datosParaCopiar.apellidos]
-                            .filter(Boolean)
-                            .join(' ') || 'conductor';
-                        copiarOCompartirImagen(datosParaCopiar.foto, nombre).then((resultado) =>
-                          Alert.alert('Foto del conductor', mensajeDeCopiarImagen(resultado))
-                        );
-                      }}
-                      activeOpacity={0.85}
-                      accessibilityRole="button"
-                      accessibilityLabel="Copiar la foto del conductor"
-                    >
-                      <Image
-                        source={{ uri: datosParaCopiar.foto }}
-                        style={styles.copyDataFotoImg}
-                      />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={styles.copyDataFoto}>
-                      <Text style={styles.copyDataFotoInicial}>{inicialDe(datosParaCopiar)}</Text>
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    style={styles.copyDataBtn}
-                    onPress={() => copiarDatosRef.current()}
-                    activeOpacity={0.85}
-                  >
-                    {/* 23-09-2026: el botón dice «Datos conductor» y lleva al lado el MISMO icono de
-                        copiar que usan las filas de pago (Yape, BCP…), así se entiende que copia sin
-                        tener que leerlo. Solo lo ve el proveedor: el conductor no lo tiene. */}
-                    <Icono fuente={ICONO_COPIAR} tamano={16} estilo={styles.copyDataBtnIcono} />
-                    <Text style={styles.copyDataBtnText}>Datos conductor</Text>
-                  </TouchableOpacity>
-                </View>
+                <AccionesDeLaTarjeta
+                  service={service}
+                  foto={datosParaCopiar.foto}
+                  inicial={inicialDe(datosParaCopiar)}
+                  alCopiarDatos={() => copiarDatosRef.current()}
+                  alCopiarImagen={copiarLaImagenDelConductor}
+                />
               )}
             </>
           }
@@ -1341,6 +1315,8 @@ export function ChatScreen() {
     currentStep,
     miPostulacionEnLaTarjeta,
     effectiveDriverId,
+    datosParaCopiar,
+    copiarLaImagenDelConductor,
   ]);
 
   // Con el teclado abierto, la barra de escribir no lleva hueco inferior: va pegada a él.
@@ -1429,9 +1405,6 @@ export function ChatScreen() {
 
         {decisionPendiente && <EvaluationBar onAccept={handleAccept} onReject={handleReject} />}
 
-        {/* El enlace del viaje para el cliente (0049): solo lo ve el proveedor con el viaje en curso
-            y solo hace algo cuando lo toca (crea o recupera el enlace y lo copia). */}
-        <CompartirViaje service={service} esProveedor={isProvider} />
 
         {showSlider ? (
           <SwipeStatusButton
@@ -1596,45 +1569,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginVertical: 10,
   },
-  /** Pie de la tarjeta del servicio: la foto del conductor y el botón, juntos y centrados. */
-  copyDataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    paddingTop: 12,
-  },
-  /** La foto del conductor (36×36, recortada): se toca y se copia. */
-  copyDataFoto: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: OSCURO,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    marginRight: 10,
-  },
-  copyDataFotoImg: { width: 36, height: 36 },
-  copyDataFotoInicial: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  copyDataBtn: {
-    backgroundColor: AZUL,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 28,
-    minWidth: 180,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  /** El icono de copiar va pegado al texto, con un respiro de 8 px (23-09-2026). */
-  copyDataBtnIcono: { marginRight: 8 },
-  copyDataBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
+  /** (El pie del proveedor — la foto, «Compartir viaje», los dos copiados y «Ver ubicación» —
+      vive en `components/chat/AccionesDeLaTarjeta`, con sus propios estilos: 09-10-2026.) */
   avisoBusqueda: {
     textAlign: 'center',
     color: '#555',

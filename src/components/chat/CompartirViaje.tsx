@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 
-import { AZUL, TEXTO_SUAVE } from '../../lib/colors';
+import { AZUL } from '../../lib/colors';
 import { crearEnlaceDelSeguimiento } from '../../lib/database';
 import { textoDeErrorParaElUsuario } from '../../lib/errors';
 import { ServiceAlert } from '../../types';
@@ -12,7 +13,7 @@ interface CompartirViajeProps {
   esProveedor: boolean;
 }
 
-/** ¿El viaje puede compartirse ahora mismo? (con conductor asignado y sin terminar) */
+/** ¿El viaje puede compartirse ahora mismo? (asignado y sin terminar) */
 function viajeEnCurso(service?: ServiceAlert | null): boolean {
   if (!service || !service.assigned_driver_id) return false;
   return (
@@ -23,12 +24,12 @@ function viajeEnCurso(service?: ServiceAlert | null): boolean {
 }
 
 /**
- * «Compartir el viaje con el cliente» (0049): el botón del PROVEEDOR dentro del chat del
- * servicio. Solo aparece con el viaje en curso.
+ * «Compartir viaje» (0049): el botón LARGO azul institucional del pie de la tarjeta del chat
+ * (diseño del usuario, 09-10-2026).
  *
- * Al tocarlo, la base crea (o devuelve, si ya existía) el enlace público del viaje y el
- * enlace queda COPIADO para mandarlo por WhatsApp. Si el seguimiento no está activo para la
- * cuenta, la base lo dice con un mensaje claro y ese mensaje se muestra.
+ * Al tocarlo, la base crea (o devuelve, si ya existe) el enlace público del viaje y este queda
+ * COPIADO para mandarlo por WhatsApp. Si el seguimiento no está activo para la cuenta, la base
+ * lo dice con un mensaje claro.
  */
 export function CompartirViaje({ service, esProveedor }: CompartirViajeProps) {
   const [ocupado, setOcupado] = useState(false);
@@ -58,25 +59,30 @@ export function CompartirViaje({ service, esProveedor }: CompartirViajeProps) {
   };
 
   return (
-    <View style={styles.zona}>
-      <Pressable
-        onPress={compartir}
-        disabled={ocupado}
-        style={[styles.boton, ocupado && styles.botonOcupado]}
-      >
-        <Text style={styles.texto}>
-          {copiado ? '¡Enlace copiado!' : 'Compartir el viaje con el cliente'}
-        </Text>
-      </Pressable>
-      <Text style={styles.nota}>Tu cliente lo abre sin cuenta y sigue la unidad en el mapa.</Text>
-    </View>
+    <Pressable
+      onPress={compartir}
+      disabled={ocupado}
+      style={[styles.boton, ocupado && styles.botonOcupado]}
+      accessibilityRole="button"
+    >
+      <MaterialCommunityIcons name="share" size={20} color="#FFFFFF" style={styles.icono} />
+      <Text style={styles.texto}>{copiado ? '¡Enlace copiado!' : 'Compartir viaje'}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  zona: { width: '100%', paddingHorizontal: 12, paddingVertical: 6 },
-  boton: { backgroundColor: AZUL, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  boton: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AZUL,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
   botonOcupado: { opacity: 0.6 },
+  icono: { marginRight: 8 },
   texto: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-  nota: { color: TEXTO_SUAVE, fontSize: 11, textAlign: 'center', marginTop: 4 },
 });

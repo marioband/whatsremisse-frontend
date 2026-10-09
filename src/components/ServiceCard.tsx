@@ -51,6 +51,12 @@ interface Props {
    * inicios NO se usa: ahí el conductor necesita la tarifa para decidir a qué servicio postularse.
    */
   sinDatosDePago?: boolean;
+  /**
+   * SIN la franja inferior (09-10-2026, pedido del usuario): en el CHAT la franja duplicaba la
+   * franja verde superior (el hito del conductor), así que se retiró y la tarjeta se cierra con
+   * el pie (los botones). En los inicios la franja se mantiene.
+   */
+  sinFranja?: boolean;
 }
 
 export function ServiceCard({
@@ -68,6 +74,7 @@ export function ServiceCard({
   miPostulacion,
   groupName,
   sinDatosDePago = false,
+  sinFranja = false,
 }: Props) {
   const swipeableRef = useRef<FilaDeslizableRef>(null);
   // El nombre lo configura el proveedor en su perfil; si no lo configuró, van su
@@ -246,13 +253,16 @@ export function ServiceCard({
           aceptaron y rojo si quedó fuera (rechazado o cubierto por otro)—. Antes el
           estado se pintaba como una capa sobre toda la tarjeta; el usuario lo cambió
           justamente por esto. Va dentro de la tarjeta para heredar su redondeo y es la
-          ÚLTIMA pieza, para cerrar la tarjeta por abajo. */}
-      <EstadoServicioBar
-        service={service}
-        vista={vista}
-        miPostulacion={miPostulacion}
-        radius={RADIUS.xl}
-      />
+          ÚLTIMA pieza, para cerrar la tarjeta por abajo. En el CHAT no se pinta
+          (`sinFranja`, 09-10-2026): duplicaba la franja verde superior. */}
+      {!sinFranja && (
+        <EstadoServicioBar
+          service={service}
+          vista={vista}
+          miPostulacion={miPostulacion}
+          radius={RADIUS.xl}
+        />
+      )}
 
       {/* El círculo oscuro con el número se quitó (08-10-2026, pedido del usuario): el aviso
           de que el proveedor escribió lo lleva la FRANJA inferior —azul con
