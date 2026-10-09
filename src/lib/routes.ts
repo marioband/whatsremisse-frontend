@@ -155,12 +155,16 @@ export function formatearEstimacion(medida: MedidaRuta | null): string {
  * Orden: memoria -> caché persistente (sobrevive a recargar) -> Google. Las
  * medidas que dependen de la posición del conductor caducan a los 5 minutos; las
  * que son entre dos direcciones (fijas para un servicio) duran 30 días.
+ *
+ * Con `paraElViajeDelServicio` (0049) una medida guardada SIN trazo no se reutiliza: se mide de
+ * nuevo UNA vez para que la página del cliente tenga el recorrido, y queda guardada con él.
  */
 export async function medirRuta(
   origen: Punto,
   destino: Punto,
-  timeoutMs = 8000
+  opciones?: { timeoutMs?: number; paraElViajeDelServicio?: boolean }
 ): Promise<MedidaRuta | null> {
+  const timeoutMs = opciones?.timeoutMs ?? 8000;
   if (!hayApiDeRutas()) return null;
   // Cada extremo sirve si tiene coordenadas O dirección escrita (el caso
   // conductor -> origen mezcla las dos cosas).
@@ -182,14 +186,22 @@ export async function medirRuta(
       ? TTL_RUTA_CON_POSICION_MS
       : TTL_RUTA_ENTRE_DIRECCIONES_MS;
 
+  // `paraElViajeDelServicio` (0049): la página del cliente necesita el TRAZO. Una medida guardada
+  // antes de que el trazo existiera (la ruta origen→destino dura 30 días en la caché) lo trae sin
+  // trazo: en ese caso NO se reutiliza — se mide UNA vez más (una llamada Essentials) y queda
+  // guardada CON trazo para todos. Sin esta opción (las estimaciones del conductor) la caché se
+  // reutiliza igual que siempre: cero llamadas de más.
+  const sirveLaCache = (medida: MedidaRuta) =>
+    !opciones?.paraElViajeDelServicio || Boolean(medida.trazo);
+
   const enMemoria = cache.get(clave);
-  if (enMemoria) {
+  if (enMemoria && sirveLaCache(enMemoria)) {
     registrarAhorro('cache');
     return enMemoria;
   }
 
   const persistida = await leerCache<MedidaRuta>(`ruta:${clave}`, ttl);
-  if (persistida) {
+  if (persistida && sirveLaCache(persistida)) {
     cache.set(clave, persistida);
     registrarAhorro('cache');
     return persistida;

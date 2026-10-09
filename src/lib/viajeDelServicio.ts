@@ -28,6 +28,8 @@ function sirve(punto: {
  * ¿Hay que medir el viaje de este servicio?
  *  - Publicación nueva: solo si no trae ya un viaje medido.
  *  - Edición: si cambiaron las direcciones, o si nunca se midió.
+ *  - Y siempre que falte el TRAZO de la ruta (0049): sin él la página del cliente no puede
+ *    dibujar el recorrido (se mide UNA vez y se rellena para todos).
  * (Con las mismas direcciones, el viaje guardado sigue valiendo: no se vuelve a pagar.)
  */
 export function haceFaltaMedirElViaje(
@@ -48,12 +50,12 @@ export function haceFaltaMedirElViaje(
   ) {
     return false;
   }
-  if (!anteriores) return !servicio.destination_estimate;
+  if (!anteriores) return !servicio.destination_estimate || !servicio.trazoPolyline;
   const cambiaron =
     anteriores.origin_address !== servicio.origin_address ||
     anteriores.destination_address !== servicio.destination_address;
   if (cambiaron) return true;
-  return !servicio.destination_estimate;
+  return !servicio.destination_estimate || !servicio.trazoPolyline;
 }
 
 /** Mide el viaje y devuelve lo que hay que guardar en el servicio (null si no se pudo medir). */
@@ -70,7 +72,9 @@ export async function medirElViaje(
       address: servicio.destination_address || '',
       lat: servicio.destination_lat ?? null,
       lng: servicio.destination_lng ?? null,
-    }
+    },
+    // La medida del servicio alimenta la página del cliente: aquí sí hace falta el trazo.
+    { paraElViajeDelServicio: true }
   );
   if (!medida) return null;
   return {
