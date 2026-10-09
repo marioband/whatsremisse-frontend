@@ -71,6 +71,7 @@
     font-weight: 700; letter-spacing: .06em; border: 2px solid var(--tinta);
     border-radius: 6px; padding: 1px 7px; font-size: 13px;
   }
+  .unidad-datos { width: 100%; font-size: 13px; color: var(--tinta-suave); margin-top: 2px; }
   #acciones { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
   #centrar {
     flex: 1; border: 0; border-radius: 12px; padding: 12px 14px;
@@ -318,7 +319,7 @@ function pintarViaje(datos) {
   document.getElementById('punto-vivo').style.display = concluido ? 'none' : 'block';
 
   var con = document.getElementById('conductor');
-  if (datos.conductor && (datos.conductor.nombre || datos.conductor.placa)) {
+  if (datos.conductor && (datos.conductor.nombre || datos.conductor.placa || datos.conductor.marca)) {
     con.innerHTML = '';
     var quien = document.createElement('span');
     quien.textContent = 'Conductor: ' + (datos.conductor.nombre || 'en camino');
@@ -327,6 +328,15 @@ function pintarViaje(datos) {
       var placa = document.createElement('span');
       placa.id = 'placa'; placa.textContent = datos.conductor.placa;
       con.appendChild(placa);
+    }
+    // La unidad: marca y modelo, y el color — una línea suave debajo.
+    var nombreUnidad = [datos.conductor.marca, datos.conductor.modelo].filter(Boolean).join(' ');
+    var detalles = [nombreUnidad, datos.conductor.color].filter(Boolean).join(' · ');
+    if (detalles) {
+      var lineaUnidad = document.createElement('div');
+      lineaUnidad.className = 'unidad-datos';
+      lineaUnidad.textContent = detalles;
+      con.appendChild(lineaUnidad);
     }
     con.style.display = 'flex';
   }
