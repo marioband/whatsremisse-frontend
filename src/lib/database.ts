@@ -728,10 +728,14 @@ async function conReintentoDeEsquema<T>(llamada: () => Promise<T>, intentos = 2)
 
 /**
  * Cuánto se espera a la base antes de dar por COLGADA una escritura de pago (08-10-2026) y cuánto
- * a la lectura de comprobación que va después.
+ * a la lectura de comprobación que va después. Cuántos intentos se hacen y cuánto se espera entre
+ * uno y otro (09-10-2026), y el plazo del saludo de conexión al volver la app.
  */
 export const PLAZO_DE_ESCRITURA_MS = 4000;
 export const PLAZO_DE_LECTURA_MS = 3000;
+export const INTENTOS_DE_ESCRITURA = 3;
+export const PAUSA_ENTRE_INTENTOS_MS = 800;
+export const PLAZO_DE_CALENTAR_MS = 2200;
 
 /**
  * Una escritura de pago a prueba del teléfono (08-10-2026).
@@ -749,7 +753,11 @@ export const PLAZO_DE_LECTURA_MS = 3000;
  *     se cierra esa conexión muerta, así que la siguiente abre una nueva—.
  *  2. Antes de reintentar o de avisar, LEE la fila: la escritura pudo llegar igual (misma regla
  *     que `lib/errors.ts`). Si ya quedó como se quería, se devuelve como buena.
- *  3. Si no llegó, reintenta UNA vez; y vuelve a leer antes de dar error.
+ *  3. Si no llegó, espera una pausa corta y reintenta, hasta INTENTOS_DE_ESCRITURA veces, leyendo
+ *     la fila después de cada intento. La pausa importa: el 09-10-2026 el primer toque del usuario
+ *     falló DOS veces seguidas (dos intentos pegados) y los toques siguientes entraron bien;
+ *     dando un respiro entre intento e intento, la conexión muerta del teléfono se descarta y el
+ *     intento que va detrás sale por una nueva. El aviso final va con la última lectura hecha.
  */
 async function escribirPagoConPlazo(
   serviceId: string,
@@ -777,22 +785,48 @@ async function escribirPagoConPlazo(
     }
   };
 
-  try {
-    return await intento();
-  } catch (err) {
-    // La base contestó con su regla, o la petición se cortó: en los dos casos puede estar HECHO
-    // (el intento llegó tarde, o lo resolvió el otro teléfono). Se comprueba antes de fallar: al
-    // usuario no se le avisa de un fallo que no ocurrió.
-    const hecho = await comoQuedo();
-    if (hecho) return hecho;
-    if (!esFalloDeTransporte(err)) throw err;
+  let ultimoError: unknown;
+  for (let numIntento = 0; numIntento < INTENTOS_DE_ESCRITURA; numIntento += 1) {
     try {
       return await intento();
-    } catch (err2) {
-      const hecho2 = await comoQuedo();
-      if (hecho2) return hecho2;
-      throw err2;
+    } catch (err) {
+      ultimoError = err;
+      // La base contestó con su regla, o la petición se cortó: en los dos casos puede estar HECHO
+      // (el intento llegó tarde, o lo resolvió el otro teléfono). Se comprueba antes de fallar: al
+      // usuario no se le avisa de un fallo que no ocurrió.
+      const hecho = await comoQuedo();
+      if (hecho) return hecho;
+      if (!esFalloDeTransporte(err)) throw err;
+      if (numIntento < INTENTOS_DE_ESCRITURA - 1) {
+        await new Promise((resolver) => setTimeout(resolver, PAUSA_ENTRE_INTENTOS_MS));
+      }
     }
+  }
+  throw ultimoError;
+}
+
+/**
+ * Un saludo corto a la base para DESPERTAR la conexión (09-10-2026).
+ *
+ * Por qué: en el iPhone, al volver del fondo la conexión que quedó puede estar muerta; Safari no
+ * lo sabe hasta que la usa, y la primera petición real (la declaración del pago, por ejemplo) se
+ * come ese tiempo muerto y hasta se corta. Con este saludo —una lectura mínima con PLAZO— el que
+ * se lo come es él: si la conexión estaba muerta, se corta aquí (y esa conexión se descarta) y la
+ * acción que venga detrás del usuario sale por una nueva.
+ *
+ * Nunca avisa ni lanza: es un saludo, no una operación. Lo llama el guardián de «volver a la app»
+ * antes de releer los datos (MockStoreContext).
+ */
+export async function calentarConexionDeDatos(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const controlador = new AbortController();
+  const reloj = setTimeout(() => controlador.abort(), PLAZO_DE_CALENTAR_MS);
+  try {
+    await supabase.from('profiles').select('id').limit(1).abortSignal(controlador.signal);
+  } catch {
+    // Un saludo no se contesta: da igual si falló o se cortó.
+  } finally {
+    clearTimeout(reloj);
   }
 }
 

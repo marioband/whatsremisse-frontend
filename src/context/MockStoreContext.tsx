@@ -29,6 +29,7 @@ import {
   reportarProgresoDelConductor,
   archivarServicio,
   esFuncionAusente,
+  calentarConexionDeDatos,
   declararPagoDelServicio as declararPagoEnDb,
   resolverDeclaracionDePago as resolverDeclaracionEnDb,
   confirmarPagoDelServicio as confirmarPagoEnDb,
@@ -1029,7 +1030,10 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   useAlVolverALaApp(
     useCallback(() => {
       setGeneracionDeVuelta((n) => n + 1);
-      load();
+      // El saludo con plazo va PRIMERO y la relectura espera a que termine: si al volver la
+      // conexión del teléfono quedó muerta, se corta aquí (y esa conexión se descarta) en vez de
+      // comérsela la relectura y la acción que el usuario haga después (09-10-2026).
+      void calentarConexionDeDatos().then(() => load());
     }, [load])
   );
 
