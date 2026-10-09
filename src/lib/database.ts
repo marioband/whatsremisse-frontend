@@ -345,12 +345,17 @@ export async function fetchServicesForProvider(providerId: string): Promise<Serv
  * descargar todo el listado: el rechazo lo escribe el OTRO dispositivo y el
  * conductor no puede enterarse solo por el tiempo real.
  */
-export async function fetchServiceAlertById(serviceId: string): Promise<ServiceAlert | null> {
+export async function fetchServiceAlertById(
+  serviceId: string,
+  /** Plazo opcional: para cortar la lectura si el teléfono dejó la conexión colgada (08-10-2026). */
+  signal?: AbortSignal
+): Promise<ServiceAlert | null> {
   if (!isSupabaseConfigured) return null;
   const { data, error } = await supabase
     .from('service_alerts')
     .select('*')
     .eq('id', serviceId)
+    .abortSignal(signal as AbortSignal)
     .maybeSingle();
   if (error) throw error;
   return data ? mapServiceAlertFromDb(data as DbServiceAlert) : null;
@@ -722,40 +727,95 @@ async function conReintentoDeEsquema<T>(llamada: () => Promise<T>, intentos = 2)
 }
 
 /**
- * Confirmar el pago recibido, a prueba de un fallo de transporte (19-09-2026).
+ * Cuánto se espera a la base antes de dar por COLGADA una escritura de pago (08-10-2026) y cuánto
+ * a la lectura de comprobación que va después.
+ */
+export const PLAZO_DE_ESCRITURA_MS = 4000;
+export const PLAZO_DE_LECTURA_MS = 3000;
+
+/**
+ * Una escritura de pago a prueba del teléfono (08-10-2026).
  *
- * El usuario lo reportó así: «al intentar por primera vez hacer clic en confirmar pago salió
- * No se pudo confirmar el pago / El backend rechazó la confirmación / No hubo respuesta del
- * servidor». La RPC existe y responde (comprobado contra el backend: contesta su propia regla
- * `P0001`), así que lo que falló fue la RED en ese primer toque — el caso típico de iPhone al
- * volver del fondo, cuando Safari revive la pestaña y la petición muere.
+ * El usuario preguntó dos veces por lo mismo: el 19-09-2026 («al presionar el botón se queda
+ * presionado de 5 a 8 segundos, ¿a qué se debe tanto tiempo?») y el 08-10-2026 («el tiempo de
+ * carga es muy largo» al declarar el pago y al confirmar el «pago recibido»). Aquella vez se
+ * contestó que el tiempo lo ponía el servidor y se puso una señal de carga; medido de verdad,
+ * las funciones contestan en 20-80 ms y la escritura en la base tarda 0,7-4 ms — el que se queda
+ * mudo es el TELÉFONO, y es la familia del 18-09: Safari congela la pestaña, la conexión se
+ * muere por detrás y la primera petición al volver o se cae o espera a un tiempo del sistema.
  *
- * Qué se hace, en este orden:
- *  1. Se confirma.
- *  2. Si el fallo es de TRANSPORTE (no hay respuesta, no hay error de la base), **primero se
- *     lee la fila**: la escritura pudo haber llegado igualmente y el pago ya estaría
- *     confirmado. Es la regla del proyecto con los fallos de transporte (ver `lib/errors.ts`).
- *  3. Si no llegó, se reintenta UNA vez; solo entonces se avisa del error.
+ * Qué hace, en orden:
+ *  1. Escribe con PLAZO (`abortSignal`): una petición colgada se corta a los 4 s —y al cortarla
+ *     se cierra esa conexión muerta, así que la siguiente abre una nueva—.
+ *  2. Antes de reintentar o de avisar, LEE la fila: la escritura pudo llegar igual (misma regla
+ *     que `lib/errors.ts`). Si ya quedó como se quería, se devuelve como buena.
+ *  3. Si no llegó, reintenta UNA vez; y vuelve a leer antes de dar error.
+ */
+async function escribirPagoConPlazo(
+  serviceId: string,
+  escribir: (signal: AbortSignal) => Promise<ServiceAlert | null>,
+  yaEstaHecho: (fila: ServiceAlert) => boolean
+): Promise<ServiceAlert | null> {
+  const intento = async (): Promise<ServiceAlert | null> => {
+    const controlador = new AbortController();
+    const reloj = setTimeout(() => controlador.abort(), PLAZO_DE_ESCRITURA_MS);
+    try {
+      return await escribir(controlador.signal);
+    } finally {
+      clearTimeout(reloj);
+    }
+  };
+
+  const comoQuedo = async (): Promise<ServiceAlert | null> => {
+    const controlador = new AbortController();
+    const reloj = setTimeout(() => controlador.abort(), PLAZO_DE_LECTURA_MS);
+    try {
+      const fila = await fetchServiceAlertById(serviceId, controlador.signal).catch(() => null);
+      return fila && yaEstaHecho(fila) ? fila : null;
+    } finally {
+      clearTimeout(reloj);
+    }
+  };
+
+  try {
+    return await intento();
+  } catch (err) {
+    // La base contestó con su regla, o la petición se cortó: en los dos casos puede estar HECHO
+    // (el intento llegó tarde, o lo resolvió el otro teléfono). Se comprueba antes de fallar: al
+    // usuario no se le avisa de un fallo que no ocurrió.
+    const hecho = await comoQuedo();
+    if (hecho) return hecho;
+    if (!esFalloDeTransporte(err)) throw err;
+    try {
+      return await intento();
+    } catch (err2) {
+      const hecho2 = await comoQuedo();
+      if (hecho2) return hecho2;
+      throw err2;
+    }
+  }
+}
+
+/**
+ * Confirmar el pago recibido, a prueba de un fallo de transporte (19-09-2026). El usuario lo
+ * reportó así: «al intentar por primera vez hacer clic en confirmar pago salió No se pudo
+ * confirmar el pago / El backend rechazó la confirmación / No hubo respuesta del servidor». Lo
+ * hace `escribirPagoConPlazo`: escribir con plazo, leer la fila, reintentar una vez.
  */
 export async function confirmarPagoDelServicio(serviceId: string): Promise<ServiceAlert | null> {
   if (!isSupabaseConfigured) return null;
-  const confirmar = () =>
-    conReintentoDeEsquema(async () => {
-      const { data: fila, error } = await supabase.rpc('confirmar_pago_recibido', {
-        p_service_id: serviceId,
-      });
-      if (error) throw error;
-      return fila;
-    });
-
-  try {
-    return aFilaDeRpc(await confirmar());
-  } catch (err) {
-    if (!esFalloDeTransporte(err)) throw err;
-    const enLaBase = await fetchServiceAlertById(serviceId).catch(() => null);
-    if (enLaBase && enLaBase.pago_estado === 'CONFIRMADO') return enLaBase;
-    return aFilaDeRpc(await confirmar());
-  }
+  return escribirPagoConPlazo(
+    serviceId,
+    (signal) =>
+      conReintentoDeEsquema(async () => {
+        const { data, error } = await supabase
+          .rpc('confirmar_pago_recibido', { p_service_id: serviceId })
+          .abortSignal(signal);
+        if (error) throw error;
+        return aFilaDeRpc(data);
+      }),
+    (fila) => fila.pago_estado === 'CONFIRMADO'
+  );
 }
 
 /**
@@ -859,40 +919,56 @@ function aFilaDeRpc(data: unknown): ServiceAlert | null {
   return fila ? mapServiceAlertFromDb(fila as DbServiceAlert) : null;
 }
 
-/** El conductor declara ("Yo pago" / "Me deben") el monto del servicio finalizado. */
+/**
+ * El conductor declara ("Yo pago" / "Me deben") el monto del servicio finalizado.
+ *
+ * Desde el 08-10-2026 va por `escribirPagoConPlazo` (ver ahí el porqué): el usuario reportaba que
+ * esta escritura «carga demasiado tiempo» en el teléfono.
+ */
 export async function declararPagoDelServicio(
   serviceId: string,
   direccion: 'DRIVER_PAYS_PROVIDER' | 'PROVIDER_PAYS_DRIVER',
   monto: number
 ): Promise<ServiceAlert | null> {
   if (!isSupabaseConfigured) return null;
-  const data = await conReintentoDeEsquema(async () => {
-    const { data: fila, error } = await supabase.rpc('declarar_pago_servicio', {
-      p_service_id: serviceId,
-      p_direccion: direccion,
-      p_monto: monto,
-    });
-    if (error) throw error;
-    return fila;
-  });
-  return aFilaDeRpc(data);
+  return escribirPagoConPlazo(
+    serviceId,
+    (signal) =>
+      conReintentoDeEsquema(async () => {
+        const { data, error } = await supabase
+          .rpc('declarar_pago_servicio', {
+            p_service_id: serviceId,
+            p_direccion: direccion,
+            p_monto: monto,
+          })
+          .abortSignal(signal);
+        if (error) throw error;
+        return aFilaDeRpc(data);
+      }),
+    // La declaración cuenta como hecha si quedó declarada CON ESE monto: un monto distinto es
+    // otra intención del conductor y no se puede dar por cumplida.
+    (fila) => fila.pago_estado === 'DECLARADO' && Number(fila.pago_monto) === Number(monto)
+  );
 }
 
-/** El proveedor acepta o rechaza el monto declarado. */
+/** El proveedor acepta o rechaza el monto declarado (con el mismo plazo y reintento que el resto). */
 export async function resolverDeclaracionDePago(
   serviceId: string,
   aceptar: boolean
 ): Promise<ServiceAlert | null> {
   if (!isSupabaseConfigured) return null;
-  const data = await conReintentoDeEsquema(async () => {
-    const { data: fila, error } = await supabase.rpc('resolver_declaracion_de_pago', {
-      p_service_id: serviceId,
-      p_aceptar: aceptar,
-    });
-    if (error) throw error;
-    return fila;
-  });
-  return aFilaDeRpc(data);
+  return escribirPagoConPlazo(
+    serviceId,
+    (signal) =>
+      conReintentoDeEsquema(async () => {
+        const { data, error } = await supabase
+          .rpc('resolver_declaracion_de_pago', { p_service_id: serviceId, p_aceptar: aceptar })
+          .abortSignal(signal);
+        if (error) throw error;
+        return aFilaDeRpc(data);
+      }),
+    (fila) => fila.pago_estado === (aceptar ? 'ACEPTADO' : 'RECHAZADO')
+  );
 }
 
 /** Datos de pago del conductor: solo el proveedor del servicio y solo en el caso B. */

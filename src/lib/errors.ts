@@ -76,7 +76,12 @@ export function esFalloDeTransporte(err: unknown): boolean {
     texto.includes('network request failed') ||
     texto.includes('networkerror') ||
     texto.includes('network error') ||
-    texto.includes('load failed')
+    texto.includes('load failed') ||
+    // Petición cortada por nuestro propio plazo (08-10-2026) o por el teléfono (Safari al volver
+    // del fondo): supabase-js la entrega como «AbortError: This operation was aborted», con
+    // `code` vacío y sin respuesta del servidor. Sin esto se contaría como un error de la base y
+    // no se comprobaría si la escritura llegó igualmente.
+    texto.includes('abort')
   );
 }
 
