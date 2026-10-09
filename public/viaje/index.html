@@ -250,6 +250,31 @@ capasLejos.forEach(function (capa) {
   if (capa.id.indexOf('autopistas') >= 0 || capa.id.indexOf('carreteras') >= 0) delete capa.maxzoom;
 });
 
+// ----------------------------------------------------------------------------
+// ESTABLECIMIENTOS REFERENTES (aeropuerto, centros comerciales, hospitales, universidades…):
+// solo en el mapa de cerca (Lima). El dato trae su importancia en «min_zoom» —manda la más
+// importante— y sólo se nombran los que le tocan a cada zoom, para no ensuciar el mapa.
+// ----------------------------------------------------------------------------
+var POIS_REFERENTES = ['aerodrome', 'mall', 'department_store', 'hospital', 'university', 'college',
+  'stadium', 'sports_centre', 'museum', 'attraction', 'heritage', 'landmark', 'park', 'station',
+  'bus_station', 'theatre', 'cinema', 'marketplace', 'place_of_worship', 'zoo'];
+var filtroPois = ['all', ['has', 'name'],
+  ['in', ['get', 'kind'], ['literal', POIS_REFERENTES]],
+  ['<=', ['get', 'min_zoom'], ['zoom']]];
+var capasPois = [
+  { id: 'cerca-pois-punto', type: 'circle', source: 'cerca', 'source-layer': 'pois', minzoom: 11,
+    filter: filtroPois,
+    paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 14, 2.4, 16, 3.4],
+             'circle-color': '#7A8087', 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': .8 } },
+  { id: 'cerca-pois-nombre', type: 'symbol', source: 'cerca', 'source-layer': 'pois', minzoom: 11,
+    filter: filtroPois,
+    layout: { 'text-field': ['get', 'name'], 'text-font': ['NotoSansRegular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 11, 9.5, 14, 11, 16, 12],
+      'text-anchor': 'top', 'text-offset': [0, .7],
+      'symbol-sort-key': ['coalesce', ['get', 'min_zoom'], 20] },
+    paint: { 'text-color': '#4A5056', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.2 } }
+];
+
 var estiloGris = {
   version: 8,
   glyphs: '/viaje/vendor/fuentes/{fontstack}/{range}.pbf',
@@ -266,7 +291,7 @@ var estiloGris = {
     { id: 'limites', type: 'line', source: 'base', 'source-layer': 'boundaries', minzoom: 3,
       filter: ['in', ['get', 'kind'], ['literal', ['country', 'region']]],
       paint: { 'line-color': '#BDBBB7', 'line-width': .9, 'line-dasharray': [2, 2] } }
-  ].concat(capasLejos).concat(capasCerca)
+  ].concat(capasLejos).concat(capasCerca).concat(capasPois)
 };
 
 function ocultarVelo() {
@@ -435,11 +460,31 @@ function pintarViaje(datos) {
   intentarRuta();
 }
 
+// El punto se desplaza ARMONIOSAMENTE al nuevo lugar declarado: nada de saltos cada 15 s.
+// Se interpola en el navegador durante ~2,4 s (el resto del tiempo queda quieto: así lo ve
+// el cliente como una unidad avanzando). Si el salto fuera gigante (un dato raro), se coloca
+// directo en vez de pasear por media ciudad.
+var animacionUnidad = null;
+function moverUnidadConSuavidad(destino) {
+  var desde = marcadorUnidad.getLngLat();
+  if (animacionUnidad) { cancelAnimationFrame(animacionUnidad); animacionUnidad = null; }
+  var salto = Math.abs(desde.lng - destino[0]) + Math.abs(desde.lat - destino[1]);
+  if (salto > 0.03) { marcadorUnidad.setLngLat(destino); return; }
+  var t0 = performance.now(), DURACION = 2400;
+  function paso(t) {
+    var f = Math.min(1, (t - t0) / DURACION);
+    marcadorUnidad.setLngLat([desde.lng + (destino[0] - desde.lng) * f,
+                              desde.lat + (destino[1] - desde.lat) * f]);
+    animacionUnidad = f < 1 ? requestAnimationFrame(paso) : null;
+  }
+  animacionUnidad = requestAnimationFrame(paso);
+}
+
 function actualizarUnidad(datos) {
   if (datos.posicion && typeof datos.posicion.lat === 'number') {
     var destino = [datos.posicion.lng, datos.posicion.lat];
     ultimoLatLng = destino;
-    if (marcadorUnidad) marcadorUnidad.setLngLat(destino);
+    if (marcadorUnidad) moverUnidadConSuavidad(destino);
     var nucleo = document.querySelector('#auto .nucleo');
     if (nucleo) nucleo.style.background = getComputedStyle(document.documentElement).getPropertyValue('--marca') || '#2D2D2D';
     var fecha = datos.posicion.publicado_at ? new Date(datos.posicion.publicado_at) : null;
