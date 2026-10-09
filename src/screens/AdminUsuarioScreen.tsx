@@ -90,15 +90,16 @@ export function AdminUsuarioScreen() {
     ejecutar(`${etiqueta} activado`, () => panelActivarMembresia(usuario.id, dias, false));
   };
 
-  const activarSinVencimiento = () => {
+  const activarPromocional = () => {
     Alert.alert(
-      'Premium sin vencimiento',
-      'La cuenta queda premium para siempre, hasta que tú se lo quites. Úsalo con quien no va a pagar por transferencia.',
+      'Membresía promocional',
+      'La cuenta queda con acceso completo y sin fecha de corte, hasta que tú se lo quites. Úsalo para cortesías o promociones.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Sí, sin vencimiento',
-          onPress: () => ejecutar('Sin vencimiento activado', () => panelActivarMembresia(usuario.id, 30, true)),
+          text: 'Sí, marcar promocional',
+          onPress: () =>
+            ejecutar('Promocional asignada', () => panelActivarMembresia(usuario.id, 30, true)),
         },
       ]
     );
@@ -158,7 +159,7 @@ export function AdminUsuarioScreen() {
               usuario.subscription_expires_at
                 ? fechaCorta(usuario.subscription_expires_at)
                 : esPremium
-                  ? 'Sin vencimiento'
+                  ? 'Sin fecha de corte'
                   : '—'
             }
           />
@@ -191,13 +192,17 @@ export function AdminUsuarioScreen() {
 
         <TouchableOpacity
           style={[styles.botonSecundario, ocupado && styles.botonApagado]}
-          onPress={activarSinVencimiento}
+          onPress={activarPromocional}
           disabled={ocupado}
           accessibilityRole="button"
-          accessibilityLabel="Activar sin vencimiento"
+          accessibilityLabel="Marcar promocional"
         >
-          <Text style={styles.botonSecundarioTexto}>Sin vencimiento</Text>
+          <Text style={styles.botonSecundarioTexto}>Promocional</Text>
         </TouchableOpacity>
+        <Text style={styles.nota}>
+          Promocional deja la cuenta con acceso completo y sin fecha de corte (cortesías). Se quita a
+          mano cuando quieras.
+        </Text>
 
         {esPremium && (
           <TouchableOpacity

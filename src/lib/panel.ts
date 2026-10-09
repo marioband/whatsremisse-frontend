@@ -24,7 +24,7 @@ export const FILTROS: readonly { id: FiltroMembresia; etiqueta: string }[] = [
   { id: 'TODAS', etiqueta: 'Todas' },
   { id: 'POR_VENCER', etiqueta: 'Por vencer' },
   { id: 'VENCIDAS', etiqueta: 'Vencidas' },
-  { id: 'SIN_MEMBRESIA', etiqueta: 'Sin membresía' },
+  { id: 'SIN_MEMBRESIA', etiqueta: 'Inactivas' },
   { id: 'ACTIVAS', etiqueta: 'Activas' },
 ];
 
@@ -135,13 +135,15 @@ export function textoDeEstado(estado: EstadoMembresia | string): string {
     case 'ACTIVA':
       return 'Activa';
     case 'SIN_VENCIMIENTO':
-      return 'Sin vencimiento';
+      return 'Promocional';
     case 'POR_VENCER':
       return 'Por vencer';
     case 'VENCIDA':
-      return 'Vencida';
+      // Un vencimiento devuelve la cuenta a su estado normal: Inactiva (con la fecha a la vista,
+      // para poder renovar a tiempo).
+      return 'Inactiva';
     default:
-      return 'Sin membresía';
+      return 'Inactiva';
   }
 }
 
@@ -149,12 +151,13 @@ export function textoDeEstado(estado: EstadoMembresia | string): string {
 export function colorDeEstado(estado: EstadoMembresia | string): string {
   switch (String(estado).toUpperCase()) {
     case 'ACTIVA':
-    case 'SIN_VENCIMIENTO':
       return '#2E9E5B';
+    case 'SIN_VENCIMIENTO':
+      // Promocional: un color propio (verde también sería correcto, pero así se ve de un vistazo).
+      return '#7A5AF8';
     case 'POR_VENCER':
       return '#B8860B';
     case 'VENCIDA':
-      return '#C2333F';
     default:
       return '#888888';
   }
@@ -172,19 +175,19 @@ export function etiquetaDeMembresia(usuario: {
 
   switch (estado) {
     case 'SIN_VENCIMIENTO':
-      return 'Premium sin vencimiento';
+      return 'Promocional';
     case 'ACTIVA':
-      return dias === null || dias === undefined ? 'Premium activo' : `Premium: ${dias} día(s)`;
+      return dias === null || dias === undefined ? 'Activa' : `Activa: ${dias} día(s)`;
     case 'POR_VENCER':
       return dias === null || dias === undefined || dias <= 0
-        ? 'Vence hoy'
-        : `Vence en ${dias} día(s)`;
+        ? 'Activa · vence hoy'
+        : `Activa · vence en ${dias} día(s)`;
     case 'VENCIDA':
       return dias === null || dias === undefined || dias >= 0
-        ? 'Premium vencido'
-        : `Vencida hace ${Math.abs(dias)} día(s)`;
+        ? 'Inactiva · venció'
+        : `Inactiva · venció hace ${Math.abs(dias)} día(s)`;
     default:
-      return 'Cuenta gratuita';
+      return 'Inactiva';
   }
 }
 
@@ -267,7 +270,7 @@ export function resumenEnFilas(resumen: ResumenDelPanel): {
     {
       etiqueta: 'Membresías activas',
       valor: numeroConMiles(m.activas),
-      nota: `${numeroConMiles(m.sin_vencimiento)} sin vencimiento`,
+      nota: `${numeroConMiles(m.sin_vencimiento)} promocionales`,
       destacado: false,
     },
     {
@@ -277,15 +280,18 @@ export function resumenEnFilas(resumen: ResumenDelPanel): {
       destacado: m.por_vencer_7 > 0,
     },
     {
-      etiqueta: 'Vencidas',
-      valor: numeroConMiles(m.vencidas),
-      nota: m.vencidas > 0 ? 'Ya no tienen las funciones de pago' : 'Ninguna vencida',
-      destacado: m.vencidas > 0,
+      etiqueta: 'Promocionales',
+      valor: numeroConMiles(m.sin_vencimiento),
+      nota: 'Acceso completo, sin fecha de corte',
+      destacado: false,
     },
     {
-      etiqueta: 'Sin membresía',
-      valor: numeroConMiles(m.sin_membresia),
-      nota: 'Cuentas gratuitas',
+      etiqueta: 'Inactivas',
+      valor: numeroConMiles(m.sin_membresia + m.vencidas),
+      nota:
+        m.vencidas > 0
+          ? `${numeroConMiles(m.vencidas)} vencieron y se pueden renovar`
+          : 'Ninguna venció',
       destacado: false,
     },
     {
@@ -349,10 +355,10 @@ export function detalleDeAccion(accion?: string | null, detalle?: Record<string,
     case 'MEMBRESIA_ACTIVADA': {
       const partes: string[] = [];
       const sinVencimiento = d.sin_vencimiento === true;
-      if (sinVencimiento) partes.push('sin vencimiento');
+      if (sinVencimiento) partes.push('promocional');
       else partes.push(`${texto('dias') || '—'} día(s)`);
       const antes = texto('antes_tier');
-      if (antes) partes.push(`antes: ${antes === 'PREMIUM' ? 'premium' : 'gratuita'}`);
+      if (antes) partes.push(`antes: ${antes === 'PREMIUM' ? 'activa' : 'inactiva'}`);
       return partes.join(' · ');
     }
     case 'MEMBRESIA_QUITADA': {
