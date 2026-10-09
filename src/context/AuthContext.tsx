@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, AuthError } from '@supabase/supabase-js';
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 
 import { usuarioParaPintarSinRed, debeTaparConElLogo } from '../lib/arranque';
 import { configurarAlmacen, limpiarCacheCompleta } from '../lib/cache';
@@ -88,6 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  /**
+   * La app ya se pintó con lo guardado (perfil y sesión del teléfono). Con esto, el logo NO
+   * vuelve a taparla cuando llega `SIGNED_IN` —que supabase dispara en cada recarga— (08-10-2026).
+   */
+  const yaPintadoRef = useRef(false);
   const [requiresProfileSetup, setRequiresProfileSetup] = useState(false);
   const [phone, setPhone] = useState<string | null>(null);
 
@@ -123,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const idParaPintar = usuarioParaPintarSinRed(perfilGuardado, usuarioGuardado);
         if (idParaPintar && mounted) {
           setSession({ user: { id: idParaPintar } } as unknown as Session);
+          yaPintadoRef.current = true;
           setLoading(false);
         }
 
@@ -151,7 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // dispara `TOKEN_REFRESHED` justo cuando la app vuelve después de un rato (el token venció
       // mientras estaba fuera): poner el logo en ese momento era la «carga al volver» que
       // reportó el usuario el 20-09-2026 (ver `lib/arranque`).
-      if (debeTaparConElLogo(evento)) setLoading(true);
+      // El segundo dato importa: `SIGNED_IN` también salta al recuperar la sesión guardada en una
+      // recarga (ver `lib/arranque`), así que solo se tapa si la app todavía no está pintada.
+      if (debeTaparConElLogo(evento, yaPintadoRef.current)) setLoading(true);
       setSession(newSession);
       if (newSession?.user) {
         await loadProfile(newSession.user.id);

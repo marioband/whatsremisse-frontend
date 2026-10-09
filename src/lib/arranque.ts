@@ -41,10 +41,26 @@ export function usuarioParaPintarSinRed(
 }
 
 /**
- * El refresco de token que hace Supabase al volver NO debe volver a poner la pantalla de carga.
- * Estuvo puesto y era, literalmente, la «carga al volver» que reportó el usuario: la app estaba
- * pintada, llegaba `TOKEN_REFRESHED` y el logo tapaba todo otra vez.
+ * ¿Este evento de la sesión debe volver a poner la pantalla de carga (el logo)?
+ *
+ * OJO — LO QUE SE DESCUBRIÓ EL 08-10-2026: **`SIGNED_IN` NO significa «entrar de verdad»**.
+ * `supabase.auth.onAuthStateChange` lo dispara TAMBIÉN cada vez que la página se recarga y la
+ * sesión se recupera del almacén del teléfono: en `@supabase/auth-js` (`GoTrueClient`,
+ * `_recoverAndRefresh`) está escrito tal cual — al leer la sesión guardada llama a
+ * `_notifyAllSubscribers('SIGNED_IN', currentSession)`. Como esta regla tapaba la app en
+ * `SIGNED_IN` y solo la destapaba cuando la red devolvía el perfil, volver a la app (botón «Ir a
+ * origen/destino» → mapa → atrás, que recarga la página) dejaba **el logo a pantalla completa
+ * —fondo negro de marca— por largo tiempo**, que es lo que el usuario reportó. `TOKEN_REFRESHED`
+ * ya se había quitado el 20-09; faltaba este.
+ *
+ * La regla ahora mira las dos cosas: el evento Y si la app YA ESTÁ PINTADA con lo guardado.
+ *   - `SIGNED_OUT` → siempre se tapa (el teléfono tiene que volver al registro).
+ *   - `SIGNED_IN` → se tapa SOLO si no había nada pintado (un alta de verdad, en un teléfono
+ *     donde todavía no hay perfil): ahí el logo cubre mientras se resuelve quién es.
+ *   - Cualquier otro (`TOKEN_REFRESHED`, `INITIAL_SESSION`, `USER_UPDATED`…) → nunca.
  */
-export function debeTaparConElLogo(evento: string): boolean {
-  return evento === 'SIGNED_IN' || evento === 'SIGNED_OUT';
+export function debeTaparConElLogo(evento: string, yaPintado: boolean): boolean {
+  if (evento === 'SIGNED_OUT') return true;
+  if (evento !== 'SIGNED_IN') return false;
+  return !yaPintado;
 }
