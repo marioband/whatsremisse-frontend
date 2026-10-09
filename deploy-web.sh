@@ -133,6 +133,26 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3.5) La página pública del viaje: incrustarle la dirección y la clave
+# ---------------------------------------------------------------------------
+# La página vive en public/viaje/index.html con dos huecos (__WR_URL__ y __WR_CLAVE__).
+# Aquí se rellenan con lo mismo que ya usa la app (del .env): así la clave no vive
+# en el repositorio, solo en el servidor y en lo publicado. Si el árbol es viejo y
+# no tiene la página, se salta sin fallar.
+PAGINA_VIAJE="web-build/viaje/index.html"
+if [ -f "$PAGINA_VIAJE" ]; then
+  echo "=== Incrustando la dirección y la clave en la página del viaje ==="
+  sed -i "s|__WR_URL__|$API_URL|g; s|__WR_CLAVE__|$CLAVE|g" "$PAGINA_VIAJE"
+  if ! grep -q -F "$CLAVE" "$PAGINA_VIAJE"; then
+    echo "ERROR: la página del viaje quedó sin la clave incrustada. No se publica."
+    exit 1
+  fi
+  echo "    listo: la página del viaje ya lleva la dirección y la clave"
+else
+  echo "=== (este build no trae la página del viaje: se salta) ==="
+fi
+
+# ---------------------------------------------------------------------------
 # 4) Copiar a la carpeta que sirve nginx (con respaldo de la anterior)
 # ---------------------------------------------------------------------------
 echo "=== Copiando a $DESTINO ==="

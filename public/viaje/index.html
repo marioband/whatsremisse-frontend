@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Viaje en vivo · WhatsRemisse</title>
+<link rel="stylesheet" href="/viaje/vendor/maplibre-gl.css">
+<style>
+  :root {
+    --marca: #2D2D2D;        /* se reemplaza con el color principal del proveedor */
+    --marca-texto: #FFFFFF;  /* se ajusta solo según el contraste */
+    --papel: #FFFFFF;
+    --tinta: #1F2937;
+    --tinta-suave: #6B7280;
+    --sombra: 0 6px 24px rgba(15, 23, 42, .18);
+  }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--tinta);
+    background: #EDEDEA;
+    -webkit-text-size-adjust: 100%;
+  }
+  #mapa { position: fixed; inset: 0; }
+
+  .tarjeta {
+    background: var(--papel);
+    border-radius: 16px;
+    box-shadow: var(--sombra);
+  }
+
+  /* ---------- Cabecera (la marca del proveedor) ---------- */
+  #cabecera {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 12px;
+    background: var(--marca);
+    color: var(--marca-texto);
+    display: flex; align-items: center; gap: 12px;
+    z-index: 30;
+    transition: background .3s;
+  }
+  #logo { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; background: rgba(255,255,255,.92); padding: 4px; display: none; }
+  #cabecera .quien { min-width: 0; flex: 1; }
+  #marca { font-weight: 700; font-size: 17px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #estado { font-size: 13px; opacity: .92; display: flex; align-items: center; gap: 6px; }
+  #punto-vivo { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: latido 1.6s ease-in-out infinite; }
+  @keyframes latido { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+  #reloj { font-size: 12px; opacity: .75; margin-top: 2px; }
+
+  /* ---------- Abajo: el viaje ---------- */
+  #pie {
+    position: fixed; left: 12px; right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: 14px;
+    z-index: 30;
+  }
+  .tramo { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+  .puntoA, .puntoB {
+    flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff; margin-top: 1px;
+  }
+  .puntoA { background: #111827; }
+  .puntoB { background: var(--marca); }
+  .texto-tramo { min-width: 0; }
+  .rotulo { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta-suave); }
+  .direccion { font-size: 14px; line-height: 1.35; }
+  #conductor { font-size: 14px; margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #placa {
+    font-weight: 700; letter-spacing: .06em; border: 2px solid var(--tinta);
+    border-radius: 6px; padding: 1px 7px; font-size: 13px;
+  }
+  #acciones { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  #centrar {
+    flex: 1; border: 0; border-radius: 12px; padding: 12px 14px;
+    background: var(--marca); color: var(--marca-texto);
+    font-size: 15px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  #centrar:active { opacity: .85; }
+  #aviso { font-size: 11px; color: var(--tinta-suave); margin-top: 10px; line-height: 1.45; }
+  #aviso a { color: inherit; }
+
+  /* ---------- Avisos flotantes ---------- */
+  #sin-conexion {
+    position: fixed; top: calc(74px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    background: #B45309; color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 999px;
+    box-shadow: var(--sombra); z-index: 40; display: none;
+  }
+
+  /* ---------- Estados de pantalla completa ---------- */
+  #velo {
+    position: fixed; inset: 0; background: #F4F4F2; z-index: 60;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    padding: 28px; text-align: center;
+  }
+  #velo.oculto { display: none; }
+  #rueda {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 4px solid rgba(0,0,0,.12); border-top-color: var(--marca);
+    animation: girar 1s linear infinite;
+  }
+  @keyframes girar { to { transform: rotate(360deg); } }
+  #velo h1 { font-size: 19px; margin: 0; }
+  #velo p { margin: 0; color: var(--tinta-suave); font-size: 14px; line-height: 1.5; max-width: 320px; }
+  #velo .firma { font-weight: 700; font-size: 15px; }
+
+  .maplibregl-ctrl-attrib { font-size: 10px; }
+</style>
+</head>
+<body>
+<div id="mapa" aria-label="Mapa del viaje"></div>
+
+<header id="cabecera">
+  <img id="logo" alt="" src="">
+  <div class="quien">
+    <div id="marca">Viaje en vivo</div>
+    <div id="estado"><span id="punto-vivo"></span><span id="estado-texto">Conectando…</span></div>
+    <div id="reloj"></div>
+  </div>
+</header>
+
+<div id="sin-conexion">Sin conexión: reintentando…</div>
+
+<div id="pie" class="tarjeta">
+  <div class="tramo">
+    <div class="puntoA">A</div>
+    <div class="texto-tramo"><div class="rotulo">Recojo</div><div class="direccion" id="origen">—</div></div>
+  </div>
+  <div class="tramo">
+    <div class="puntoB">B</div>
+    <div class="texto-tramo"><div class="rotulo">Destino</div><div class="direccion" id="destino">—</div></div>
+  </div>
+  <div id="conductor" style="display:none"></div>
+  <div id="acciones">
+    <button id="centrar" type="button">Centrar en la unidad</button>
+  </div>
+  <div id="aviso">
+    Compártelo solo con quien quieras que vea el viaje: muestra la unidad, la placa y el nombre del conductor.
+    El proveedor puede desactivar este enlace. <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Mapa © OpenStreetMap</a>
+  </div>
+</div>
+
+<div id="velo">
+  <div id="rueda"></div>
+  <h1 id="velo-titulo">Buscando el viaje…</h1>
+  <p id="velo-texto">Un momento, estamos abriendo el mapa.</p>
+  <p class="firma" id="velo-firma" style="display:none">WhatsRemisse</p>
+</div>
+
+<script src="/viaje/vendor/maplibre-gl.js"></script>
+<script src="/viaje/vendor/pmtiles.js"></script>
+<script>
+// ============================================================================
+// Página pública del viaje (whatsremisse.tech/viaje/<token>).
+// No tiene sesión: le pide los datos a la función del servidor y nada más.
+// Las dos piezas __WR_URL__ / __WR_CLAVE__ las incrusta deploy-web.sh desde el
+// .env del servidor (así no viven en el repositorio).
+// ============================================================================
+var WR_URL = '__WR_URL__';
+var WR_CLAVE = '__WR_CLAVE__';
+
+var token = decodeURIComponent((location.pathname.split('/').filter(Boolean).pop() || ''));
+var mapa = null, marcadorUnidad = null, marcadorA = null, marcadorB = null;
+var ultimosDatos = null, trazoDibujado = null;
+var primeraVez = true, fallosSeguidos = 0, ultimoLatLng = null, sigue = true;
+
+var estiloGris = {
+  version: 8,
+  sources: {
+    base: {
+      type: 'vector',
+      url: 'pmtiles:///mapa/peru.pmtiles',
+      attribution: '© OpenStreetMap'
+    }
+  },
+  layers: [
+    { id: 'fondo', type: 'background', paint: { 'background-color': '#F4F4F2' } },
+    { id: 'tierra', type: 'fill', source: 'base', 'source-layer': 'earth', paint: { 'fill-color': '#F4F4F2' } },
+    { id: 'cobertura', type: 'fill', source: 'base', 'source-layer': 'landcover', paint: { 'fill-color': '#EFEFEC' } },
+    { id: 'usos', type: 'fill', source: 'base', 'source-layer': 'landuse', paint: { 'fill-color': '#EDEDEA' } },
+    { id: 'agua', type: 'fill', source: 'base', 'source-layer': 'water', paint: { 'fill-color': '#D9DFE4' } },
+    { id: 'edificios', type: 'fill', source: 'base', 'source-layer': 'buildings', minzoom: 14, paint: { 'fill-color': '#E6E5E1' } },
+    { id: 'vias-menores', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 11,
+      filter: ['in', ['get', 'kind'], ['literal', ['minor_road']]],
+      paint: { 'line-color': '#E1E0DC', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, .5, 14, 2, 16, 6] } },
+    { id: 'vias-mayores', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 8,
+      filter: ['in', ['get', 'kind'], ['literal', ['major_road']]],
+      paint: { 'line-color': '#D3D2CE', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, .5, 11, 1.2, 14, 3.4, 16, 9] } },
+    { id: 'autopistas', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 6,
+      filter: ['in', ['get', 'kind'], ['literal', ['highway']]],
+      paint: { 'line-color': '#C6C5C1', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, .6, 10, 1.6, 14, 4.4, 16, 11] } },
+    { id: 'vias-rail', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 10,
+      filter: ['==', ['get', 'kind'], 'rail'],
+      paint: { 'line-color': '#C9C8C4', 'line-width': 1, 'line-dasharray': [2, 2] } },
+    { id: 'limites', type: 'line', source: 'base', 'source-layer': 'boundaries', minzoom: 3,
+      filter: ['in', ['get', 'kind'], ['literal', ['country', 'region']]],
+      paint: { 'line-color': '#BDBBB7', 'line-width': .9, 'line-dasharray': [2, 2] } }
+  ]
+};
+
+function ocultarVelo() {
+  var velo = document.getElementById('velo');
+  if (!velo.classList.contains('oculto')) velo.classList.add('oculto');
+}
+function mostrarVelo(titulo, texto) {
+  var velo = document.getElementById('velo');
+  velo.classList.remove('oculto');
+  document.getElementById('rueda').style.display = 'none';
+  document.getElementById('velo-titulo').textContent = titulo;
+  document.getElementById('velo-texto').textContent = texto;
+  document.getElementById('velo-firma').style.display = 'block';
+}
+function contrasteSobre(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return '#FFFFFF';
+  var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 165 ? '#111827' : '#FFFFFF';
+}
+function aplicarMarca(marca) {
+  if (!marca) return;
+  var principal = /^#[0-9a-f]{6}$/i.test(marca.color_principal || '') ? marca.color_principal : '#2D2D2D';
+  document.documentElement.style.setProperty('--marca', principal);
+  document.documentElement.style.setProperty('--marca-texto', contrasteSobre(principal));
+  document.getElementById('marca').textContent = marca.nombre || 'Viaje en vivo';
+  document.title = (marca.nombre ? marca.nombre + ' · ' : '') + 'Viaje en vivo';
+  if (marca.logo_url) {
+    var logo = document.getElementById('logo');
+    logo.src = marca.logo_url; logo.style.display = 'block';
+  }
+  if (mapa) {
+    if (mapa.getLayer('trazo')) mapa.setPaintProperty('trazo', 'line-color', principal);
+    var nucleo = document.querySelector('#auto .nucleo');
+    if (nucleo) nucleo.style.background = principal;
+    var puntoB = document.querySelector('.punto-mapa-B');
+    if (puntoB) puntoB.style.background = principal;
+  }
+}
+
+// El trazo viene en el formato de Google (encodedPolyline, precisión 5).
+function decodificarTrazo(s) {
+  var puntos = [], i = 0, lat = 0, lng = 0, b, desp, res;
+  while (i < s.length) {
+    desp = 0; res = 0;
+    do { b = s.charCodeAt(i++) - 63; res |= (b & 0x1f) << desp; desp += 5; } while (b >= 0x20);
+    lat += (res & 1) ? ~(res >> 1) : (res >> 1);
+    desp = 0; res = 0;
+    do { b = s.charCodeAt(i++) - 63; res |= (b & 0x1f) << desp; desp += 5; } while (b >= 0x20);
+    lng += (res & 1) ? ~(res >> 1) : (res >> 1);
+    puntos.push([lng / 1e5, lat / 1e5]);
+  }
+  return puntos;
+}
+
+// Los pines no necesitan que el estilo del mapa haya cargado: se montan ya.
+function montarMarcadores(datos) {
+  var marcA = document.createElement('div'); marcA.className = 'punto-mapa'; marcA.textContent = 'A';
+  marcadorA = new maplibregl.Marker({ element: marcA }).setLngLat([datos.origen.lng, datos.origen.lat]).addTo(mapa);
+  var marcB = document.createElement('div'); marcB.className = 'punto-mapa punto-mapa-B'; marcB.textContent = 'B';
+  marcadorB = new maplibregl.Marker({ element: marcB }).setLngLat([datos.destino.lng, datos.destino.lat]).addTo(mapa);
+  var auto = document.createElement('div'); auto.id = 'auto';
+  auto.innerHTML = '<div class="halo"></div><div class="nucleo"></div>';
+  // OJO: nunca crear un marcador sin posición: MapLibre revienta al colocarlo (aprendido en vivo).
+  marcadorUnidad = new maplibregl.Marker({ element: auto, anchor: 'center' })
+    .setLngLat([datos.origen.lng, datos.origen.lat]).addTo(mapa);
+  actualizarUnidad(datos);   // con la posición real, si ya la hay
+  aplicarMarca(datos.marca);
+}
+
+var yaEncuadrado = false;
+function encuadrar(datos) {
+  if (yaEncuadrado || !mapa || datos.origen.lat == null || datos.destino.lat == null) return;
+  yaEncuadrado = true;
+  var limites = new maplibregl.LngLatBounds();
+  limites.extend([datos.origen.lng, datos.origen.lat]);
+  limites.extend([datos.destino.lng, datos.destino.lat]);
+  mapa.fitBounds(limites, { padding: { top: 110, bottom: 210, left: 50, right: 50 }, maxZoom: 15, duration: 700 });
+}
+
+// La ruta: el trazo dibujado por el servidor, o una línea de referencia entre A y B.
+// Se intenta en cada consulta y en un reloj de repuesto: si el estilo tardó en cargar,
+// entra igual en cuanto se pueda (nada se queda esperando una sola señal).
+function intentarRuta() {
+  var datos = ultimosDatos;
+  if (!datos || !mapa || !mapa.isStyleLoaded()) return;
+  var puntos = null;
+  if (datos.trazo) { try { puntos = decodificarTrazo(datos.trazo); } catch (e) { puntos = null; } }
+  if ((!puntos || puntos.length < 2) && datos.origen.lat != null && datos.destino.lat != null) {
+    puntos = [[datos.origen.lng, datos.origen.lat], [datos.destino.lng, datos.destino.lat]];
+  }
+  if (!puntos) return;
+  var geo = { type: 'Feature', geometry: { type: 'LineString', coordinates: puntos } };
+  if (mapa.getSource('ruta')) {
+    if (trazoDibujado !== (datos.trazo || null)) {
+      mapa.getSource('ruta').setData(geo);
+      trazoDibujado = datos.trazo || null;
+    }
+    return;
+  }
+  mapa.addSource('ruta', { type: 'geojson', data: geo });
+  mapa.addLayer({ id: 'trazo-borde', type: 'line', source: 'ruta',
+    paint: { 'line-color': '#FFFFFF', 'line-opacity': .9, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 6, 16, 10] } });
+  mapa.addLayer({ id: 'trazo', type: 'line', source: 'ruta',
+    paint: { 'line-color': '#2D2D2D', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3.5, 16, 6.5], 'line-opacity': .95 } });
+  trazoDibujado = datos.trazo || null;
+  var color = getComputedStyle(document.documentElement).getPropertyValue('--marca').trim();
+  if (color) mapa.setPaintProperty('trazo', 'line-color', color);
+}
+
+function pintarViaje(datos) {
+  ultimosDatos = datos;
+  aplicarMarca(datos.marca);
+  document.getElementById('origen').textContent = datos.origen.direccion || '—';
+  document.getElementById('destino').textContent = datos.destino.direccion || '—';
+
+  var concluido = datos.estado === 'STATUS_COMPLETED';
+  document.getElementById('estado-texto').textContent = concluido ? 'Viaje finalizado' : 'En viaje';
+  document.getElementById('punto-vivo').style.display = concluido ? 'none' : 'block';
+
+  var con = document.getElementById('conductor');
+  if (datos.conductor && (datos.conductor.nombre || datos.conductor.placa)) {
+    con.innerHTML = '';
+    var quien = document.createElement('span');
+    quien.textContent = 'Conductor: ' + (datos.conductor.nombre || 'en camino');
+    con.appendChild(quien);
+    if (datos.conductor.placa) {
+      var placa = document.createElement('span');
+      placa.id = 'placa'; placa.textContent = datos.conductor.placa;
+      con.appendChild(placa);
+    }
+    con.style.display = 'flex';
+  }
+
+  if (!mapa) {
+    mapa = new maplibregl.Map({
+      container: 'mapa',
+      style: estiloGris,
+      attributionControl: { compact: true },
+      center: [datos.origen.lng || -77, datos.origen.lat || -12],
+      zoom: 12
+    });
+    var protocolo = new pmtiles.Protocol();
+    maplibregl.addProtocol('pmtiles', protocolo.tile);
+    montarMarcadores(datos);
+    encuadrar(datos);
+    mapa.on('load', intentarRuta);
+    // Reloj de repuesto: si el estilo tardó (o falló y volvió), la ruta entra igual.
+    var relojRuta = setInterval(function () {
+      if (!mapa || mapa.getSource('ruta')) { clearInterval(relojRuta); return; }
+      intentarRuta();
+    }, 2000);
+    primeraVez = false;
+    ocultarVelo();
+    return;
+  }
+  actualizarUnidad(datos);
+  intentarRuta();
+}
+
+function actualizarUnidad(datos) {
+  if (datos.posicion && typeof datos.posicion.lat === 'number') {
+    var destino = [datos.posicion.lng, datos.posicion.lat];
+    ultimoLatLng = destino;
+    if (marcadorUnidad) marcadorUnidad.setLngLat(destino);
+    var nucleo = document.querySelector('#auto .nucleo');
+    if (nucleo) nucleo.style.background = getComputedStyle(document.documentElement).getPropertyValue('--marca') || '#2D2D2D';
+    var fecha = datos.posicion.publicado_at ? new Date(datos.posicion.publicado_at) : null;
+    document.getElementById('reloj').textContent = fecha
+      ? 'Ubicación actualizada a las ' + fecha.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : '';
+  } else if (!datos.posicion) {
+    document.getElementById('reloj').textContent = 'Esperando la ubicación de la unidad…';
+  }
+}
+
+async function traerDatos() {
+  var respuesta = await fetch(WR_URL + '/rest/v1/rpc/seguimiento_del_viaje', {
+    method: 'POST',
+    headers: { 'apikey': WR_CLAVE, 'Authorization': 'Bearer ' + WR_CLAVE, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_token: token })
+  });
+  if (!respuesta.ok) throw new Error('respuesta ' + respuesta.status);
+  return await respuesta.json();
+}
+
+// Ojo con no mezclar las dos cosas: un fallo de RED reintenta y avisa "sin conexión";
+// un fallo al PINTAR (código) queda anotado y no se disfraza de problema de conexión.
+async function preguntar() {
+  var datos;
+  try {
+    datos = await traerDatos();
+  } catch (e) {
+    fallosSeguidos++;
+    window.__ultimoError = 'red: ' + (e && e.message);
+    if (fallosSeguidos >= 2) document.getElementById('sin-conexion').style.display = 'block';
+    if (primeraVez && fallosSeguidos >= 3) {
+      mostrarVelo('No se pudo conectar', 'Revisa tu conexión y vuelve a abrir el enlace.');
+    }
+    return;
+  }
+  fallosSeguidos = 0;
+  document.getElementById('sin-conexion').style.display = 'none';
+  if (datos === null) {
+    sigue = false;
+    mostrarVelo('Este enlace ya no está disponible',
+      'El viaje terminó hace un rato, se canceló, o el proveedor cerró el enlace. Pídele uno nuevo si lo necesitas.');
+    return;
+  }
+  try {
+    pintarViaje(datos);
+    ocultarVelo();
+  } catch (e) {
+    window.__ultimoError = 'pintado: ' + (e && e.message) + ' @ ' + ((e && e.stack || '').split('\n').slice(1, 5).join(' | '));
+    if (window.__errores) window.__errores.push(window.__ultimoError);
+  }
+}
+
+document.getElementById('centrar').addEventListener('click', function () {
+  if (mapa && ultimoLatLng) mapa.easeTo({ center: ultimoLatLng, zoom: Math.max(mapa.getZoom(), 15), duration: 600 });
+});
+document.addEventListener('visibilitychange', function () { if (!document.hidden && sigue) preguntar(); });
+
+preguntar();
+setInterval(function () { if (sigue) preguntar(); }, 15000);
+</script>
+<style>
+  .punto-mapa {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #111827; color: #fff; font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2.5px solid #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+  }
+  .punto-mapa-B { background: #2D2D2D; }
+  #auto { position: relative; width: 46px; height: 46px; }
+  #auto .halo {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: rgba(45, 45, 45, .25); animation: halo 2s ease-out infinite;
+  }
+  #auto .nucleo {
+    position: absolute; inset: 11px; border-radius: 50%;
+    background: #2D2D2D; border: 3px solid #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+  }
+  @keyframes halo { 0% { transform: scale(.55); opacity: .9; } 100% { transform: scale(1.6); opacity: 0; } }
+</style>
+</body>
+</html>
