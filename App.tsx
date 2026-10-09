@@ -12,7 +12,6 @@ import { SeguimientoEnVivo } from './src/components/SeguimientoEnVivo';
 import { AuthProvider } from './src/context/AuthContext';
 import { MockStoreProvider } from './src/context/MockStoreContext';
 import { ALTURA_VISIBLE, instalarAlturaVisible } from './src/lib/alturaVisible';
-import { cargarContadores } from './src/lib/medidor';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { initNotifications } from './src/services/notifications';
 
@@ -96,9 +95,6 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 export default function App() {
   useEffect(() => {
     initNotifications();
-    // Los contadores de consultas a Google sobreviven a la recarga: se cargan al arrancar para poder
-    // medir en campo cuántas hace de verdad este teléfono (y no suponerlo).
-    void cargarContadores();
     // Mide el viewport visible para ajustar la altura cuando aparece el teclado.
     return instalarAlturaVisible();
   }, []);
