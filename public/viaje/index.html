@@ -167,15 +167,95 @@ var mapa = null, marcadorUnidad = null, marcadorA = null, marcadorB = null;
 var ultimosDatos = null, trazoDibujado = null;
 var primeraVez = true, fallosSeguidos = 0, ultimoLatLng = null, sigue = true;
 
+// ----------------------------------------------------------------------------
+// EL ESTILO DEL MAPA (grises, sin costo). Dos archivos servidos por el propio VPS:
+//   «base»  = el Perú hasta zoom 11 → la vista general del viaje;
+//   «cerca» = Lima y Callao hasta zoom 15 → las calles de la operación.
+// El «maxzoom» de cada fuente es la clave: al acercar más de la cuenta, MapLibre ESTIRA
+// el último nivel (borroso) en vez de quedarse en blanco (trampa vista el 09-10-2026).
+// Los nombres usan el «min_zoom» que trae cada vía (lógica de Google/Waze: cada una
+// aparece cuando le toca) y la más importante gana el espacio (symbol-sort-key).
+// ----------------------------------------------------------------------------
+var VIAS_Y_NOMBRES = [
+  { id: 'edificios', type: 'fill', 'source-layer': 'buildings', minzoom: 14,
+    paint: { 'fill-color': '#E6E5E1' } },
+  { id: 'vias-menores', type: 'line', 'source-layer': 'roads', minzoom: 11,
+    filter: ['in', ['get', 'kind'], ['literal', ['minor_road']]],
+    paint: { 'line-color': '#E1E0DC', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, .5, 14, 2, 16, 6] } },
+  { id: 'vias-mayores', type: 'line', 'source-layer': 'roads', minzoom: 8,
+    filter: ['in', ['get', 'kind'], ['literal', ['major_road']]],
+    paint: { 'line-color': '#D3D2CE', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, .5, 11, 1.2, 14, 3.4, 16, 9] } },
+  { id: 'autopistas', type: 'line', 'source-layer': 'roads', minzoom: 6,
+    filter: ['in', ['get', 'kind'], ['literal', ['highway']]],
+    paint: { 'line-color': '#C6C5C1', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, .6, 10, 1.6, 14, 4.4, 16, 11] } },
+  { id: 'vias-rail', type: 'line', 'source-layer': 'roads', minzoom: 10,
+    filter: ['==', ['get', 'kind'], 'rail'],
+    paint: { 'line-color': '#C9C8C4', 'line-width': 1, 'line-dasharray': [2, 2] } },
+  { id: 'nombres-carreteras', type: 'symbol', 'source-layer': 'roads', minzoom: 8,
+    filter: ['all', ['==', ['get', 'kind'], 'highway'], ['<=', ['get', 'min_zoom'], ['zoom']]],
+    layout: { 'symbol-placement': 'line', 'symbol-spacing': 260,
+      'text-field': ['coalesce', ['get', 'name'], ['get', 'ref']],
+      'text-font': ['NotoSansRegular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 12, 11.5, 16, 14],
+      'symbol-sort-key': ['coalesce', ['get', 'min_zoom'], 20],
+      'text-rotation-alignment': 'map' },
+    paint: { 'text-color': '#4A5056', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.3 } },
+  { id: 'nombres-avenidas', type: 'symbol', 'source-layer': 'roads', minzoom: 10,
+    filter: ['all', ['==', ['get', 'kind'], 'major_road'], ['has', 'name'],
+             ['<=', ['get', 'min_zoom'], ['zoom']]],
+    layout: { 'symbol-placement': 'line', 'symbol-spacing': 200,
+      'text-field': ['get', 'name'],
+      'text-font': ['NotoSansRegular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 13, 11.5, 16, 13.5],
+      'symbol-sort-key': ['coalesce', ['get', 'min_zoom'], 20],
+      'text-rotation-alignment': 'map' },
+    paint: { 'text-color': '#4A5056', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.3 } },
+  { id: 'nombres-calles', type: 'symbol', 'source-layer': 'roads', minzoom: 13.5,
+    filter: ['all', ['==', ['get', 'kind'], 'minor_road'], ['has', 'name'],
+             ['in', ['get', 'kind_detail'], ['literal', ['residential', 'unclassified', 'living_street']]],
+             ['<=', ['get', 'min_zoom'], ['zoom']]],
+    layout: { 'symbol-placement': 'line', 'symbol-spacing': 130,
+      'text-field': ['get', 'name'],
+      'text-font': ['NotoSansRegular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 13.5, 10, 16, 12.5],
+      'symbol-sort-key': ['coalesce', ['get', 'min_zoom'], 20],
+      'text-rotation-alignment': 'map' },
+    paint: { 'text-color': '#5A6067', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.2 } },
+  { id: 'nombres-lugares', type: 'symbol', 'source-layer': 'places', minzoom: 10,
+    filter: ['all', ['in', ['get', 'kind'], ['literal', ['locality', 'macrohood', 'neighbourhood']]],
+             ['<=', ['get', 'min_zoom'], ['zoom']]],
+    layout: { 'text-field': ['get', 'name'], 'text-font': ['NotoSansRegular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 13, 11.5, 16, 13],
+      'text-letter-spacing': .05,
+      'symbol-sort-key': ['coalesce', ['get', 'min_zoom'], 20] },
+    paint: { 'text-color': '#3F444A', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.4 } }
+];
+
+// Cada definición se duplica por fuente: «lejos» apaga sus vías de detalle al pasar el zoom
+// 11.5; «cerca» las enciende desde ahí. Las carreteras del país y sus nombres no se apagan
+// nunca: con cualquier zoom se ve por dónde va el viaje (fuera de Lima, esa es toda la guía).
+function capasConFuente(fuente, zMin, zMax) {
+  return VIAS_Y_NOMBRES.map(function (definicion) {
+    var capa = JSON.parse(JSON.stringify(definicion));
+    capa.id = fuente + '-' + capa.id;
+    capa.source = fuente;
+    capa.minzoom = Math.max(capa.minzoom || 0, zMin);
+    if (zMax !== null) capa.maxzoom = zMax;
+    return capa;
+  });
+}
+var capasLejos = capasConFuente('base', 0, 11.5);
+var capasCerca = capasConFuente('cerca', 11.5, null);
+capasLejos.forEach(function (capa) {
+  if (capa.id.indexOf('autopistas') >= 0 || capa.id.indexOf('carreteras') >= 0) delete capa.maxzoom;
+});
+
 var estiloGris = {
   version: 8,
   glyphs: '/viaje/vendor/fuentes/{fontstack}/{range}.pbf',
   sources: {
-    base: {
-      type: 'vector',
-      url: 'pmtiles:///mapa/peru.pmtiles',
-      attribution: '© OpenStreetMap'
-    }
+    base: { type: 'vector', url: 'pmtiles:///mapa/peru.pmtiles', maxzoom: 11, attribution: '© OpenStreetMap' },
+    cerca: { type: 'vector', url: 'pmtiles:///mapa/lima.pmtiles', maxzoom: 15 }
   },
   layers: [
     { id: 'fondo', type: 'background', paint: { 'background-color': '#F4F4F2' } },
@@ -183,52 +263,10 @@ var estiloGris = {
     { id: 'cobertura', type: 'fill', source: 'base', 'source-layer': 'landcover', paint: { 'fill-color': '#EFEFEC' } },
     { id: 'usos', type: 'fill', source: 'base', 'source-layer': 'landuse', paint: { 'fill-color': '#EDEDEA' } },
     { id: 'agua', type: 'fill', source: 'base', 'source-layer': 'water', paint: { 'fill-color': '#D9DFE4' } },
-    { id: 'edificios', type: 'fill', source: 'base', 'source-layer': 'buildings', minzoom: 14, paint: { 'fill-color': '#E6E5E1' } },
-    { id: 'vias-menores', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 11,
-      filter: ['in', ['get', 'kind'], ['literal', ['minor_road']]],
-      paint: { 'line-color': '#E1E0DC', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, .5, 14, 2, 16, 6] } },
-    { id: 'vias-mayores', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 8,
-      filter: ['in', ['get', 'kind'], ['literal', ['major_road']]],
-      paint: { 'line-color': '#D3D2CE', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, .5, 11, 1.2, 14, 3.4, 16, 9] } },
-    { id: 'autopistas', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 6,
-      filter: ['in', ['get', 'kind'], ['literal', ['highway']]],
-      paint: { 'line-color': '#C6C5C1', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, .6, 10, 1.6, 14, 4.4, 16, 11] } },
-    { id: 'vias-rail', type: 'line', source: 'base', 'source-layer': 'roads', minzoom: 10,
-      filter: ['==', ['get', 'kind'], 'rail'],
-      paint: { 'line-color': '#C9C8C4', 'line-width': 1, 'line-dasharray': [2, 2] } },
     { id: 'limites', type: 'line', source: 'base', 'source-layer': 'boundaries', minzoom: 3,
       filter: ['in', ['get', 'kind'], ['literal', ['country', 'region']]],
-      paint: { 'line-color': '#BDBBB7', 'line-width': .9, 'line-dasharray': [2, 2] } },
-
-    // ------------------------------------------------------------------
-    // LOS NOMBRES (las letras van servidas por el propio VPS, sin costo).
-    // Carreteras: la referencia (PE-1N…) o su nombre; avenidas y calles: el nombre.
-    // ------------------------------------------------------------------
-    { id: 'nombres-carreteras', type: 'symbol', source: 'base', 'source-layer': 'roads', minzoom: 10,
-      filter: ['==', ['get', 'kind'], 'highway'],
-      layout: { 'symbol-placement': 'line',
-        'text-field': ['coalesce', ['get', 'ref'], ['get', 'name']],
-        'text-font': ['NotoSansRegular'], 'text-size': 11, 'text-rotation-alignment': 'map' },
-      paint: { 'text-color': '#5B6166', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.2 } },
-    { id: 'nombres-avenidas', type: 'symbol', source: 'base', 'source-layer': 'roads', minzoom: 12,
-      filter: ['all', ['==', ['get', 'kind'], 'major_road'], ['has', 'name']],
-      layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'],
-        'text-font': ['NotoSansRegular'],
-        'text-size': ['interpolate', ['linear'], ['zoom'], 12, 10, 15, 12.5],
-        'text-rotation-alignment': 'map' },
-      paint: { 'text-color': '#5B6166', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.2 } },
-    { id: 'nombres-calles', type: 'symbol', source: 'base', 'source-layer': 'roads', minzoom: 14.3,
-      filter: ['all', ['==', ['get', 'kind'], 'minor_road'], ['has', 'name']],
-      layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'],
-        'text-font': ['NotoSansRegular'], 'text-size': 10.5, 'text-rotation-alignment': 'map' },
-      paint: { 'text-color': '#6B7178', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.1 } },
-    { id: 'nombres-lugares', type: 'symbol', source: 'base', 'source-layer': 'places', minzoom: 11,
-      filter: ['in', ['get', 'kind'], ['literal', ['locality', 'neighbourhood']]],
-      layout: { 'text-field': ['get', 'name'], 'text-font': ['NotoSansRegular'],
-        'text-size': ['interpolate', ['linear'], ['zoom'], 11, 10, 15, 13],
-        'text-letter-spacing': .04 },
-      paint: { 'text-color': '#4B5157', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1.3 } }
-  ]
+      paint: { 'line-color': '#BDBBB7', 'line-width': .9, 'line-dasharray': [2, 2] } }
+  ].concat(capasLejos).concat(capasCerca)
 };
 
 function ocultarVelo() {
