@@ -21,7 +21,6 @@ import {
   nombreDeUsuario,
   PLANES,
   problemaDelPanel,
-  ROLES,
   telefonoBonito,
   textoDeEstado,
   UsuarioDelPanel,
@@ -35,7 +34,7 @@ const DARK_BG = '#2D2D2D';
 
 /**
  * La ficha de una cuenta: sus datos y las tres cosas que se pueden hacer desde aquí
- * (activar/extender la membresía, quitarla y cambiar el rol).
+ * (activar/extender la membresía, quitarla y dar o quitar el administrador).
  *
  * Después de cada cambio se vuelve a leer la fila de la base: la pantalla nunca inventa el
  * resultado, y si la escritura no llegó se ve el estado real.
@@ -116,18 +115,26 @@ export function AdminUsuarioScreen() {
     ]);
   };
 
-  const cambiarRol = (rol: string) => {
-    if (rol === usuario.role) return;
-    Alert.alert('Cambiar rol', confirmacionDeRol(nombreDeUsuario(usuario), rol), [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sí, cambiar',
-        onPress: () => ejecutar('Rol cambiado', () => panelCambiarRol(usuario.id, rol)),
-      },
-    ]);
+  const cambiarAdministrador = (hacerAdmin: boolean) => {
+    if (hacerAdmin === esAdmin) return;
+    Alert.alert(
+      hacerAdmin ? 'Hacer administrador' : 'Quitar administrador',
+      confirmacionDeRol(nombreDeUsuario(usuario), hacerAdmin),
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: hacerAdmin ? 'Sí, hacer administrador' : 'Sí, quitar',
+          onPress: () =>
+            ejecutar(hacerAdmin ? 'Ahora es administrador' : 'Ya no es administrador', () =>
+              panelCambiarRol(usuario.id, hacerAdmin ? 'ADMIN' : 'USER')
+            ),
+        },
+      ]
+    );
   };
 
   const esPremium = String(usuario.tier || '').toUpperCase() === 'PREMIUM';
+  const esAdmin = String(usuario.role || '').toUpperCase() === 'ADMIN';
 
   return (
     <View style={styles.container}>
@@ -204,24 +211,18 @@ export function AdminUsuarioScreen() {
           </TouchableOpacity>
         )}
 
-        <Text style={styles.seccion}>Rol de la cuenta</Text>
-        <View style={styles.botonesFila}>
-          {ROLES.map((rol) => {
-            const activo = String(usuario.role || '').toUpperCase() === rol.id;
-            return (
-              <TouchableOpacity
-                key={rol.id}
-                style={[styles.chip, activo && styles.chipActivo, ocupado && styles.botonApagado]}
-                onPress={() => cambiarRol(rol.id)}
-                disabled={ocupado}
-                accessibilityRole="button"
-                accessibilityLabel={`Rol ${rol.etiqueta}${activo ? ' (actual)' : ''}`}
-              >
-                <Text style={[styles.chipTexto, activo && styles.chipTextoActivo]}>{rol.etiqueta}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <Text style={styles.seccion}>Administrador del panel</Text>
+        <TouchableOpacity
+          style={[styles.botonSecundario, ocupado && styles.botonApagado]}
+          onPress={() => cambiarAdministrador(!esAdmin)}
+          disabled={ocupado}
+          accessibilityRole="button"
+          accessibilityLabel={esAdmin ? 'Quitarle el administrador' : 'Hacer administrador'}
+        >
+          <Text style={styles.botonSecundarioTexto}>
+            {esAdmin ? 'Quitarle el administrador' : 'Hacer administrador'}
+          </Text>
+        </TouchableOpacity>
         <Text style={styles.nota}>
           Un administrador puede abrir este panel. No se puede quitar el rol al último que queda, para
           que el panel no se cierre para siempre.

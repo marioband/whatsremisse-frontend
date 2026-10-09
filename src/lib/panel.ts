@@ -35,13 +35,22 @@ export const PLANES: readonly { dias: number; etiqueta: string }[] = [
   { dias: 90, etiqueta: '3 meses' },
 ];
 
-/** Los roles de `profiles.role`, con su nombre en español. */
-export const ROLES: readonly { id: string; etiqueta: string }[] = [
-  { id: 'DRIVER', etiqueta: 'Conductor' },
-  { id: 'PROVIDER', etiqueta: 'Proveedor' },
-  { id: 'GROUP_OWNER', etiqueta: 'Dueño de grupo' },
-  { id: 'ADMIN', etiqueta: 'Administrador' },
-];
+/**
+ * Cómo se llama el rol de una cuenta en el panel (09-10-2026).
+ *
+ * Las cuentas NO se categorizan: cualquiera puede publicar o postular (el papel lo decide cada
+ * servicio, no la cuenta). Lo único que distingue es si la cuenta puede abrir el panel (ADMIN); a
+ * los demás no se les pone etiqueta (la cadena vacía cae sola en los `filter(Boolean).join(' · ')`
+ * que ya usan las pantallas).
+ */
+export function nombreDeRol(rol?: string | null): string {
+  return String(rol || '').toUpperCase() === 'ADMIN' ? 'Administrador' : '';
+}
+
+/** En el registro de acciones un rol se nombra SIEMPRE (Usuario o Administrador). */
+export function etiquetaDeRolEnElRegistro(rol?: string | null): string {
+  return String(rol || '').toUpperCase() === 'ADMIN' ? 'Administrador' : 'Usuario';
+}
 
 export interface UsuarioDelPanel {
   id: string;
@@ -218,11 +227,7 @@ export function numeroConMiles(valor: number | null | undefined): string {
   return signo + digitos.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
-/** El nombre del rol en español. */
-export function nombreDeRol(rol?: string | null): string {
-  const buscado = String(rol || '').toUpperCase();
-  return ROLES.find((r) => r.id === buscado)?.etiqueta || 'Sin rol';
-}
+/** (nombreDeRol vive arriba, junto a los tipos del panel.) */
 
 /**
  * Los números del panel, en filas para pintar. `destacado` marca lo que pide acción hoy
@@ -244,7 +249,7 @@ export function resumenEnFilas(resumen: ResumenDelPanel): {
     {
       etiqueta: 'Cuentas',
       valor: numeroConMiles(c.total),
-      nota: `${numeroConMiles(c.proveedores)} proveedor(es) · ${numeroConMiles(c.conductores)} conductor(es)`,
+      nota: `${numeroConMiles(c.administradores)} administrador(es)`,
       destacado: false,
     },
     {
@@ -324,7 +329,7 @@ export function textoDeAccion(accion?: string | null): string {
     case 'MEMBRESIA_QUITADA':
       return 'Quitó la membresía';
     case 'ROL_CAMBIADO':
-      return 'Cambió el rol';
+      return 'Cambió el administrador';
     case 'MODO_PRUEBAS':
       return 'Cambió el modo de pruebas';
     default:
@@ -355,9 +360,9 @@ export function detalleDeAccion(accion?: string | null, detalle?: Record<string,
       return antes === 'PREMIUM' ? 'era premium' : '';
     }
     case 'ROL_CAMBIADO': {
-      const antes = nombreDeRol(texto('antes'));
-      const ahora = nombreDeRol(texto('ahora'));
-      return `${antes} → ${ahora}`;
+      // En el registro todo se dice con una palabra (en el listado, en cambio, al usuario sin rol
+      // no se le pone etiqueta): «Usuario → Administrador».
+      return `${etiquetaDeRolEnElRegistro(texto('antes'))} → ${etiquetaDeRolEnElRegistro(texto('ahora'))}`;
     }
     case 'MODO_PRUEBAS': {
       const ahora = d.ahora === true;
@@ -402,9 +407,11 @@ export function confirmacionDeQuitar(nombre: string): string {
   return `¿Quitarle la membresía a ${nombre}? La cuenta sigue existiendo, pero pierde las direcciones y los tiempos hasta que la vuelvas a activar.`;
 }
 
-/** La confirmación antes de dar o quitar el rol de administrador. */
-export function confirmacionDeRol(nombre: string, rol: string): string {
-  return `¿Cambiar el rol de ${nombre} a ${nombreDeRol(rol)}? Un administrador puede abrir el panel y cambiar membresías.`;
+/** La confirmación antes de dar o quitar el rol de administrador (el único que existe). */
+export function confirmacionDeRol(nombre: string, hacerAdmin: boolean): string {
+  return hacerAdmin
+    ? `¿Hacer administrador a ${nombre}? Podrá abrir el panel y cambiar membresías.`
+    : `¿Quitarle el administrador a ${nombre}? Dejará de poder abrir el panel.`;
 }
 
 /** El estado de la membresía ya resumido para la ficha de un usuario. */
