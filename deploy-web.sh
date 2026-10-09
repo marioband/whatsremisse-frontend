@@ -140,6 +140,14 @@ fi
 # en el repositorio, solo en el servidor y en lo publicado. Si el árbol es viejo y
 # no tiene la página, se salta sin fallar.
 PAGINA_VIAJE="web-build/viaje/index.html"
+# Respaldo del publicador: el export de Expo copia public/ al build, pero si esta
+# versión no lo hiciera (o se reintenta con SALTAR_BUILD=1 sobre un web-build viejo),
+# la página del viaje se copia aquí. El publicador no depende de una sola vía.
+if [ -d public/viaje ] && [ ! -f "$PAGINA_VIAJE" ]; then
+  echo "=== Copiando la página del viaje al build (respaldo del publicador) ==="
+  mkdir -p web-build/viaje
+  cp -r public/viaje/. web-build/viaje/
+fi
 if [ -f "$PAGINA_VIAJE" ]; then
   echo "=== Incrustando la dirección y la clave en la página del viaje ==="
   sed -i "s|__WR_URL__|$API_URL|g; s|__WR_CLAVE__|$CLAVE|g" "$PAGINA_VIAJE"
