@@ -9,17 +9,20 @@ import { CompartirViaje } from './CompartirViaje';
 /**
  * Las acciones del viaje DENTRO de la tarjeta del chat (diseño del usuario, 09-10-2026):
  *
- *     [ Compartir viaje ]                ← botón largo azul institucional (con sus márgenes)
+ *     [ Compartir viaje ]                ← botón largo azul institucional (texto solo, centrado)
  *     ┌──────────────┬───────────────┐
  *     │ Copiar datos │ Copiar imagen │   ← los grises van PEGADOS formando un bloque del
  *     ├──────────────┴───────────────┤     MISMO color que la tarjeta (`FONDO_TARJETA`):
- *     │        Ver ubicación         │     la única división entre ellos son sus líneas
- *     └──────────────────────────────┘     blancas finas (3ª vuelta del usuario).
+ *     │  📍 Ver ubicación            │     la única división son sus líneas blancas finas.
+ *     └──────────────────────────────┘     Solo «Ver ubicación» lleva icono (el pin): los
+ *                                          copiados y el azul van SIN icono (4ª vuelta del
+ *                                          usuario: «copiar imagen» se veía corrido a la
+ *                                          derecha por el icono, y su referencia no los tiene).
  *
  * La FOTO del conductor se quitó (2ª vuelta): su función de copiar la imagen la tiene el botón
  * «Copiar imagen». «Ver ubicación» es VISUAL por ahora (la función detallada llega en otra
- * etapa). El orden de la pareja es el de la imagen de referencia: datos IZQUIERDA, imagen
- * DERECHA. La barra inferior de la tarjeta NO se pinta en el chat (`ServiceCard` `sinFranja`).
+ * etapa). El orden de la pareja es el de la referencia: datos IZQUIERDA, imagen DERECHA. La
+ * barra inferior de la tarjeta NO se pinta en el chat (`ServiceCard` `sinFranja`).
  */
 interface AccionesDeLaTarjetaProps {
   service: ServiceAlert;
@@ -50,11 +53,9 @@ export function AccionesDeLaTarjeta({
           onPress={alCopiarDatos}
           activeOpacity={0.85}
         >
-          <MaterialCommunityIcons name="account" size={20} color="#555555" style={styles.icono} />
           <Text style={styles.texto}>Copiar datos</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.mitad} onPress={alCopiarImagen} activeOpacity={0.85}>
-          <MaterialCommunityIcons name="image" size={20} color="#555555" style={styles.icono} />
           <Text style={styles.texto}>Copiar imagen</Text>
         </TouchableOpacity>
       </View>

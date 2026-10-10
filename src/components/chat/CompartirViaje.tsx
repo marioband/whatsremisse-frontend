@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 
 import { AZUL } from '../../lib/colors';
@@ -65,7 +64,6 @@ export function CompartirViaje({ service, esProveedor }: CompartirViajeProps) {
       style={[styles.boton, ocupado && styles.botonOcupado]}
       accessibilityRole="button"
     >
-      <MaterialCommunityIcons name="share" size={20} color="#FFFFFF" style={styles.icono} />
       <Text style={styles.texto}>{copiado ? '¡Enlace copiado!' : 'Compartir viaje'}</Text>
     </Pressable>
   );
@@ -85,6 +83,5 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   botonOcupado: { opacity: 0.6 },
-  icono: { marginRight: 8 },
   texto: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
 });
