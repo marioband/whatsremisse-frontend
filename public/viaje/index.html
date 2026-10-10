@@ -10,6 +10,7 @@
   :root {
     --marca: #2D2D2D;        /* se reemplaza con el color principal del proveedor */
     --marca-texto: #FFFFFF;  /* se ajusta solo según el contraste */
+    --marca-2: #9AA0A6;      /* se reemplaza con el color secundario del proveedor */
     --papel: #FFFFFF;
     --tinta: #1F2937;
     --tinta-suave: #6B7280;
@@ -62,7 +63,7 @@
     font-size: 12px; font-weight: 700; color: #fff; margin-top: 1px;
   }
   .puntoA { background: #111827; }
-  .puntoB { background: var(--marca); }
+  .puntoB { background: var(--marca-2); }
   .texto-tramo { min-width: 0; }
   .rotulo { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta-suave); }
   .direccion { font-size: 14px; line-height: 1.35; }
@@ -314,8 +315,10 @@ function contrasteSobre(hex) {
 function aplicarMarca(marca) {
   if (!marca) return;
   var principal = /^#[0-9a-f]{6}$/i.test(marca.color_principal || '') ? marca.color_principal : '#2D2D2D';
+  var secundario = /^#[0-9a-f]{6}$/i.test(marca.color_secundario || '') ? marca.color_secundario : '#9AA0A6';
   document.documentElement.style.setProperty('--marca', principal);
   document.documentElement.style.setProperty('--marca-texto', contrasteSobre(principal));
+  document.documentElement.style.setProperty('--marca-2', secundario);
   document.getElementById('marca').textContent = marca.nombre || 'Viaje en vivo';
   document.title = (marca.nombre ? marca.nombre + ' · ' : '') + 'Viaje en vivo';
   if (marca.logo_url) {
@@ -327,7 +330,7 @@ function aplicarMarca(marca) {
     var nucleo = document.querySelector('#auto .nucleo');
     if (nucleo) nucleo.style.background = principal;
     var puntoB = document.querySelector('.punto-mapa-B');
-    if (puntoB) puntoB.style.background = principal;
+    if (puntoB) puntoB.style.background = secundario;
   }
 }
 
