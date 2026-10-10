@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { AZUL } from '../../lib/colors';
 import {
   cortarPedidoDeUbicacion,
   pedidoDeUbicacionDelServicio,
   responderPedidoDeUbicacion,
 } from '../../lib/database';
+import { AZUL, RADIOS, ROJO_ACCION, TEXTO_SUAVE } from '../../lib/diseno';
 import { textoDeErrorParaElUsuario } from '../../lib/errors';
 import { ServiceAlert } from '../../types';
 
@@ -104,7 +104,11 @@ export function PideTuUbicacion({ service }: { service: ServiceAlert }) {
         <Text style={styles.pregunta}>
           Estás compartiendo tu ubicación con el proveedor (ve tu unidad en vivo).
         </Text>
-        <TouchableOpacity onPress={cortar} disabled={ocupado}>
+        <TouchableOpacity
+          onPress={cortar}
+          disabled={ocupado}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+        >
           <Text style={styles.dejarDeCompartir}>Dejar de compartir</Text>
         </TouchableOpacity>
       </View>
@@ -121,7 +125,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pregunta: {
-    color: '#555555',
+    color: TEXTO_SUAVE,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 8,
@@ -135,7 +139,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: AZUL,
-    borderRadius: 12,
+    borderRadius: RADIOS.md,
     paddingVertical: 14,
   },
   apagado: { opacity: 0.6 },
@@ -148,10 +152,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   dejarDeCompartir: {
-    color: '#B00020',
+    /** 10-10-2026: el rojo de la casa (antes #B00020, de la paleta de Material) y 44 px
+     *  de alto efectivo (11+19+11), que es el mínimo táctil: es una acción destructiva
+     *  y no puede quedar escasa de dedo. */
+    color: ROJO_ACCION,
     fontSize: 14,
     fontWeight: '600',
-    paddingVertical: 6,
+    paddingVertical: 11,
     paddingHorizontal: 12,
   },
 });

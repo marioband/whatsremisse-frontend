@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, Linking, Platform, View } from 'react-native';
 
 import { Alert } from '../lib/alert';
-import { AZUL } from '../lib/colors';
+import { AZUL, PESO, RADIOS } from '../lib/diseno';
 import {
   APP_DE_NAVEGACION_POR_DEFECTO,
   AppDeNavegacion,
@@ -135,8 +135,12 @@ const styles = StyleSheet.create({
   },
   boton: {
     backgroundColor: AZUL,
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderRadius: RADIOS.md,
+    /**
+     * 10-10-2026: 13 en vez de 10. El botón medía 36 px de alto (por debajo del mínimo
+     * táctil de 44): es la acción principal del viaje y tiene que agarrarse sin puntería.
+     */
+    paddingVertical: 13,
     paddingHorizontal: 28,
     minWidth: 180,
     alignItems: 'center',
@@ -144,6 +148,6 @@ const styles = StyleSheet.create({
   texto: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: PESO.fuerte,
   },
 });

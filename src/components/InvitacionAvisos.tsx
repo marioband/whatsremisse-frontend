@@ -1,10 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { Alert } from '../lib/alert';
 import { activarAvisos, estadoDeAvisos, estaInstalada } from '../lib/avisosWeb';
 import { leerCache, guardarCache } from '../lib/cache';
-import { Alert } from '../lib/alert';
-import { AZUL } from '../lib/colors';
+import {
+  AZUL,
+  ESPACIADO,
+  FONDO_TARJETA,
+  INTERLINEADO,
+  PESO,
+  RADIOS,
+  TALLAS,
+  ALTURAS,
+  TEXTO,
+  TEXTO_SUAVE,
+  TEXTO_TENUE,
+} from '../lib/diseno';
 
 /**
  * La invitación a activar los avisos, la primera vez que se abre la app.
@@ -97,26 +109,32 @@ export function InvitacionAvisos() {
 const styles = StyleSheet.create({
   tarjeta: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginHorizontal: 12,
-    marginBottom: 10,
+    borderRadius: RADIOS.md,
+    padding: ESPACIADO.md,
+    marginHorizontal: ESPACIADO.md,
+    marginBottom: ESPACIADO.sm,
     borderWidth: 1,
     borderColor: '#E3E6F0',
   },
-  titulo: { fontSize: 15, fontWeight: '700', color: '#2D2D2D', marginBottom: 4 },
-  texto: { fontSize: 13, color: '#555555', lineHeight: 18 },
-  apunte: { fontSize: 12, color: '#777777', marginTop: 6, lineHeight: 17 },
-  botones: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  titulo: { fontSize: TALLAS.cuerpo, fontWeight: PESO.fuerte, color: TEXTO, marginBottom: 3 },
+  texto: { fontSize: TALLAS.etiqueta, color: TEXTO_SUAVE, lineHeight: INTERLINEADO.etiqueta },
+  apunte: {
+    fontSize: TALLAS.leyenda,
+    color: TEXTO_TENUE,
+    marginTop: ESPACIADO.xs,
+    lineHeight: INTERLINEADO.leyenda,
+  },
+  botones: { flexDirection: 'row', gap: ESPACIADO.sm, marginTop: ESPACIADO.sm },
   boton: {
     flex: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
+    minHeight: ALTURAS.toque,
+    borderRadius: RADIOS.md,
+    paddingVertical: ESPACIADO.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primario: { backgroundColor: AZUL },
-  secundario: { backgroundColor: '#F1F2F6' },
-  textoPrimario: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-  textoSecundario: { color: '#2D2D2D', fontWeight: '600', fontSize: 14 },
+  secundario: { backgroundColor: FONDO_TARJETA },
+  textoPrimario: { color: '#FFFFFF', fontWeight: PESO.fuerte, fontSize: TALLAS.texto },
+  textoSecundario: { color: TEXTO, fontWeight: PESO.medio, fontSize: TALLAS.texto },
 });

@@ -356,7 +356,12 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   avatarColumn: {
-    justifyContent: 'center',
+    /**
+     * 10-10-2026: arriba, no centrado. Centrado contra todo el bloque el avatar quedaba a
+     * la altura de «Unidad» (medido: el nombre arrancaba 22 px más arriba) y el ojo lo leía
+     * descolgado; alineado con el nombre, la tarjeta se lee como una ficha de contacto.
+     */
+    justifyContent: 'flex-start',
     marginRight: 12,
   },
   avatar: {

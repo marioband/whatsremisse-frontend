@@ -24,7 +24,6 @@ import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { ordenarEnProceso } from '../lib/apartadosDelInicio';
 import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
-import { AZUL, TEXTO_SUAVE } from '../lib/colors';
 import { esProgramado } from '../lib/datetime';
 import { distanciaLinealMetros, textoDeDistanciaAproximada } from '../lib/geo';
 import { ultimaUbicacion } from '../lib/geolocation';
@@ -32,6 +31,7 @@ import {
   AVISO_CANCELACION_FALLIDA,
   AVISO_POSTULACION_CANCELADA,
 } from '../lib/deslizamientoDeLaTarjeta';
+import { AZUL, ESPACIADO, INTERLINEADO, TALLAS, TEXTO_SUAVE, TEXTO_TENUE } from '../lib/diseno';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { textoDelBoton } from '../lib/numerosDelInicio';
 import { tiposEfectivos } from '../lib/unidades';
@@ -664,7 +664,11 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
       )}
 
       {/* Archived link */}
-      <TouchableOpacity style={styles.archivedLink} onPress={() => setShowArchived((v) => !v)}>
+      <TouchableOpacity
+        style={styles.archivedLink}
+        onPress={() => setShowArchived((v) => !v)}
+        hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+      >
         <Text style={styles.archivedText}>{showArchived ? 'Ver activos' : 'Archivados'}</Text>
       </TouchableOpacity>
 
@@ -732,15 +736,22 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
         }}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {consulta.trim()
-              ? 'Ningún servicio coincide con la búsqueda.'
-              : showArchived
-                ? 'No hay servicios archivados'
-                : activeStatus === 'En proceso'
-                  ? 'Todavía no tienes servicios en proceso.'
-                  : 'No hay servicios disponibles'}
-          </Text>
+          <View>
+            <Text style={styles.emptyText}>
+              {consulta.trim()
+                ? 'Ningún servicio coincide con la búsqueda.'
+                : showArchived
+                  ? 'No hay servicios archivados'
+                  : activeStatus === 'En proceso'
+                    ? 'Todavía no tienes servicios en proceso.'
+                    : 'No hay servicios disponibles'}
+            </Text>
+            {!consulta.trim() && !showArchived && activeStatus === 'Disponibles' && (
+              <Text style={styles.emptyAyuda}>
+                Cuando publiquen un servicio en tus grupos, aparecerá aquí.
+              </Text>
+            )}
+          </View>
         }
       />
 
@@ -876,8 +887,17 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 40,
-    fontSize: 14,
+    fontSize: TALLAS.texto,
+  },
+  /** 10-10-2026: el estado vacío explica de dónde salen los servicios (antes era mudo). */
+  emptyAyuda: {
+    textAlign: 'center',
+    color: TEXTO_TENUE,
+    fontSize: TALLAS.leyenda,
+    lineHeight: INTERLINEADO.leyenda,
+    marginTop: ESPACIADO.sm,
+    paddingHorizontal: 36,
   },
 });
