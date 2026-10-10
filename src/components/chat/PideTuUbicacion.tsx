@@ -125,7 +125,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 8,
-    lineHeight: 1.35,
+    // OJO: en React Native `lineHeight` es PÍXELES, no multiplicador: con `1.35` las dos
+    // líneas quedan a 1.35 px y se pintan encima (el texto «pisado» que reportó el usuario el
+    // 10-10-2026). Se usa el valor absoluto de la casa, como en el resto de la app.
+    lineHeight: 18,
   },
   botonAzul: {
     alignSelf: 'stretch',

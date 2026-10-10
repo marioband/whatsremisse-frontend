@@ -117,7 +117,13 @@ const styles = StyleSheet.create({
   mapa: { flex: 1 },
   iframe: { width: '100%', height: '100%', border: '0' },
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
-  texto: { color: '#555555', fontSize: 14, textAlign: 'center', lineHeight: 1.5 },
+  texto: {
+    color: '#555555',
+    fontSize: 14,
+    textAlign: 'center',
+    // PÍXELES, no multiplicador (ver `PideTuUbicacion`): 20 para 14 px, como la casa.
+    lineHeight: 20,
+  },
   boton: {
     backgroundColor: '#3F51B5',
     borderRadius: 12,
