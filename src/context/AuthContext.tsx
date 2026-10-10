@@ -200,6 +200,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[Auth] Error cargando perfil:', err);
+      /**
+       * 10-10-2026: un fallo aqui (sin red, token vencido) NO puede mandar a «Mi perfil»
+       * VACIO a quien ya lo tiene completo: se conserva lo guardado en el telefono.
+       * Antes se pisaba a profile=null + requiresProfileSetup=true y el usuario existente
+       * veia el formulario en blanco (visto en pruebas con la sesion vencida).
+       */
+      try {
+        const guardadoCrudo = await AsyncStorage.getItem(PERFIL_KEY);
+        const guardado = guardadoCrudo ? JSON.parse(guardadoCrudo) : null;
+        if (guardado?.role && guardado?.full_name && guardado?.vehicle_data) {
+          setProfile(guardado);
+          setRequiresProfileSetup(false);
+          return;
+        }
+      } catch {
+        // Cache ilegible: se sigue el camino normal.
+      }
       setProfile(null);
       setRequiresProfileSetup(true);
     }

@@ -313,7 +313,9 @@ export function PagoDelServicio({
         color: OSCURO,
       };
     }
-    return { texto: 'Pendiente de pago', color: AZUL };
+    // Negra, como la tarjeta del inicio («Pendiente de pago» = OSCURO en estadoDeServicio):
+    // la barra del chat habla el mismo idioma que la franja (opcion B del usuario, 10-10-2026).
+    return { texto: 'Pendiente de pago', color: OSCURO };
   };
 
   const fila = filaDeEstado();

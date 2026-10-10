@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-import { VERDE_ACCION } from '../../lib/colors';
+import { AZUL, OSCURO } from '../../lib/colors';
 import { paradaDelPaso, paradasDelServicio, totalDePasos } from '../../lib/paradasDelServicio';
 import { ServiceAlert } from '../../types';
 
@@ -41,8 +41,16 @@ export function ProviderStatusBar({ service }: ProviderStatusBarProps) {
   else if (step === 2) text = 'En proceso';
   else if (step >= 3) text = 'Finalizado';
 
+  /**
+   * 10-10-2026 (eleccion del usuario, «opcion B»): la barra habla el MISMO idioma de
+   * colores que la franja de la tarjeta del inicio — AZUL en «En camino» (el conductor
+   * ya acepto y va hacia el origen) y NEGRA en los hitos (Ubicado / En proceso /
+   * Destino N de M / Finalizado). Antes era verde fijo y contradecia a la tarjeta.
+   */
+  const color = step <= 0 ? AZUL : OSCURO;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: color }]}>
       <Text style={styles.text}>{text}</Text>
     </View>
   );
@@ -52,7 +60,6 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     height: 50,
-    backgroundColor: VERDE_ACCION,
     justifyContent: 'center',
     alignItems: 'center',
   },
