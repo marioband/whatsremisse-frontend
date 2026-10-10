@@ -65,7 +65,7 @@ function mapProfile(row: Record<string, unknown>): Profile {
     email: row.email ? String(row.email) : '',
     full_name: row.full_name ? String(row.full_name) : null,
     phone: row.phone ? String(row.phone) : null,
-    role: (row.role as Profile['role']) || 'DRIVER',
+    role: (row.role as Profile['role']) || 'USER',
     group_id: null,
     // La membresía vive en `profiles.tier` (migración 0008). Si la columna no
     // existe todavía, `esPremium` la trata como premium en esta etapa de pruebas.
@@ -338,7 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: '',
         full_name: null,
         phone: phone || null,
-        role: 'DRIVER',
+        role: 'USER',
         group_id: null,
         tier: 'PREMIUM',
         subscription_expires_at: null,
@@ -356,7 +356,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const payload: Record<string, unknown> = {
       id: session.user.id,
       phone: nextProfile.phone,
-      role: nextProfile.role,
+      /**
+       * 0048: el rol de la CUENTA es USER/ADMIN y NO se escribe desde aquí: lo pone la base al
+       * crear la cuenta (handle_new_user) y solo lo mueve el panel. Antes se guardaba el rol de
+       * VISTA del store («DRIVER»/«PROVIDER») y de ahí salían las «categorías» que vio el
+       * usuario (09-10-2026); desde la 0048 ese valor rebota el guardado con
+       * `profiles_role_check` (reporte del usuario, 10-10-2026). El normalizador protege además
+       * de una caché vieja del teléfono: lo que no sea ADMIN se escribe como USER.
+       */
+      role: profile?.role === 'ADMIN' ? 'ADMIN' : 'USER',
       full_name: nextProfile.full_name,
       vehicle_data: nextProfile.vehicle_data,
       license_data: nextProfile.license_data,

@@ -40,6 +40,7 @@ export function initialOf(name?: string | null): string {
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  USER: 'Usuario',
   GROUP_OWNER: 'Propietario de grupo',
   ADMIN: 'Administrador',
   PROVIDER: 'Proveedor',

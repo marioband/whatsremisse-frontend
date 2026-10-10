@@ -1,7 +1,8 @@
 export interface DbProfile {
   id: string;
   phone: string | null;
-  role: 'GROUP_OWNER' | 'ADMIN' | 'PROVIDER' | 'DRIVER';
+  /** 0048: la cuenta es USER (cualquiera) o ADMIN (abre el panel). */
+  role: 'USER' | 'ADMIN';
   full_name: string | null;
   tier: 'FREE' | 'PREMIUM' | null;
   subscription_expires_at: string | null;

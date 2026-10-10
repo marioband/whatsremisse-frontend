@@ -1,4 +1,10 @@
 export type AppRole = 'GROUP_OWNER' | 'ADMIN' | 'PROVIDER' | 'DRIVER';
+/**
+ * El rol de la CUENTA en la base (migración 0048): `USER` para cualquiera, `ADMIN` para quien
+ * puede abrir el panel. NO confundir con `AppRole`, que es el rol de VISTA de la app (la
+ * pestaña con la que se mira: Conductor / Proveedor / Mis grupos) y vive en el store.
+ */
+export type RolDeCuenta = 'USER' | 'ADMIN';
 export type SubscriptionTier = 'FREE' | 'PREMIUM';
 
 export type ServiceStatus =
@@ -49,7 +55,8 @@ export interface Profile {
   email: string;
   full_name: string | null;
   phone: string | null;
-  role: AppRole;
+  /** Rol de la CUENTA (0048): USER o ADMIN. El de vista es del store, no de aquí. */
+  role: RolDeCuenta;
   group_id: string | null;
   tier: SubscriptionTier;
   subscription_expires_at: string | null;

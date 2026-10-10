@@ -33,7 +33,7 @@ const DARK_BG = '#2D2D2D';
 export function ProfileSetupScreen() {
   const navigation = useNavigation<SetupNav>();
   const { session, phone, completeProfileSetup, requiresProfileSetup } = useAuth();
-  const { role, userProfile, persistUserProfile } = useMockStore();
+  const { userProfile, persistUserProfile } = useMockStore();
 
   const [firstName, setFirstName] = useState(userProfile?.firstName || '');
   const [lastName, setLastName] = useState(userProfile?.lastName || '');
@@ -167,9 +167,13 @@ export function ProfileSetupScreen() {
       if (requiresProfileSetup) {
         // Primer guardado (onboarding): asegura que exista la fila en `profiles`
         // con rol, teléfono y nombre antes de persistir el resto de los datos.
+        // OJO: aquí NO va el rol. El rol de la CUENTA (USER/ADMIN, migración 0048) lo pone la
+        // base al crear la cuenta y solo lo cambia el panel; el rol de VISTA (Conductor/
+        // Proveedor/Mis grupos) vive en el store y no se escribe. Mandarlo aquí era el origen
+        // de las «categorías» que vio el usuario y, desde la 0048, el guardado rebotaba con
+        // `profiles_role_check` (reporte del usuario, 10-10-2026).
         await completeProfileSetup({
           full_name: `${firstName} ${lastName}`.trim() || null,
-          role,
           vehicle_data: { vehicle_type: vehicleTypes, brand, model, plate },
         });
       }
