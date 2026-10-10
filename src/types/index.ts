@@ -227,18 +227,15 @@ export interface Payment {
   resolved_at: string | null;
 }
 
+/**
+ * Una cuenta bloqueada (0055). La ficha muestra lo mínimo real: nombre, teléfono y desde qué
+ * lista se bloqueó. (Antes tenía campos de vehículo y una foto «simulada»: eran de mentira.)
+ */
 export interface BlockedUser {
   id: string;
   name: string;
-  firstName: string;
-  lastName: string;
-  dni: string;
-  phone: string;
-  brand: string;
-  model: string;
-  year: string;
-  color: string;
-  plate: string;
+  phone: string | null;
+  vista: 'CONDUCTOR' | 'PROVEEDOR';
 }
 
 export interface GroupMembership {

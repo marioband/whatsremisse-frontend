@@ -2085,6 +2085,45 @@ export async function countVisibleProfiles(): Promise<number> {
   return count ?? 0;
 }
 
+/**
+ * Bloqueos (0055): entre dos cuentas bloqueadas no se cruzan las alertas de servicio.
+ * La tabla no se toca por la API: se entra por estas tres funciones (mismo estilo que la 0053).
+ */
+export interface BloqueoDeCuenta {
+  id: string;
+  phone: string | null;
+  full_name: string | null;
+  vista: 'CONDUCTOR' | 'PROVEEDOR';
+}
+
+/** Mis bloqueos, con nombre y teléfono (alimentan las dos pantallas de Privacidad). */
+export async function cargarMisBloqueos(): Promise<BloqueoDeCuenta[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data, error } = await supabase.rpc('mis_bloqueos');
+  if (error) throw error;
+  return (data || []) as BloqueoDeCuenta[];
+}
+
+/** Bloquea a una cuenta. `vista` recuerda desde qué lista se hizo (Conductores/Proveedores). */
+export async function bloquearCuenta(
+  bloqueadoId: string,
+  vista: 'CONDUCTOR' | 'PROVEEDOR'
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.rpc('bloquear_usuario', {
+    p_bloqueado_id: bloqueadoId,
+    p_vista: vista,
+  });
+  if (error) throw error;
+}
+
+/** Quita MI bloqueo de esa cuenta (si no es mío, la base no borra nada). */
+export async function desbloquearCuenta(bloqueadoId: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.rpc('desbloquear_usuario', { p_bloqueado_id: bloqueadoId });
+  if (error) throw error;
+}
+
 export interface ProfilePatch {
   full_name?: string | null;
   phone?: string | null;

@@ -20,6 +20,7 @@ import { ChatScreen } from '../screens/ChatScreen';
 import { CreateGroupScreen } from '../screens/CreateGroupScreen';
 import { CreateServiceAlertScreen } from '../screens/CreateServiceAlertScreen';
 import { CreateServiceScreen } from '../screens/CreateServiceScreen';
+import { ElegirBloqueoScreen } from '../screens/ElegirBloqueoScreen';
 import { EstadisticasScreen } from '../screens/EstadisticasScreen';
 import { GroupChatScreen } from '../screens/GroupChatScreen';
 import { GroupMembersScreen } from '../screens/GroupMembersScreen';
@@ -89,6 +90,8 @@ export type RootStackParamList = {
   BlockedDrivers: undefined;
   BlockedProviders: undefined;
   BlockedUserProfile: { user: BlockedUser };
+  /** Bloquear desde las listas de Privacidad (0055): se busca a la persona y se bloquea. */
+  ElegirBloqueo: { vista: 'CONDUCTOR' | 'PROVEEDOR' };
   AppLock: undefined;
   Membership: undefined;
   /**
@@ -277,6 +280,12 @@ export function RootNavigator() {
               <Stack.Screen
                 name="BlockedUserProfile"
                 component={BlockedUserProfileScreen}
+                options={{ headerShown: false }}
+              />
+              {/* 0055: buscar a la persona para bloquear (desde las listas de Privacidad). */}
+              <Stack.Screen
+                name="ElegirBloqueo"
+                component={ElegirBloqueoScreen}
                 options={{ headerShown: false }}
               />
               <Stack.Screen

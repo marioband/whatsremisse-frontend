@@ -1,54 +1,54 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 
 import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { TEXTO_TENUE } from '../lib/colors';
+import { TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
+import { desbloquearCuenta } from '../lib/database';
 
 type ProfileNav = StackNavigationProp<RootStackParamList, 'BlockedUserProfile'>;
 type ProfileRoute = RouteProp<RootStackParamList, 'BlockedUserProfile'>;
 
 const DARK_BG = '#2D2D2D';
 
+/**
+ * La ficha de una cuenta bloqueada (0055). Antes era de mentira: mostraba «Datos del
+ * conductor» y del vehículo inventados, con un «Cambiar foto de perfil» simulado que no
+ * hacía nada. Ahora enseña lo real (nombre y teléfono) y lo único que se puede hacer aquí:
+ * desbloquear — que sí se guarda.
+ */
 export function BlockedUserProfileScreen() {
   const navigation = useNavigation<ProfileNav>();
   const route = useRoute<ProfileRoute>();
   const { user } = route.params;
+  const [saliendo, setSaliendo] = useState(false);
 
   const handleUnblock = () => {
-    Alert.alert('Desbloquear usuario', `¿Estás seguro de desbloquear a ${user.name}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Desbloquear',
-        onPress: () => navigation.goBack(),
-      },
-    ]);
+    Alert.alert(
+      'Desbloquear cuenta',
+      `¿Estás seguro de desbloquear a ${user.name}? Entre ustedes volverán a verse las alertas de servicio.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Desbloquear',
+          onPress: () => {
+            setSaliendo(true);
+            desbloquearCuenta(user.id)
+              .then(() => navigation.goBack())
+              .catch((err) => {
+                setSaliendo(false);
+                // eslint-disable-next-line no-console
+                console.warn('[Bloqueados] no se pudo desbloquear:', err);
+                Alert.alert('No se pudo desbloquear', 'Inténtalo de nuevo en un momento.');
+              });
+          },
+        },
+      ]
+    );
   };
-
-  const renderRow = (label: string, value: string) => (
-    <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        editable={false}
-        placeholder="-"
-        placeholderTextColor={TEXTO_TENUE}
-      />
-    </View>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -63,44 +63,28 @@ export function BlockedUserProfileScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
-        {/* Avatar */}
-        <TouchableOpacity
-          style={styles.avatarContainer}
-          onPress={() => Alert.alert('Avatar', 'Selección de avatar simulada.')}
-        >
-          <View style={styles.avatar}>
-            <MaterialCommunityIcons name="camera" size={48} color="#9E9E9E" />
-          </View>
-          <Text style={styles.changePhotoText}>Cambiar foto de perfil</Text>
-        </TouchableOpacity>
-
-        {/* Driver data */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Datos del conductor</Text>
-          {renderRow('Nombres', user.firstName)}
-          {renderRow('Apellidos', user.lastName)}
-          {renderRow('DNI', user.dni)}
-          {renderRow('Número Celular', user.phone)}
+      <View style={styles.body}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
         </View>
+        <Text style={styles.name}>{user.name}</Text>
+        {!!user.phone && <Text style={styles.phone}>{user.phone}</Text>}
+        <Text style={styles.nota}>
+          {user.vista === 'CONDUCTOR'
+            ? 'Este conductor no ve tus alertas de servicio.'
+            : 'No ves las alertas de servicio de este proveedor.'}
+        </Text>
+      </View>
 
-        {/* Vehicle data */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Datos del Vehículo</Text>
-          {renderRow('Marca', user.brand)}
-          {renderRow('Modelo', user.model)}
-          {renderRow('Año', user.year)}
-          {renderRow('Color', user.color)}
-          {renderRow('Placa', user.plate)}
-        </View>
-
-        <View style={styles.spacer} />
-      </ScrollView>
-
-      {/* Unblock button */}
+      {/* Desbloquear */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.unblockBtn} onPress={handleUnblock}>
-          <Text style={styles.unblockText}>Desbloquear</Text>
+        <TouchableOpacity
+          style={[styles.unblockBtn, saliendo && styles.unblockBtnApagado]}
+          onPress={handleUnblock}
+          disabled={saliendo}
+          accessibilityLabel="Desbloquear cuenta"
+        >
+          <Text style={styles.unblockText}>{saliendo ? 'Desbloqueando…' : 'Desbloquear'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -108,10 +92,7 @@ export function BlockedUserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -123,10 +104,6 @@ const styles = StyleSheet.create({
     minHeight: 102,
   },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  backArrow: {
-    color: '#fff',
-    fontSize: 24,
-  },
   headerTitle: {
     color: '#fff',
     fontSize: 18,
@@ -135,72 +112,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 12,
   },
-  headerSpacer: {
-    width: 36,
-  },
-  body: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  avatarContainer: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
+  headerSpacer: { width: 36 },
+  body: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 48 },
   avatar: {
-    width: 140,
-    height: 140,
-    borderRadius: 20,
-    backgroundColor: '#E0E0E0',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: DARK_BG,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  avatarIcon: {
-    fontSize: 48,
-  },
-  changePhotoText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  section: {
-    marginBottom: 28,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111',
-    marginBottom: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  label: {
-    fontSize: 14,
-    color: '#555',
-    fontWeight: '500',
-    width: '30%',
-  },
-  input: {
-    width: '65%',
-    backgroundColor: '#F2F2F2',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#333',
-  },
-  spacer: {
-    height: 20,
+  avatarText: { color: '#fff', fontSize: 38, fontWeight: 'bold' },
+  name: { fontSize: 20, fontWeight: 'bold', color: '#111', textAlign: 'center' },
+  phone: { fontSize: 15, color: TEXTO_SUAVE, marginTop: 6 },
+  nota: {
+    fontSize: 13,
+    color: TEXTO_TENUE,
+    textAlign: 'center',
+    marginTop: 24,
+    lineHeight: 19,
+    paddingHorizontal: 8,
   },
   footer: {
-    backgroundColor: '#fff',
     paddingHorizontal: 20,
     paddingVertical: 20,
-    borderTopWidth: 0.5,
-    borderTopColor: '#ddd',
   },
   unblockBtn: {
     backgroundColor: DARK_BG,
@@ -208,9 +144,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  unblockText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  unblockBtnApagado: { opacity: 0.6 },
+  unblockText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

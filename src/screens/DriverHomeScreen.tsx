@@ -25,6 +25,7 @@ import { usePosicionPublicada } from '../hooks/usePosicionPublicada';
 import { Alert } from '../lib/alert';
 import { ordenarEnProceso } from '../lib/apartadosDelInicio';
 import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
+import { cargarMisBloqueos } from '../lib/database';
 import { esProgramado } from '../lib/datetime';
 import { distanciaLinealMetros, textoDeDistanciaAproximada } from '../lib/geo';
 import { ultimaUbicacion } from '../lib/geolocation';
@@ -108,6 +109,12 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
 
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('Disponibles');
   const [showArchived, setShowArchived] = useState(false);
+  /**
+   * 0055: las cuentas que bloqueé. La base ya esconde sus alertas al consultar; esto es el
+   * cinturón del cliente (una tarjeta vieja en caché no se pinta). Solo aplica a alertas
+   * abiertas: un servicio EN CURSO asignado a mí no se oculta nunca.
+   */
+  const [bloqueadosPorMi, setBloqueadosPorMi] = useState<Set<string>>(new Set());
 
   /**
    * La lupa del apartado (18-09-2026): filtra la lista que se ESTÁ VIENDO con lo que se
@@ -299,6 +306,21 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
         Object.entries(visiblesRef.current).forEach(([id, hasta]) => {
           if (hasta > ahora) rechazosPendientes.current.add(id);
         });
+      };
+    }, [])
+  );
+
+  /** 0055: relee mis bloqueos al entrar al inicio (se cambian desde Cuenta → Privacidad). */
+  useFocusEffect(
+    useCallback(() => {
+      let activo = true;
+      cargarMisBloqueos()
+        .then((lista) => {
+          if (activo) setBloqueadosPorMi(new Set(lista.map((b) => b.id)));
+        })
+        .catch(() => undefined);
+      return () => {
+        activo = false;
       };
     }, [])
   );
@@ -534,7 +556,12 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
         serviciosDelInicio(myActiveServices, applications, 'En proceso', opcionesDelInicio)
       );
     }
-    return sortedServices;
+    // 0055: una alerta ABIERTA de un proveedor que bloqueé no se muestra (la base ya la
+    // esconde al consultar; esto además quita las tarjetas viejas de la caché). Un servicio
+    // asignado a mí sigue: los viajes en curso no se tocan.
+    return sortedServices.filter(
+      (s) => !(bloqueadosPorMi.has(s.provider_id) && s.assigned_driver_id !== currentDriverId)
+    );
   }, [
     sortedServices,
     myActiveServices,
@@ -542,6 +569,8 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
     activeStatus,
     showArchived,
     opcionesDelInicio,
+    bloqueadosPorMi,
+    currentDriverId,
   ]);
 
   /**

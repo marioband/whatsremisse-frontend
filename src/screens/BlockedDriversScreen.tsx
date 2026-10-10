@@ -1,7 +1,15 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  ActivityIndicator,
+} from 'react-native';
 
 import { Fab } from '../components/Fab';
 import { Alert } from '../lib/alert';
@@ -10,17 +18,52 @@ import { BlockedUser } from '../types';
 import { IconoDeAtras } from '../components/IconoDeAtras';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TEXTO_TENUE } from '../lib/colors';
+import { cargarMisBloqueos, desbloquearCuenta } from '../lib/database';
 
 type BlockedNav = StackNavigationProp<RootStackParamList, 'BlockedDrivers'>;
 
 const DARK_BG = '#2D2D2D';
 
+/**
+ * Conductores bloqueados (0055 desde la base): aquí viven los bloqueos hechos desde esta
+ * lista. Antes la lista era de mentira (se vaciaba al salir) y el «+» abría un aviso de
+ * relleno; ahora el «+» lleva a buscar a la persona y todo se guarda en la cuenta.
+ */
 export function BlockedDriversScreen() {
   const navigation = useNavigation<BlockedNav>();
   const [drivers, setDrivers] = useState<BlockedUser[]>([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cargar = useCallback(async () => {
+    try {
+      const lista = await cargarMisBloqueos();
+      setDrivers(
+        lista
+          .filter((b) => b.vista === 'CONDUCTOR')
+          .map((b) => ({
+            id: b.id,
+            name: b.full_name || b.phone || 'Cuenta sin nombre',
+            phone: b.phone,
+            vista: b.vista,
+          }))
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[Bloqueados] no se pudo leer la lista:', err);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  // Al volver de la pantalla de bloqueo (o de la ficha), la lista se relee sola.
+  useFocusEffect(
+    useCallback(() => {
+      void cargar();
+    }, [cargar])
+  );
 
   const handleAdd = () => {
-    Alert.alert('Agregar conductor', 'Aquí se abriría la búsqueda de conductores para bloquear.');
+    navigation.navigate('ElegirBloqueo', { vista: 'CONDUCTOR' });
   };
 
   const handleUnblock = (id: string, name: string) => {
@@ -28,7 +71,15 @@ export function BlockedDriversScreen() {
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Desbloquear',
-        onPress: () => setDrivers((prev) => prev.filter((d) => d.id !== id)),
+        onPress: () => {
+          desbloquearCuenta(id)
+            .then(() => void cargar())
+            .catch((err) => {
+              // eslint-disable-next-line no-console
+              console.warn('[Bloqueados] no se pudo desbloquear:', err);
+              Alert.alert('No se pudo desbloquear', 'Inténtalo de nuevo en un momento.');
+            });
+        },
       },
     ]);
   };
@@ -42,8 +93,17 @@ export function BlockedDriversScreen() {
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
       </View>
-      <Text style={styles.name}>{item.name}</Text>
-      <TouchableOpacity style={styles.removeBtn} onPress={() => handleUnblock(item.id, item.name)}>
+      <View style={styles.textos}>
+        <Text style={styles.name} numberOfLines={1}>
+          {item.name}
+        </Text>
+        {!!item.phone && <Text style={styles.phone}>{item.phone}</Text>}
+      </View>
+      <TouchableOpacity
+        style={styles.removeBtn}
+        onPress={() => handleUnblock(item.id, item.name)}
+        accessibilityLabel={`Desbloquear a ${item.name}`}
+      >
         <MaterialCommunityIcons name="close" size={16} color="#fff" />
       </TouchableOpacity>
     </TouchableOpacity>
@@ -60,16 +120,22 @@ export function BlockedDriversScreen() {
         <View style={styles.headerIconBtn} />
       </View>
 
-      <FlatList
-        data={drivers}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={<Text style={styles.emptyText}>No tienes conductores bloqueados.</Text>}
-      />
+      {cargando && drivers.length === 0 ? (
+        <ActivityIndicator style={styles.cargando} color={TEXTO_TENUE} />
+      ) : (
+        <FlatList
+          data={drivers}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No tienes conductores bloqueados.</Text>
+          }
+        />
+      )}
 
       {/* FAB */}
-      <Fab etiqueta="Agregar conductor bloqueado" onPress={handleAdd} />
+      <Fab etiqueta="Bloquear un conductor" onPress={handleAdd} />
     </SafeAreaView>
   );
 }
@@ -87,7 +153,6 @@ const styles = StyleSheet.create({
     minHeight: 102,
   },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { color: '#fff', fontSize: 24 },
   headerTitle: {
     color: '#fff',
     fontSize: 18,
@@ -97,7 +162,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   headerIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  headerIcon: { fontSize: 22 },
+  cargando: { marginTop: 40 },
   list: { padding: 16, paddingBottom: 100 },
   card: {
     flexDirection: 'row',
@@ -118,12 +183,13 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   avatarText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  textos: { flex: 1 },
   name: {
-    flex: 1,
     fontSize: 16,
     fontWeight: '600',
     color: '#111',
   },
+  phone: { fontSize: 13, color: TEXTO_TENUE, marginTop: 2 },
   removeBtn: {
     width: 28,
     height: 28,
@@ -132,6 +198,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  removeText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   emptyText: { textAlign: 'center', color: TEXTO_TENUE, marginTop: 40, fontSize: 14 },
 });
