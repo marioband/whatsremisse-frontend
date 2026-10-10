@@ -79,6 +79,15 @@ function mapProfile(row: Record<string, unknown>): Profile {
     yape_number: row.yape_number ? String(row.yape_number) : null,
     bcp_account: row.bcp_account ? String(row.bcp_account) : null,
     bcp_cci: row.bcp_cci ? String(row.bcp_cci) : null,
+    /**
+     * 10-10-2026: la 0039 guarda el tipo de billetera y el banco en estas tres columnas, pero
+     * este mapeo no las copiaba: el store quedaba sin ellas, «Datos de pago» no hidrataba lo
+     * declarado (ninguna billetera marcada + pista roja sobre datos que YA existían) y el
+     * rótulo propio de pago salía genérico en los chats. El tipo `Profile` ya las tenía.
+     */
+    billetera_tipo: row.billetera_tipo ? String(row.billetera_tipo) : null,
+    billetera_nombre: row.billetera_nombre ? String(row.billetera_nombre) : null,
+    banco_nombre: row.banco_nombre ? String(row.banco_nombre) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
