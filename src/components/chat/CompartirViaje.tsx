@@ -3,8 +3,9 @@ import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 import { AZUL } from '../../lib/colors';
-import { crearEnlaceDelSeguimiento } from '../../lib/database';
+import { crearEnlaceDelSeguimiento, updateServiceAlert } from '../../lib/database';
 import { textoDeErrorParaElUsuario } from '../../lib/errors';
+import { medirElViaje } from '../../lib/viajeDelServicio';
 import { ServiceAlert } from '../../types';
 
 interface CompartirViajeProps {
@@ -20,6 +21,23 @@ function viajeEnCurso(service?: ServiceAlert | null): boolean {
     service.status !== 'STATUS_COMPLETED' &&
     service.status !== 'STATUS_CANCELLED'
   );
+}
+
+/**
+ * La página del cliente dibuja el RECORRIDO de la ruta (0049) con el trazo guardado en el
+ * servicio. Un servicio publicado antes del arreglo puede no tenerlo — y entonces el cliente
+ * ve una línea recta: al compartir, si falta, se mide UNA vez y se guarda aquí mismo. La
+ * próxima medida sale de la caché, así que no cuesta una llamada extra.
+ * Es «mejor esfuerzo»: si falla, el enlace se comparte igual.
+ */
+async function asegurarElTrazoDelViaje(service: ServiceAlert): Promise<void> {
+  try {
+    if (service.trazoPolyline) return;
+    const viaje = await medirElViaje(service);
+    if (viaje?.trazoPolyline) await updateServiceAlert(service.id, viaje);
+  } catch {
+    // sin trazo la página cae a la línea A→B; no vale la pena frenar el compartir por esto
+  }
 }
 
 /**
@@ -40,6 +58,8 @@ export function CompartirViaje({ service, esProveedor }: CompartirViajeProps) {
     if (ocupado || !service) return;
     setOcupado(true);
     try {
+      // Primero se asegura el trazo del recorrido (si falta, se mide ahora); el enlace va después.
+      void asegurarElTrazoDelViaje(service);
       const enlace = await crearEnlaceDelSeguimiento(service.id);
       const url = `https://whatsremisse.tech${enlace.url}`;
       await Clipboard.setStringAsync(url);
