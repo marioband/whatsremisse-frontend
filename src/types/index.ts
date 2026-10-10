@@ -71,6 +71,8 @@ export interface Profile {
   billetera_nombre?: string | null;
   /** 0039: banco de los datos de pago (BCP, Interbank, Scotiabank o el nombre escrito). */
   banco_nombre?: string | null;
+  /** 0056: unidades extra del filtro del conductor (el aviso del servidor usa las mismas). */
+  unidades_extra?: string[] | null;
   /**
    * 0042: el conductor quiere recibir avisos de EMERGENCIAS cercanas de grupos que no integra.
    * Vive en la base (no solo en el teléfono) porque el aviso lo manda el servidor.

@@ -126,6 +126,16 @@ export async function leerUnidadesExtra(): Promise<string[]> {
   return normalizarUnidades(guardadas);
 }
 
+/**
+ * Como `leerUnidadesExtra`, pero `null` = NUNCA se guardó en este teléfono (se distingue de
+ * «guardado vacío», que es una elección: solo mis unidades). Sirve para caer al perfil —
+ * el aviso del servidor (0056) usa `profiles.unidades_extra` y el teléfono nuevo no lo tiene.
+ */
+export async function leerUnidadesExtraCrudo(): Promise<string[] | null> {
+  const guardadas = await leerCache<string[]>(CLAVE_UNIDADES_EXTRA, VIGENCIA_DE_LA_PREFERENCIA_MS);
+  return guardadas ? normalizarUnidades(guardadas) : null;
+}
+
 /** Guarda el filtro. Una lista vacía SÍ se guarda: significa «solo mis unidades». */
 export async function guardarUnidadesExtra(unidades: readonly string[]): Promise<void> {
   await guardarCache(CLAVE_UNIDADES_EXTRA, normalizarUnidades(unidades));

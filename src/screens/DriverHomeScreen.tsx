@@ -37,13 +37,7 @@ import { AZUL, ESPACIADO, INTERLINEADO, TALLAS, TEXTO_SUAVE, TEXTO_TENUE } from 
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { textoDelBoton } from '../lib/numerosDelInicio';
 import { tiposEfectivos } from '../lib/unidades';
-import {
-  guardarIniciosDelViaje,
-  IniciosDelViaje,
-  leerIniciosDelViaje,
-  marcarInicio,
-  yaInicio,
-} from '../lib/inicioDelViaje';
+import { yaInicio } from '../lib/inicioDelViaje';
 import {
   esAceptadoMio as esAceptadoMioDe,
   estadoEfectivoDeMiPostulacion,
@@ -105,6 +99,7 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
     debtThreshold,
     marcarArranqueDelViaje,
     cargandoInicial,
+    iniciosDeViaje,
   } = useMockStore();
 
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('Disponibles');
@@ -179,35 +174,31 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
    */
   const esAceptadoMio = (service: ServiceAlert) => esAceptadoMioDe(service, currentDriverId);
 
-  /**
-   * Marca local de "ya cumplí el toque de inicio" (ver `lib/inicioDelViaje.ts`): el
-   * toque NO reporta ningún hito, solo mueve la tarjeta a "En proceso". Se guarda en
-   * el dispositivo, así que sobrevive a recargar la app.
-   */
-  const [inicios, setInicios] = useState<IniciosDelViaje>({});
   /** Huella de la alerta cuando me postulé (para saber si el proveedor la editó). */
   const [huellas, setHuellas] = useState<HuellasDePostulacion>({});
 
-  /** Relee las marcas del dispositivo (al montar y después de postularme). */
+  /** Relee las huellas del dispositivo (al montar y después de postularme). */
   const releerMarcas = useCallback(async () => {
-    const [i, h] = await Promise.all([leerIniciosDelViaje(), leerHuellasDePostulacion()]);
-    setInicios(i);
-    setHuellas(h);
+    setHuellas(await leerHuellasDePostulacion());
   }, []);
 
   useEffect(() => {
     let vivo = true;
-    Promise.all([leerIniciosDelViaje(), leerHuellasDePostulacion()]).then(([i, h]) => {
-      if (!vivo) return;
-      setInicios(i);
-      setHuellas(h);
+    leerHuellasDePostulacion().then((h) => {
+      if (vivo) setHuellas(h);
     });
     return () => {
       vivo = false;
     };
   }, []);
 
-  const inicioCumplido = (serviceId: string) => yaInicio(inicios, serviceId, currentDriverId);
+  /**
+   * Marca local del toque «toca para iniciar» (10-10-2026): vive en el almacén, así la LISTA
+   * y los NÚMEROS del inicio leen la misma verdad (antes el contador no veía el toque y decía
+   * «Disponibles 1» con la lista vacía, y «En proceso 3» con 4 tarjetas).
+   */
+  const inicioCumplido = (serviceId: string) =>
+    yaInicio(iniciosDeViaje, serviceId, currentDriverId);
   const huellaAlPostular = (serviceId: string) =>
     huellaDeMiPostulacion(huellas, serviceId, currentDriverId);
 
@@ -389,7 +380,7 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
       driverVehicleTypes,
       showArchived,
       rechazosVisibles,
-      inicios,
+      iniciosDeViaje,
       huellas,
     ]
   );
@@ -484,14 +475,11 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
       // dispositivo (`lib/inicioDelViaje.ts`) y los hitos los reporta el deslizamiento
       // dentro del chat (Ubicado → En proceso → Finalizado).
       if (plan.cumpleElToqueDeInicio) {
-        // Marca local (la que vale sin conexión) + marca en la base (0022), que es la
-        // que deja al PROVEEDOR mover su tarjeta de "Publicados" a "En proceso".
-        const actualizados = marcarInicio(inicios, service.id, currentDriverId);
-        setInicios(actualizados);
-        await guardarIniciosDelViaje(actualizados);
-        // No se espera: el toque ya está marcado en el teléfono y la pantalla no debe
-        // quedarse esperando a la red (el store avisa por consola si la 0022 falta).
-        marcarArranqueDelViaje(service.id);
+        // La marca local la guarda el almacén (fuente única para la lista Y los números del
+        // inicio) y él mismo dispara la de la base (0022), que deja al PROVEEDOR mover su
+        // tarjeta de "Publicados" a "En proceso". No se espera: el toque ya está marcado en
+        // el teléfono y la pantalla no debe quedarse esperando a la red.
+        marcarArranqueDelViaje(service.id, currentDriverId);
       }
       navigation.navigate('Chat', {
         serviceId: service.id,

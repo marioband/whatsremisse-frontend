@@ -16,10 +16,12 @@
  *     los pagos pendientes) **30 minutos antes** de la hora del servicio y se queda ahí
  *     hasta que el viaje termine o la reserva deje de estar vigente.
  *
- * Cuándo entra una tarjeta en "En proceso" (lo fijó el usuario al aclarar el caso):
- * cuando el conductor hace la acción **"Servicio aceptado, toca para iniciar"**. Antes
- * de ese toque, la tarjeta se queda en "Disponibles" (conductor) y "Publicados"
- * (proveedor), aunque el servicio ya esté asignado.
+ * Cuándo entra una tarjeta en "En proceso" (el lado del CONDUCTOR lo fijó el usuario el
+ * 17-09-2026; el del PROVEEDOR se corrigió el 10-10-2026): el conductor entra con la acción
+ * **"Servicio aceptado, toca para iniciar"** (antes del toque, su tarjeta se queda en
+ * "Disponibles"); el proveedor entra **en cuanto hay conductor asignado** (antes esperaba al
+ * toque y una tarjeta "En camino" se quedaba en "Publicados" — el usuario lo reportó como
+ * sin sentido: con conductor, el servicio ya está en curso).
  *
  * El toque NO es un hito (`driver_progress_step` sigue igual): se guarda en la columna
  * `service_alerts.driver_started_at` (migración 0022) para que el proveedor —que no ve
@@ -90,11 +92,12 @@ export function estaEnProcesoDelConductor(
 
 /**
  * Apartado "En proceso" del PROVEEDOR: los servicios que ya tienen a un conductor
- * trabajando (arrancó) hasta que cierre el pago. Mientras el conductor no haga el toque,
- * la tarjeta se queda en "Publicados", aunque el servicio ya esté asignado.
+ * asignado, hasta que cierre el pago. (10-10-2026, corrección pedida por el usuario:
+ * antes esperaba al toque "toca para iniciar" del conductor y una tarjeta «En camino»
+ * se quedaba en "Publicados"; con conductor asignado, el servicio ya está en curso.)
  */
 export function estaEnProcesoDelProveedor(service: ServiceAlert): boolean {
-  return !!service.assigned_driver_id && sigueVivo(service) && arrancoElViaje(service);
+  return !!service.assigned_driver_id && sigueVivo(service);
 }
 
 /** Grupo de orden dentro de "En proceso". */

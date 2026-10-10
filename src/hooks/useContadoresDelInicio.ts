@@ -10,6 +10,7 @@ import {
   listaDelProveedor,
 } from '../lib/apartadosDelInicio';
 import { listaBaseDelConductor, serviciosDelInicio } from '../lib/listaDelConductor';
+import { yaInicio } from '../lib/inicioDelViaje';
 import { sumaDeNumeros } from '../lib/numerosDelInicio';
 import { tiposEfectivos } from '../lib/unidades';
 
@@ -60,7 +61,8 @@ const SIN_CONTADORES: ContadoresDelInicio = {
 };
 
 export function useContadoresDelInicio(): { contadores: ContadoresDelInicio } {
-  const { services, applications, groups, userProfile, sinLeerDeGrupos } = useMockStore();
+  const { services, applications, groups, userProfile, sinLeerDeGrupos, iniciosDeViaje } =
+    useMockStore();
   const { session } = useAuth();
   const userId = session?.user?.id ?? '';
   // Las mismas unidades que ve el inicio (las suyas + las que marcó en el filtro): si aquí no se
@@ -70,12 +72,16 @@ export function useContadoresDelInicio(): { contadores: ContadoresDelInicio } {
   // emergencias que el conductor sí ve en la lista.
   const emergenciasCerca = useEmergenciasCerca();
 
+  const inicioCumplidoConductor = (serviceId: string) =>
+    yaInicio(iniciosDeViaje, serviceId, userId);
+
   const contadores = useMemo<ContadoresDelInicio>(() => {
     if (!userId) return SIN_CONTADORES;
 
     // Mismas reglas que los inicios (lib/listaDelConductor). Lo único que NO entra son los estados
-    // transitorios de la pantalla —el rechazo recién llegado de 3 segundos y el toque local de
-    // inicio—: no son tarjetas de la lista.
+    // transitorios de la pantalla —el rechazo recién llegado de 3 segundos—: no son tarjetas de la
+    // lista. El toque «toca para iniciar» SÍ entra (10-10-2026): es la misma marca local que usa la
+    // lista, y desde que vive en el almacén el número se mueve junto con la tarjeta.
     const opciones = {
       userId,
       groupIds: groups.map((g) => g.id),
@@ -83,7 +89,7 @@ export function useContadoresDelInicio(): { contadores: ContadoresDelInicio } {
       emergenciasCerca,
       mostrarArchivados: false,
       rechazoReciente: () => false,
-      inicioCumplido: () => false,
+      inicioCumplido: (serviceId: string) => yaInicio(iniciosDeViaje, serviceId, userId),
     };
 
     const baseDelConductor = listaBaseDelConductor(services, applications, opciones);
@@ -94,7 +100,7 @@ export function useContadoresDelInicio(): { contadores: ContadoresDelInicio } {
       opciones
     );
     const enProcesoLista = baseDelConductor.filter((s) =>
-      estaEnProcesoDelConductor(s, userId, false)
+      estaEnProcesoDelConductor(s, userId, inicioCumplidoConductor(s.id))
     );
 
     const mios = listaDelProveedor(services.filter((s) => s.provider_id === userId));
@@ -132,6 +138,7 @@ export function useContadoresDelInicio(): { contadores: ContadoresDelInicio } {
     emergenciasCerca,
     userProfile,
     userId,
+    iniciosDeViaje,
   ]);
 
   return { contadores };

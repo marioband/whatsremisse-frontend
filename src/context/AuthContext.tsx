@@ -88,6 +88,8 @@ function mapProfile(row: Record<string, unknown>): Profile {
     billetera_tipo: row.billetera_tipo ? String(row.billetera_tipo) : null,
     billetera_nombre: row.billetera_nombre ? String(row.billetera_nombre) : null,
     banco_nombre: row.banco_nombre ? String(row.banco_nombre) : null,
+    // 0056: las «unidades extra» del filtro del conductor (el aviso del servidor usa las mismas).
+    unidades_extra: Array.isArray(row.unidades_extra) ? (row.unidades_extra as string[]) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };

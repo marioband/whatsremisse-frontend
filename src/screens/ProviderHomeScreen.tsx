@@ -109,8 +109,8 @@ export function ProviderHomeScreen({ numeros }: ProviderHomeProps = {}) {
       return ordenarEnProceso(serviciosDelInicio.filter((s) => estaEnProcesoDelProveedor(s)));
     }
 
-    // "Publicados": todo lo demás, incluidos los servicios con conductor aceptado que
-    // todavía no hicieron el toque "toca para iniciar" (regla del usuario).
+    // "Publicados": los servicios que todavía NO tienen conductor. (10-10-2026: el que ya
+    // tiene conductor asignado vive en "En proceso", aunque no haya tocado "toca para iniciar".)
     return serviciosDelInicio.filter((s) => !estaEnProcesoDelProveedor(s));
   }, [serviciosDelInicio, activeStatus]);
 

@@ -2086,6 +2086,25 @@ export async function countVisibleProfiles(): Promise<number> {
 }
 
 /**
+ * Guarda las «unidades extra» del filtro del conductor en SU perfil (0056): el aviso del
+ * servidor necesita el dato para no avisar de más (ni de menos). Mejor esfuerzo: si falla,
+ * el filtro del teléfono ya quedó guardado y la lista funciona igual.
+ */
+export async function guardarUnidadesExtraEnPerfil(
+  unidades: readonly string[]
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ unidades_extra: [...unidades] })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+/**
  * Bloqueos (0055): entre dos cuentas bloqueadas no se cruzan las alertas de servicio.
  * La tabla no se toca por la API: se entra por estas tres funciones (mismo estilo que la 0053).
  */

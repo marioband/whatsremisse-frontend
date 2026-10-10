@@ -57,6 +57,12 @@ import {
   updateServiceAlert,
   ProfilePatch,
 } from '../lib/database';
+import {
+  guardarIniciosDelViaje,
+  IniciosDelViaje,
+  leerIniciosDelViaje,
+  marcarInicio,
+} from '../lib/inicioDelViaje';
 import { Candado, claveDeEnvio, crearCandado } from '../lib/envioUnico';
 import { describeError, esFalloDeTransporte, textoDeErrorParaElUsuario } from '../lib/errors';
 import { conGrupos } from '../lib/gruposDeServicio';
@@ -672,8 +678,11 @@ interface MockContextValue extends MockState {
    * El toque "Servicio aceptado, toca para iniciar" del conductor (0022): deja la marca
    * en la base para que el PROVEEDOR vea lo mismo. No es un hito (`driver_progress_step`
    * no cambia) y no bloquea nada si falla: en el teléfono queda la marca local.
+   *
+   * La marca LOCAL la guarda el almacén (10-10-2026): es la misma que leen la lista y los
+   * números del inicio. `conductorId` es quien tocó (la marca vale por conductor).
    */
-  marcarArranqueDelViaje: (serviceId: string) => Promise<void>;
+  marcarArranqueDelViaje: (serviceId: string, conductorId: string) => Promise<void>;
   archiveService: (serviceId: string) => void;
   unarchiveService: (serviceId: string) => void;
   addMessage: (serviceId: string, message: Message) => void;
@@ -745,6 +754,8 @@ interface MockContextValue extends MockState {
    * tarjeta en vez del mensaje de «no hay servicios» (10-10-2026).
    */
   cargandoInicial: boolean;
+  /** Marcas locales del toque «toca para iniciar» (10-10-2026): las leen la lista y los números. */
+  iniciosDeViaje: IniciosDelViaje;
 }
 
 const MockContext = createContext<MockContextValue | undefined>(undefined);
@@ -855,19 +866,28 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
    */
   /** Primera carga en curso (10-10-2026): enciende los esqueletos del inicio; se apaga con caché pintada o con la consulta terminada. */
   const [cargandoInicial, setCargandoInicial] = useState(true);
+  /**
+   * 10-10-2026: las marcas locales del toque «Servicio aceptado, toca para iniciar» viven AQUÍ
+   * (antes solo en la pantalla del inicio): la lista del conductor Y los números de las píldoras
+   * leen lo mismo, así el número sigue a la tarjeta en el acto (antes el contador no veía el toque
+   * y decía «Disponibles 1» con la lista vacía, y «En proceso 3» con 4 tarjetas).
+   */
+  const [iniciosDeViaje, setIniciosDeViaje] = useState<IniciosDelViaje>({});
 
   const claveDeCache = (nombre: string, userId: string) => `${nombre}:${userId}`;
 
   /** Pinta grupos, servicios y postulaciones de la última vez que se abrió la app. Devuelve si pintó algo. */
   const hidratarDelTelefono = useCallback(async (userId: string) => {
-    const [grupos, servicios, postulaciones] = await Promise.all([
+    const [grupos, servicios, postulaciones, inicios] = await Promise.all([
       leerCache<GroupItem[]>(claveDeCache('grupos', userId), TTL_DE_LA_CACHE_MS),
       leerCache<ServiceAlert[]>(claveDeCache('servicios', userId), TTL_DE_LA_CACHE_MS),
       leerCache<Application[]>(claveDeCache('postulaciones', userId), TTL_DE_LA_CACHE_MS),
+      leerIniciosDelViaje(),
     ]);
     if (grupos?.length) dispatch({ type: 'SET_GROUPS', payload: grupos });
     if (servicios?.length) dispatch({ type: 'SET_SERVICES', payload: servicios });
     if (postulaciones?.length) dispatch({ type: 'SET_APPLICATIONS', payload: postulaciones });
+    if (Object.keys(inicios).length > 0) setIniciosDeViaje(inicios);
     return Boolean(grupos?.length || servicios?.length || postulaciones?.length);
   }, []);
 
@@ -1398,6 +1418,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
   const value: MockContextValue = {
     ...state,
     cargandoInicial,
+    iniciosDeViaje,
     setRole: (role) => dispatch({ type: 'SET_ROLE', payload: role }),
     addService: async (service, groupIds) => {
       // Un solo envío por borrador: si el usuario pulsa varias veces antes de que
@@ -1632,7 +1653,14 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       }
       dispatch({ type: 'UPDATE_SERVICE_STATUS', payload: { serviceId, status } });
     },
-    marcarArranqueDelViaje: async (serviceId) => {
+    marcarArranqueDelViaje: async (serviceId, conductorId) => {
+      // 10-10-2026: la marca local se guarda en el almacén (fuente única): la lista Y los
+      // números del inicio la leen de aquí, así el contador se mueve junto con la tarjeta.
+      setIniciosDeViaje((previos) => {
+        const mapa = marcarInicio(previos, serviceId, conductorId);
+        void guardarIniciosDelViaje(mapa);
+        return mapa;
+      });
       if (!isSupabaseConfigured) return;
       try {
         const actualizado = await marcarArranqueEnDb(serviceId);
