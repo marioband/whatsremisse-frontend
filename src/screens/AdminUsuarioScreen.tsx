@@ -474,6 +474,10 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
  * La mini maqueta de la cabecera del enlace (pedido del usuario, 10-10-2026): se actualiza al
  * instante con lo que hay en el formulario —nombre, color principal, logo— más el trazo y el
  * punto del color secundario, para ver cómo le queda la personalización.
+ *
+ * El logo es AUTO-DIMENSIONADO (10-10-2026, 2ª vuelta: los apaisados quedaban diminutos en una
+ * caja cuadrada): alto fijo (como la cabecera real) y ancho según su proporción, con un tope,
+ * igual que la regla CSS de la página del viaje.
  */
 export function VistaPreviaDelLink({
   nombre,
@@ -488,10 +492,34 @@ export function VistaPreviaDelLink({
 }) {
   const principal = normalizarColorDeMarca(colorPrincipal) || MARCA_COLOR_PRINCIPAL;
   const secundario = normalizarColorDeMarca(colorSecundario) || MARCA_COLOR_SECUNDARIO;
+  /** ancho/alto del logo, en cuanto la imagen lo cuenta (mientras, la cajita de 22). */
+  const [logoAspecto, setLogoAspecto] = useState<number | null>(null);
+  useEffect(() => {
+    setLogoAspecto(null);
+  }, [logoUrl]);
   return (
     <View style={styles.vistaPrevia}>
       <View style={[styles.vistaCabecera, { backgroundColor: principal }]}>
-        {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.vistaLogo} /> : null}
+        {logoUrl ? (
+          <Image
+            source={{ uri: logoUrl }}
+            style={[
+              styles.vistaLogo,
+              logoAspecto && logoAspecto > 0
+                ? { width: Math.min(72, Math.round(22 * logoAspecto)) }
+                : null,
+            ]}
+            resizeMode="contain"
+            onLoad={(e) => {
+              const fuente = e.nativeEvent.source as
+                | { width?: number; height?: number }
+                | undefined;
+              if (fuente?.width && fuente?.height) {
+                setLogoAspecto(fuente.width / fuente.height);
+              }
+            }}
+          />
+        ) : null}
         <Text
           style={[styles.vistaNombre, { color: contrasteSobreColor(principal) }]}
           numberOfLines={1}
