@@ -629,6 +629,32 @@ export function esColorDeMarcaValido(valor?: string | null): boolean {
 }
 
 /**
+ * Lo que se escribe en un campo de color, YA limpio: sin espacios ni caracteres invisibles (iOS a
+ * veces cuela uno al autocompletar y el campo se atasca «un carácter corto», reportado por el
+ * usuario el 10-10-2026), en MAYÚSCULAS, solo `#` (a la cabeza) y hex, y sin pasar de 7.
+ */
+export function limpiarColorDeMarca(valor?: string | null): string {
+  let limpio = '';
+  for (const caracter of (valor || '').toUpperCase()) {
+    if (caracter === '#' && limpio.length === 0) limpio += '#';
+    else if (/[0-9A-F]/.test(caracter)) limpio += caracter;
+    if (limpio.length === 7) break;
+  }
+  return limpio;
+}
+
+/**
+ * El color en la forma de la base, aceptando que se teclee SIN el `#`: «0B5FFF» y «#0B5FFF» valen
+ * igual. Devuelve '' si no hay 6 dígitos hex.
+ */
+export function normalizarColorDeMarca(valor?: string | null): string {
+  const limpio = limpiarColorDeMarca(valor);
+  if (/^#[0-9A-F]{6}$/.test(limpio)) return limpio;
+  if (/^[0-9A-F]{6}$/.test(limpio)) return `#${limpio}`;
+  return '';
+}
+
+/**
  * El color con el que se pinta ENCIMA del color de la marca: negro casi puro si el fondo es
  * claro, blanco si es oscuro. Es la MISMA cuenta que hace la página del viaje, para que la
  * vista previa no engañe.

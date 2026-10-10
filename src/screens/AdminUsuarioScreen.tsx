@@ -22,13 +22,14 @@ import {
   confirmacionDeQuitar,
   confirmacionDeRol,
   contrasteSobreColor,
-  esColorDeMarcaValido,
   etiquetaDeMembresia,
   fechaCorta,
+  limpiarColorDeMarca,
   MARCA_COLOR_PRINCIPAL,
   MARCA_COLOR_SECUNDARIO,
   nombreDeRol,
   nombreDeUsuario,
+  normalizarColorDeMarca,
   PLANES,
   problemaDelPanel,
   telefonoBonito,
@@ -213,19 +214,21 @@ export function AdminUsuarioScreen() {
 
   /** Guarda nombre, colores y logo; la base valida el formato y devuelve la fila como quedó. */
   const guardarPersonalizacion = () => {
-    if (colorPrincipal.trim() && !esColorDeMarcaValido(colorPrincipal)) {
+    const principal = normalizarColorDeMarca(colorPrincipal);
+    const secundario = normalizarColorDeMarca(colorSecundario);
+    if (colorPrincipal.trim() && !principal) {
       Alert.alert('Revisa el color principal', 'Va en formato #RRGGBB, por ejemplo #0B5FFF.');
       return;
     }
-    if (colorSecundario.trim() && !esColorDeMarcaValido(colorSecundario)) {
+    if (colorSecundario.trim() && !secundario) {
       Alert.alert('Revisa el color secundario', 'Va en formato #RRGGBB, por ejemplo #9AA0A6.');
       return;
     }
     ejecutar('Personalización guardada', async () => {
       const quedado = await panelGuardarMarca(usuario.id, {
         nombre: nombreDeLaMarca,
-        colorPrincipal: colorPrincipal.trim() || null,
-        colorSecundario: colorSecundario.trim() || null,
+        colorPrincipal: principal || null,
+        colorSecundario: secundario || null,
         logo: logoUrl,
       });
       sembrarCampos(quedado);
@@ -362,16 +365,15 @@ export function AdminUsuarioScreen() {
                 style={[
                   styles.colorMuestra,
                   {
-                    backgroundColor: esColorDeMarcaValido(colorPrincipal)
-                      ? colorPrincipal.trim()
-                      : MARCA_COLOR_PRINCIPAL,
+                    backgroundColor:
+                      normalizarColorDeMarca(colorPrincipal) || MARCA_COLOR_PRINCIPAL,
                   },
                 ]}
               />
               <TextInput
                 style={styles.campoColor}
                 value={colorPrincipal}
-                onChangeText={setColorPrincipal}
+                onChangeText={(t) => setColorPrincipal(limpiarColorDeMarca(t))}
                 placeholder={MARCA_COLOR_PRINCIPAL}
                 placeholderTextColor="#999999"
                 autoCapitalize="characters"
@@ -386,16 +388,15 @@ export function AdminUsuarioScreen() {
                 style={[
                   styles.colorMuestra,
                   {
-                    backgroundColor: esColorDeMarcaValido(colorSecundario)
-                      ? colorSecundario.trim()
-                      : MARCA_COLOR_SECUNDARIO,
+                    backgroundColor:
+                      normalizarColorDeMarca(colorSecundario) || MARCA_COLOR_SECUNDARIO,
                   },
                 ]}
               />
               <TextInput
                 style={styles.campoColor}
                 value={colorSecundario}
-                onChangeText={setColorSecundario}
+                onChangeText={(t) => setColorSecundario(limpiarColorDeMarca(t))}
                 placeholder={MARCA_COLOR_SECUNDARIO}
                 placeholderTextColor="#999999"
                 autoCapitalize="characters"
@@ -485,12 +486,8 @@ export function VistaPreviaDelLink({
   colorSecundario: string;
   logoUrl: string;
 }) {
-  const principal = esColorDeMarcaValido(colorPrincipal)
-    ? colorPrincipal.trim().toUpperCase()
-    : MARCA_COLOR_PRINCIPAL;
-  const secundario = esColorDeMarcaValido(colorSecundario)
-    ? colorSecundario.trim().toUpperCase()
-    : MARCA_COLOR_SECUNDARIO;
+  const principal = normalizarColorDeMarca(colorPrincipal) || MARCA_COLOR_PRINCIPAL;
+  const secundario = normalizarColorDeMarca(colorSecundario) || MARCA_COLOR_SECUNDARIO;
   return (
     <View style={styles.vistaPrevia}>
       <View style={[styles.vistaCabecera, { backgroundColor: principal }]}>
