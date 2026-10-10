@@ -79,6 +79,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: AZUL,
     borderRadius: 12,
+    // El bloque gris de abajo llega hasta los bordes de la tarjeta; el azul lleva su margen.
+    marginHorizontal: 12,
     paddingVertical: 14,
     marginBottom: 10,
   },
