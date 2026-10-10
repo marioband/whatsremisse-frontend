@@ -89,7 +89,11 @@ export function AdminUsuariosScreen() {
         <Text style={styles.detalle} numberOfLines={1}>
           {[telefonoBonito(item.phone), nombreDeRol(item.role)].filter(Boolean).join(' · ')}
         </Text>
-        <Text style={styles.membresia}>{etiquetaDeMembresia(item)}</Text>
+        {/* La frase solo si agrega algo: «Inactiva»/«Promocional» repetían la etiqueta de la
+            derecha palabra por palabra (visto en el panel a escritorio, 10-10-2026). */}
+        {etiquetaDeMembresia(item) !== textoDeEstado(item.estado) && (
+          <Text style={styles.membresia}>{etiquetaDeMembresia(item)}</Text>
+        )}
       </View>
       <View style={[styles.etiqueta, { backgroundColor: colorDeEstado(item.estado) }]}>
         <Text style={styles.etiquetaTexto}>{textoDeEstado(item.estado)}</Text>
@@ -170,7 +174,8 @@ export function AdminUsuariosScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  buscador: { paddingHorizontal: 16, paddingTop: 16 },
+  /** 10-10-2026 (escritorio): la columna entera (buscar, filtros y lista) no se estira a 1280 px. */
+  buscador: { width: '100%', maxWidth: 800, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 16 },
   campo: {
     borderWidth: 1,
     borderColor: '#E2E2E2',
@@ -181,6 +186,9 @@ const styles = StyleSheet.create({
     color: '#111111',
   },
   filtros: {
+    width: '100%',
+    maxWidth: 800,
+    alignSelf: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
@@ -199,7 +207,7 @@ const styles = StyleSheet.create({
   filtroActivo: { backgroundColor: DARK_BG, borderColor: DARK_BG },
   filtroTexto: { fontSize: 13, color: '#444444' },
   filtroTextoActivo: { color: '#FFFFFF', fontWeight: '600' },
-  lista: { paddingHorizontal: 16, paddingBottom: 32 },
+  lista: { width: '100%', maxWidth: 800, alignSelf: 'center', paddingHorizontal: 16, paddingBottom: 32 },
   fila: {
     flexDirection: 'row',
     alignItems: 'center',

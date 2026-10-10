@@ -357,7 +357,8 @@ export function AdminGrupoScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  content: { padding: 16, paddingBottom: 48 },
+  /** 10-10-2026 (escritorio): columna centrada — el contenido no se estira a 1280 px. */
+  content: { width: '100%', maxWidth: 800, alignSelf: 'center', padding: 16, paddingBottom: 48 },
   boton: {
     backgroundColor: DARK_BG,
     borderRadius: 10,

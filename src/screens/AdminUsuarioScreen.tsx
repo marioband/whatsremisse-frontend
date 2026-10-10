@@ -23,6 +23,7 @@ import {
   confirmacionDeRol,
   contrasteSobreColor,
   etiquetaDeMembresia,
+  etiquetaDeRolEnElRegistro,
   fechaCorta,
   limpiarColorDeMarca,
   MARCA_COLOR_PRINCIPAL,
@@ -253,7 +254,7 @@ export function AdminUsuarioScreen() {
 
         <View style={styles.datos}>
           <Dato etiqueta="Membresía" valor={etiquetaDeMembresia(usuario)} />
-          <Dato etiqueta="Rol" valor={nombreDeRol(usuario.role)} />
+          <Dato etiqueta="Rol" valor={etiquetaDeRolEnElRegistro(usuario.role)} />
           <Dato
             etiqueta="Vence"
             valor={
@@ -539,7 +540,8 @@ export function VistaPreviaDelLink({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  content: { padding: 16, paddingBottom: 48 },
+  /** 10-10-2026 (escritorio): columna centrada — el contenido no se estira a 1280 px. */
+  content: { width: '100%', maxWidth: 800, alignSelf: 'center', padding: 16, paddingBottom: 48 },
   ficha: { alignItems: 'center', paddingVertical: 12 },
   nombre: { fontSize: 19, fontWeight: 'bold', color: '#111111', textAlign: 'center' },
   telefono: { fontSize: 15, color: '#444444', marginTop: 4 },

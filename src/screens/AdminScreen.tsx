@@ -202,7 +202,8 @@ const DARK_BG = '#2D2D2D';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  content: { padding: 16, paddingBottom: 48 },
+  /** 10-10-2026 (escritorio): columna centrada — el contenido no se estira a 1280 px. */
+  content: { width: '100%', maxWidth: 800, alignSelf: 'center', padding: 16, paddingBottom: 48 },
   botonLista: {
     backgroundColor: DARK_BG,
     borderRadius: 10,
