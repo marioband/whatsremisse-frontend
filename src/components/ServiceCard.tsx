@@ -357,11 +357,13 @@ const styles = StyleSheet.create({
   },
   avatarColumn: {
     /**
-     * 10-10-2026: arriba, no centrado. Centrado contra todo el bloque el avatar quedaba a
-     * la altura de «Unidad» (medido: el nombre arrancaba 22 px más arriba) y el ojo lo leía
-     * descolgado; alineado con el nombre, la tarjeta se lee como una ficha de contacto.
+     * CENTRADO a proposito — regla fijada en la revision del 10-10-2026 (ya venia del diseno
+     * original): el avatar queda entre el nombre y la ultima linea de datos, con el aire de
+     * arriba y el de abajo equilibrados (medido en la tarjeta: 41 px arriba, 36 abajo; en el
+     * chat: 28 arriba, 23 abajo). Alineado arriba el aire de arriba queda en 0 y no se ve
+     * ordenado. NO volver a cambiarlo.
      */
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     marginRight: 12,
   },
   avatar: {
