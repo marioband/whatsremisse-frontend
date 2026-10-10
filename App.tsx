@@ -57,6 +57,13 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   estilo.textContent = `
     html, body, #root { height: var(${ALTURA_VISIBLE}, 100%); min-height: var(${ALTURA_VISIBLE}, 100%); }
     html, body { background-color: ${COLOR_DE_LA_BARRA_DE_ESTADO}; }
+    /* 10-10-2026 (reporte del usuario): al deslizar el dedo sobre la app, el NAVEGADOR estiraba
+       la página entera hacia abajo y se veía un espacio arriba en todas las pantallas. La app ya
+       vive en un alto fijo con sus propias listas (chat incluido): el rebote elástico del
+       documento no aporta nada y confunde. Con esto el documento no rebota ni encadena el
+       scroll, y cada lista interna (chat, tarjetas) conserva su propio rebote — como WhatsApp,
+       que solo "cede" dentro de la conversación. */
+    html, body { overscroll-behavior: none; }
     /* Elemento FIJO pegado al borde superior: es lo que iOS mira para el color de su barra.
        Va detrás del contenido (z-index -1) y no recibe toques: no se ve ni estorba. */
     /* En el iPhone, mantener pulsado un texto abre el menú del sistema (seleccionar, copiar)

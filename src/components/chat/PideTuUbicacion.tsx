@@ -91,7 +91,12 @@ export function PideTuUbicacion({ service }: { service: ServiceAlert }) {
         >
           <Text style={styles.textoAzul}>Compartir ubicación</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => responder(false)} disabled={ocupado}>
+        <TouchableOpacity
+          onPress={() => responder(false)}
+          disabled={ocupado}
+          /* El texto mide ~34 de alto: con este margen el toque llega a 44. */
+          hitSlop={{ top: 6, bottom: 6 }}
+        >
           <Text style={styles.ahoraNo}>Ahora no</Text>
         </TouchableOpacity>
       </View>
@@ -145,16 +150,17 @@ const styles = StyleSheet.create({
   apagado: { opacity: 0.6 },
   textoAzul: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
   ahoraNo: {
-    color: '#6B7280',
+    /* 10-10-2026: era #6B7280 — 4,3:1 sobre el gris de la tarjeta, debajo de 4,5:1. #5B6472 da 5,3:1. */
+    color: '#5B6472',
     fontSize: 14,
     fontWeight: '600',
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
   dejarDeCompartir: {
-    /** 10-10-2026: el rojo de la casa (antes #B00020, de la paleta de Material) y 44 px
-     *  de alto efectivo (11+19+11), que es el mínimo táctil: es una acción destructiva
-     *  y no puede quedar escasa de dedo. */
+    /** 10-10-2026: el rojo de la casa (antes #B00020, de la paleta de Material) y toque
+     *  completo: 38 px reales (11+16+11) + hitSlop de 8 arriba y abajo = 54 efectivos —
+     *  es una acción destructiva y no puede quedar escasa de dedo. */
     color: ROJO_ACCION,
     fontSize: 14,
     fontWeight: '600',

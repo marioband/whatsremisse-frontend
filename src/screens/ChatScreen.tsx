@@ -56,6 +56,7 @@ import {
   TTL_DE_LA_CACHE_MS,
 } from '../lib/cache';
 import { marcarAvisoPropio } from '../lib/avisos';
+import { TEXTO_TENUE } from '../lib/colors';
 import { hayApiDeRutas } from '../lib/routes';
 import { esPremium } from '../lib/premium';
 import { nombreDeLaContraparte, rolDeLaContraparte } from '../lib/contraparte';
@@ -1604,7 +1605,8 @@ const styles = StyleSheet.create({
   },
   dateText: {
     textAlign: 'center',
-    color: '#999',
+    /* 10-10-2026: era #999 (2,8:1 sobre blanco, por debajo del 4,5:1 de AA para 12 px). */
+    color: TEXTO_TENUE,
     fontSize: 12,
     marginVertical: 10,
   },
