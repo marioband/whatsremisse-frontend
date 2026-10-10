@@ -615,6 +615,8 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
                 key={status}
                 style={[styles.statusPill, activeStatus === status && styles.statusPillActive]}
                 onPress={() => setActiveStatus(status)}
+                /* La píldora mide ~32 de alto: con este margen el toque llega a 44 sin mover un píxel. */
+                hitSlop={{ top: 6, bottom: 6 }}
               >
                 <Text
                   style={[

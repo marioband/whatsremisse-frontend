@@ -32,7 +32,12 @@ export const BORDE_SUAVE = '#E2E2E2';
 
 export const TEXTO = '#111111';
 export const TEXTO_SUAVE = '#444444';
-export const TEXTO_TENUE = '#888888';
+/**
+ * 10-10-2026 (pasada de interfaz): era `#888888` — 3,54:1 sobre blanco, por debajo del 4,5:1
+ * que pide WCAG AA para texto pequeño (estados vacíos, ayudas, marcadores de posición). El
+ * gris se mantiene igual de discreto, pero ahora mide 5,10:1 (`#6E6E6E`).
+ */
+export const TEXTO_TENUE = '#6E6E6E';
 
 /**
  * Colores de las tarjetas de **Mis grupos**, por categoría (pedido del usuario):

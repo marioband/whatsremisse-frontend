@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, Linking, Platform, View } from 'react-native';
 
 import { Alert } from '../lib/alert';
-import { AZUL, PESO, RADIOS } from '../lib/diseno';
+import { ALTURAS, AZUL, PESO, RADIOS } from '../lib/diseno';
 import {
   APP_DE_NAVEGACION_POR_DEFECTO,
   AppDeNavegacion,
@@ -139,10 +139,14 @@ const styles = StyleSheet.create({
     /**
      * 10-10-2026: 13 en vez de 10. El botón medía 36 px de alto (por debajo del mínimo
      * táctil de 44): es la acción principal del viaje y tiene que agarrarse sin puntería.
+     * Con 13 medía 42 en la app real (falta la línea de texto entera): `minHeight` de 44
+     * lo garantiza en cualquier equipo, sin depender del alto de la línea.
      */
     paddingVertical: 13,
     paddingHorizontal: 28,
     minWidth: 180,
+    minHeight: ALTURAS.toque,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   texto: {
