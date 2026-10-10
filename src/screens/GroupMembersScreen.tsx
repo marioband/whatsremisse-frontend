@@ -20,12 +20,11 @@ import { useAuth } from '../context/AuthContext';
 import { useMockStore, GroupMember, rolEnGrupo } from '../context/MockStoreContext';
 import { elegirFoto, fueCancelado, subirFoto, tomarFoto } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
-import { OSCURO, ROJO_ACCION, TEXTO_SUAVE } from '../lib/colors';
+import { OSCURO, ROJO_ACCION, TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
 import { silenciarGrupo } from '../lib/database';
 import { displayName, groupRoleBadgeLabel, initialOf, sortMembersByRole } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
-import { TEXTO_TENUE } from '../lib/colors';
 
 type MembersNav = StackNavigationProp<RootStackParamList, 'GroupMembers'>;
 type MembersRoute = RouteProp<RootStackParamList, 'GroupMembers'>;

@@ -20,13 +20,12 @@ import { useMockStore, GroupItem } from '../context/MockStoreContext';
 import { useFilasDeslizantes } from '../hooks/useFilasDeslizantes';
 import { useRealtimeMisGrupos } from '../hooks/useRealtimeMisGrupos';
 import { camposDeBusquedaDeGrupo, filtrarPorBusqueda } from '../lib/busqueda';
-import { TEXTO_SUAVE } from '../lib/colors';
+import { TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
 import { fetchResumenDeMisGrupos, fetchUltimoMensajePorGrupo, ResumenDeGrupoDeLaLista } from '../lib/database';
 import { horaDelUltimoMensaje } from '../lib/horaDelMensaje';
 import { vistaPreviaDelMensaje } from '../lib/mensajes';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
-import { TEXTO_TENUE } from '../lib/colors';
 
 type GroupsNav = StackNavigationProp<
   RootStackParamList,

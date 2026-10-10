@@ -5,6 +5,7 @@ import { FilaDeslizable, FilaDeslizableRef } from './FilaDeslizable';
 
 import { EstadoServicioBar } from './EstadoServicioBar';
 import { COLORS, RADIUS } from '../constants/colors';
+import { TEXTO_TENUE } from '../lib/colors';
 import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
 import { planDelDeslizamiento } from '../lib/deslizamientoDeLaTarjeta';
@@ -13,7 +14,6 @@ import { tarjetaBloqueadaDelConductor } from '../lib/listaDelConductor';
 import { usePedidoDeUbicacionPendiente } from '../lib/pedidosDeUbicacionPendientes';
 import { textoDeLasUnidadesDeLaAlerta } from '../lib/unidades';
 import { ServiceAlert } from '../types';
-import { TEXTO_TENUE } from '../lib/colors';
 
 interface Props {
   service: ServiceAlert;

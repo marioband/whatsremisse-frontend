@@ -26,12 +26,11 @@ import {
 } from '../lib/apartadosDelInicio';
 import { camposDeBusquedaDeServicio, filtrarPorBusqueda } from '../lib/busqueda';
 import { textoDelBoton } from '../lib/numerosDelInicio';
-import { TEXTO_SUAVE } from '../lib/colors';
+import { TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
 import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
-import { TEXTO_TENUE } from '../lib/colors';
 
 type HomeNav = StackNavigationProp<
   RootStackParamList,

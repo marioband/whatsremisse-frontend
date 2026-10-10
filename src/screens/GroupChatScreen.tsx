@@ -37,7 +37,7 @@ import {
   subirAudio,
 } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
-import { AZUL } from '../lib/colors';
+import { AZUL, TEXTO_TENUE } from '../lib/colors';
 import { urlDeLaConversacion } from '../lib/conversacionVista';
 import {
   ChatMessage,
@@ -70,7 +70,6 @@ import { displayName } from '../lib/names';
 import { AVISO_MIGRACION_0020, LecturaDeChat, estadoDePalomas } from '../lib/palomas';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
-import { TEXTO_TENUE } from '../lib/colors';
 
 type GroupChatNav = StackNavigationProp<
   RootStackParamList,

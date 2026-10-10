@@ -740,6 +740,11 @@ interface MockContextValue extends MockState {
    * base y el cuadre de pagos se adelantaba.
    */
   advanceDriverProgress: (serviceId: string) => Promise<number | null>;
+  /**
+   * Primera carga en curso y sin nada pintado todavía: el inicio dibuja esqueletos de
+   * tarjeta en vez del mensaje de «no hay servicios» (10-10-2026).
+   */
+  cargandoInicial: boolean;
 }
 
 const MockContext = createContext<MockContextValue | undefined>(undefined);
@@ -848,9 +853,12 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
    * verdad lo corrige un momento después. La clave lleva el id del usuario: los datos de una
    * cuenta nunca se pintan en la pantalla de otra.
    */
+  /** Primera carga en curso (10-10-2026): enciende los esqueletos del inicio; se apaga con caché pintada o con la consulta terminada. */
+  const [cargandoInicial, setCargandoInicial] = useState(true);
+
   const claveDeCache = (nombre: string, userId: string) => `${nombre}:${userId}`;
 
-  /** Pinta grupos, servicios y postulaciones de la última vez que se abrió la app. */
+  /** Pinta grupos, servicios y postulaciones de la última vez que se abrió la app. Devuelve si pintó algo. */
   const hidratarDelTelefono = useCallback(async (userId: string) => {
     const [grupos, servicios, postulaciones] = await Promise.all([
       leerCache<GroupItem[]>(claveDeCache('grupos', userId), TTL_DE_LA_CACHE_MS),
@@ -860,6 +868,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     if (grupos?.length) dispatch({ type: 'SET_GROUPS', payload: grupos });
     if (servicios?.length) dispatch({ type: 'SET_SERVICES', payload: servicios });
     if (postulaciones?.length) dispatch({ type: 'SET_APPLICATIONS', payload: postulaciones });
+    return Boolean(grupos?.length || servicios?.length || postulaciones?.length);
   }, []);
 
   /**
@@ -962,15 +971,27 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       });
     } catch (err) {
       console.error('[MockStore] Error loading from Supabase:', err);
+    } finally {
+      // Llegó el momento de la verdad (haya o no datos): el esqueleto del inicio se apaga.
+      setCargandoInicial(false);
     }
   }, [session?.user, profile]);
 
   // Carga inicial (una sola vez por sesión): primero lo guardado —la pantalla se pinta en el
   // acto— y en seguida la consulta de verdad, que manda.
   useEffect(() => {
-    if (!isSupabaseConfigured || !session?.user || !profile || loadedRef.current) return;
+    if (!session?.user || !profile || loadedRef.current) return;
     loadedRef.current = true;
-    hidratarDelTelefono(profile.id);
+    if (!isSupabaseConfigured) {
+      // Sin base configurada no va a llegar nada por red: fuera el esqueleto.
+      setCargandoInicial(false);
+      return;
+    }
+    // Lo guardado primero; si pintó algo, el esqueleto se apaga ya. Y la consulta de
+    // verdad SIEMPRE apaga la bandera al terminar (bien o mal): nunca queda colgada.
+    void hidratarDelTelefono(profile.id).then((pinto) => {
+      if (pinto) setCargandoInicial(false);
+    });
     load();
   }, [load, session?.user, profile, hidratarDelTelefono]);
 
@@ -1376,6 +1397,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
   const value: MockContextValue = {
     ...state,
+    cargandoInicial,
     setRole: (role) => dispatch({ type: 'SET_ROLE', payload: role }),
     addService: async (service, groupIds) => {
       // Un solo envío por borrador: si el usuario pulsa varias veces antes de que

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { BotonDeBusqueda, BarraDeBusqueda } from '../components/Busqueda';
+import { EsqueletoDeTarjetas } from '../components/EsqueletoDeTarjetas';
 import { Fab } from '../components/Fab';
 import { ServiceCard } from '../components/ServiceCard';
 import { useAuth } from '../context/AuthContext';
@@ -102,6 +103,7 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
     driverDebt,
     debtThreshold,
     marcarArranqueDelViaje,
+    cargandoInicial,
   } = useMockStore();
 
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('Disponibles');
@@ -738,22 +740,27 @@ export function DriverHomeScreen({ numeros }: DriverHomeProps = {}) {
         }}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <View>
-            <Text style={styles.emptyText}>
-              {consulta.trim()
-                ? 'Ningún servicio coincide con la búsqueda.'
-                : showArchived
-                  ? 'No hay servicios archivados'
-                  : activeStatus === 'En proceso'
-                    ? 'Todavía no tienes servicios en proceso.'
-                    : 'No hay servicios disponibles'}
-            </Text>
-            {!consulta.trim() && !showArchived && activeStatus === 'Disponibles' && (
-              <Text style={styles.emptyAyuda}>
-                Cuando publiquen un servicio en tus grupos, aparecerá aquí.
+          cargandoInicial ? (
+            /* Primera carga en frío: esqueleto con la forma de la tarjeta (10-10-2026). */
+            <EsqueletoDeTarjetas />
+          ) : (
+            <View>
+              <Text style={styles.emptyText}>
+                {consulta.trim()
+                  ? 'Ningún servicio coincide con la búsqueda.'
+                  : showArchived
+                    ? 'No hay servicios archivados'
+                    : activeStatus === 'En proceso'
+                      ? 'Todavía no tienes servicios en proceso.'
+                      : 'No hay servicios disponibles'}
               </Text>
-            )}
-          </View>
+              {!consulta.trim() && !showArchived && activeStatus === 'Disponibles' && (
+                <Text style={styles.emptyAyuda}>
+                  Cuando publiquen un servicio en tus grupos, aparecerá aquí.
+                </Text>
+              )}
+            </View>
+          )
         }
       />
 

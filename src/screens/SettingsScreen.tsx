@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 
 import { lineaDeVersion, versionEnEjecucion } from '../lib/actualizacion';
-import { leerContadores, lineaDeContadores } from '../lib/medidor';
+import { leerContadores, lineaDeContadores, registrarResumenEnConsola, reiniciarContadores, textoDelResumen } from '../lib/medidor';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
@@ -18,12 +18,10 @@ import {
   EstadoDeAvisos,
 } from '../lib/avisosWeb';
 import { limpiarCacheCompleta } from '../lib/cache';
-import { AZUL, ROJO_ACCION, TEXTO_SUAVE } from '../lib/colors';
-import { registrarResumenEnConsola, reiniciarContadores, textoDelResumen } from '../lib/medidor';
+import { AZUL, ROJO_ACCION, TEXTO_SUAVE, TEXTO_TENUE } from '../lib/colors';
 import { limpiarCacheDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
-import { TEXTO_TENUE } from '../lib/colors';
 
 type SettingsNav = StackNavigationProp<RootStackParamList, 'Settings'>;
 

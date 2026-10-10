@@ -6,7 +6,7 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { useNombresDeProveedores } from '../hooks/useNombreDelProveedor';
-import { AZUL, OSCURO, VERDE_ACCION } from '../lib/colors';
+import { AZUL, OSCURO, TEXTO_TENUE, VERDE_ACCION } from '../lib/colors';
 import {
   estaPagadoYCerrado,
   estadoDeServicio,
@@ -17,7 +17,6 @@ import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 import { IconoDeAtras } from '../components/IconoDeAtras';
-import { TEXTO_TENUE } from '../lib/colors';
 
 type MyServicesNav = StackNavigationProp<RootStackParamList, 'MyServices'>;
 
