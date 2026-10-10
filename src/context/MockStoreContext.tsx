@@ -71,6 +71,7 @@ import {
   leerEmergenciasActivas,
 } from '../lib/emergencias';
 import { haceFaltaMedirElViaje, medirElViaje } from '../lib/viajeDelServicio';
+import { refrescarPedidosDeUbicacionPendientes } from '../lib/pedidosDeUbicacionPendientes';
 import { ultimaUbicacion } from '../lib/geolocation';
 import { esPremium } from '../lib/premium';
 import { registrarTokenDePush } from '../lib/pushToken';
@@ -925,6 +926,9 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         )
         .slice(0, 5)
         .forEach((s) => void medirYGuardarElViaje(s));
+      // 0053 (10-10-2026): y el aviso de «Ver ubicación» — qué servicios me piden la ubicación
+      // (la tarjeta de la lista lo enseña; el chat es donde se responde). Best effort.
+      void refrescarPedidosDeUbicacionPendientes();
       // Las que le tocan AHORA: es lo que la lista y los contadores dejan pasar aunque no sean de
       // sus grupos (el tiempo real usa esta misma lista para no descartarlas).
       emergenciasCercaRef.current = emergenciasActivas

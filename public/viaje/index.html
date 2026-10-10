@@ -168,6 +168,19 @@ var WR_URL = '__WR_URL__';
 var WR_CLAVE = '__WR_CLAVE__';
 
 var token = decodeURIComponent((location.pathname.split('/').filter(Boolean).pop() || ''));
+/**
+ * La MISMA página sirve dos pantallas (10-10-2026):
+ *   /viaje/<token>          → el CLIENTE ve el viaje (lo de siempre);
+ *   /viaje/unidad/<token>   → el PROVEEDOR ve al conductor en vivo (0053, «Ver ubicación»).
+ * El token es el último trozo de la dirección en los dos casos; aquí se decide cuál es cuál.
+ */
+var ES_UNIDAD = /^\/viaje\/unidad\//.test(location.pathname);
+if (ES_UNIDAD) {
+  // La pantalla del proveedor va con el azul institucional de la app (no con la marca del cliente).
+  document.documentElement.style.setProperty('--marca', '#3F51B5');
+  document.documentElement.style.setProperty('--marca-texto', '#FFFFFF');
+  document.title = 'Ubicación del conductor';
+}
 var mapa = null, marcadorUnidad = null, marcadorA = null, marcadorB = null;
 var ultimosDatos = null, trazoDibujado = null;
 var primeraVez = true, fallosSeguidos = 0, ultimoLatLng = null, sigue = true;
@@ -528,8 +541,72 @@ function actualizarUnidad(datos) {
   }
 }
 
+/**
+ * La pantalla del PROVEEDOR (0053): solo la unidad en vivo — sin recorrido ni pines A/B.
+ * Enseña el conductor (nombre, placa y unidad) y el reloj de su última posición.
+ */
+function pintarUnidad(datos) {
+  document.querySelectorAll('.tramo').forEach(function (t) { t.style.display = 'none'; });
+  document.getElementById('marca').textContent = 'Ubicación del conductor';
+  document.getElementById('estado-texto').textContent = 'En vivo';
+  var aviso = document.getElementById('aviso');
+  if (aviso) {
+    aviso.textContent = 'Este mapa lo ves tú como proveedor. El conductor puede dejar de compartir cuando quiera.';
+  }
+
+  var con = document.getElementById('conductor');
+  con.innerHTML = '';
+  if (datos.conductor && (datos.conductor.nombre || datos.conductor.placa)) {
+    var quien = document.createElement('span');
+    quien.textContent = 'Conductor: ' + (datos.conductor.nombre || 'en camino');
+    con.appendChild(quien);
+    if (datos.conductor.placa) {
+      var placa = document.createElement('span');
+      placa.id = 'placa'; placa.textContent = datos.conductor.placa;
+      con.appendChild(placa);
+    }
+    var nombreUnidad = [datos.conductor.marca, datos.conductor.modelo].filter(Boolean).join(' ');
+    var detalles = [nombreUnidad, datos.conductor.color].filter(Boolean).join(' · ');
+    if (detalles) {
+      var linea = document.createElement('div');
+      linea.className = 'unidad-datos';
+      linea.textContent = detalles;
+      con.appendChild(linea);
+    }
+    con.style.display = 'flex';
+  }
+
+  if (!mapa) {
+    var centro = [-77, -12];
+    if (datos.posicion && typeof datos.posicion.lat === 'number') {
+      centro = [datos.posicion.lng, datos.posicion.lat];
+    }
+    mapa = new maplibregl.Map({
+      container: 'mapa',
+      style: estiloGris,
+      attributionControl: { compact: true },
+      center: centro,
+      zoom: 15
+    });
+    var protocolo = new pmtiles.Protocol();
+    maplibregl.addProtocol('pmtiles', protocolo.tile);
+    // Solo la unidad (nunca sin posición: MapLibre revienta — lección del 09-10-2026).
+    var auto = document.createElement('div');
+    auto.id = 'auto';
+    auto.innerHTML = '<div class="halo"></div><div class="nucleo"></div>';
+    marcadorUnidad = new maplibregl.Marker({ element: auto, anchor: 'center' })
+      .setLngLat(centro).addTo(mapa);
+    // Con la posición real (y el reloj) desde el primer pintado, como hace el modo cliente.
+    actualizarUnidad(datos);
+    primeraVez = false;
+    ocultarVelo();
+    return;
+  }
+  actualizarUnidad(datos);
+}
+
 async function traerDatos() {
-  var respuesta = await fetch(WR_URL + '/rest/v1/rpc/seguimiento_del_viaje', {
+  var respuesta = await fetch(WR_URL + '/rest/v1/rpc/' + (ES_UNIDAD ? 'ubicacion_del_conductor' : 'seguimiento_del_viaje'), {
     method: 'POST',
     headers: { 'apikey': WR_CLAVE, 'Authorization': 'Bearer ' + WR_CLAVE, 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_token: token })
@@ -557,12 +634,27 @@ async function preguntar() {
   document.getElementById('sin-conexion').style.display = 'none';
   if (datos === null) {
     sigue = false;
-    mostrarVelo('Este enlace ya no está disponible',
-      'El viaje terminó hace un rato, se canceló, o el proveedor cerró el enlace. Pídele uno nuevo si lo necesitas.');
+    if (ES_UNIDAD) {
+      mostrarVelo('El conductor no está compartiendo su ubicación',
+        'No aceptó el pedido, o el pedido caducó. Pídesela otra vez desde el chat del servicio.');
+    } else {
+      mostrarVelo('Este enlace ya no está disponible',
+        'El viaje terminó hace un rato, se canceló, o el proveedor cerró el enlace. Pídele uno nuevo si lo necesitas.');
+    }
+    return;
+  }
+  if (ES_UNIDAD && datos.estado === 'CORTADO') {
+    sigue = false;
+    mostrarVelo('El conductor dejó de compartir',
+      'Puedes volver a pedirle la ubicación desde el chat del servicio.');
     return;
   }
   try {
-    pintarViaje(datos);
+    if (ES_UNIDAD) {
+      pintarUnidad(datos);
+    } else {
+      pintarViaje(datos);
+    }
     ocultarVelo();
   } catch (e) {
     window.__ultimoError = 'pintado: ' + (e && e.message) + ' @ ' + ((e && e.stack || '').split('\n').slice(1, 5).join(' | '));

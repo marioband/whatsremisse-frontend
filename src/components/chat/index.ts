@@ -7,5 +7,7 @@ export { EvaluationBar } from './EvaluationBar';
 export { MessageList } from './MessageList';
 export { Palomas } from './Palomas';
 export { PagoDelServicio } from './PagoDelServicio';
+export { PideTuUbicacion } from './PideTuUbicacion';
 export { ProviderStatusBar } from './ProviderStatusBar';
 export { ServiceSummaryCard } from './ServiceSummaryCard';
+export { VerUbicacionDelConductor } from './VerUbicacionDelConductor';

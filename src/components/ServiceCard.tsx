@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FilaDeslizable, FilaDeslizableRef } from './FilaDeslizable';
 
 import { EstadoServicioBar } from './EstadoServicioBar';
@@ -9,6 +10,7 @@ import { textoProgramado } from '../lib/datetime';
 import { planDelDeslizamiento } from '../lib/deslizamientoDeLaTarjeta';
 import { MiPostulacionEnLaTarjeta } from '../lib/estadoServicio';
 import { tarjetaBloqueadaDelConductor } from '../lib/listaDelConductor';
+import { usePedidoDeUbicacionPendiente } from '../lib/pedidosDeUbicacionPendientes';
 import { textoDeLasUnidadesDeLaAlerta } from '../lib/unidades';
 import { ServiceAlert } from '../types';
 
@@ -80,6 +82,9 @@ export function ServiceCard({
   // El nombre lo configura el proveedor en su perfil; si no lo configuró, van su
   // primer nombre y su primer apellido (nunca "Empresa").
   const nombreDelProveedor = useNombreDelProveedor(service);
+
+  /** 0053 (10-10-2026): ¿el proveedor me está pidiendo la ubicación en este servicio? */
+  const pidenMiUbicacion = usePedidoDeUbicacionPendiente(service.id);
 
   const cardBackground = COLORS.cardNew;
 
@@ -241,6 +246,23 @@ export function ServiceCard({
         )}
       </View>
 
+      {/* Aviso de «Ver ubicación» (0053, 10-10-2026): el proveedor quiere ver al conductor
+          en vivo y espera su respuesta — este es nuestro «push» sin push (pedido del usuario):
+          la tarjeta de la lista lo dice y el chat es donde se acepta o se dice «Ahora no». */}
+      {pidenMiUbicacion && (
+        <View style={styles.avisoUbicacion}>
+          <MaterialCommunityIcons
+            name="map-marker"
+            size={16}
+            color={COLORS.primary}
+            style={styles.iconoAviso}
+          />
+          <Text style={styles.avisoUbicacionTexto}>
+            El proveedor quiere ver tu ubicación — entra al chat
+          </Text>
+        </View>
+      )}
+
       {/* Pie de la tarjeta: en el chat, el botón de navegación del conductor y el botón
           "Copiar datos" del proveedor. Va DENTRO de la tarjeta (hereda su redondeo),
           debajo de los datos del servicio y POR ENCIMA de la franja de estado: la franja
@@ -294,6 +316,15 @@ export function ServiceCard({
 }
 
 const styles = StyleSheet.create({
+  /** Aviso de «Ver ubicación» (0053): una línea suave dentro de la tarjeta de la lista. */
+  avisoUbicacion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  iconoAviso: { marginRight: 6 },
+  avisoUbicacionTexto: { color: COLORS.primary, fontSize: 12, fontWeight: '600', flexShrink: 1 },
   cardWrapper: {
     marginHorizontal: 12,
     marginBottom: 12,

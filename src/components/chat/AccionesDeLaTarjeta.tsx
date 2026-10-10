@@ -1,10 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { FONDO_TARJETA } from '../../lib/colors';
 import { ServiceAlert } from '../../types';
 import { CompartirViaje } from './CompartirViaje';
+import { VerUbicacionDelConductor } from './VerUbicacionDelConductor';
 
 /**
  * Las acciones del viaje DENTRO de la tarjeta del chat (diseño del usuario, 09-10-2026):
@@ -60,16 +60,10 @@ export function AccionesDeLaTarjeta({
         </TouchableOpacity>
       </View>
 
-      {/* Visual por ahora (decisión del usuario, 09-10-2026): su función llegará después. */}
-      <View style={styles.verUbicacion}>
-        <MaterialCommunityIcons
-          name="map-marker"
-          size={20}
-          color="#555555"
-          style={styles.icono}
-        />
-        <Text style={styles.texto}>Ver ubicación</Text>
-      </View>
+      {/* «Ver ubicación» (0053, 10-10-2026): ahora pide ver al conductor en vivo y, aceptado,
+          abre el mapa. Vive en su componente porque tiene sus estados (pedido, aceptado,
+          rechazado…) y su propio reloj de refresco. */}
+      <VerUbicacionDelConductor service={service} />
     </View>
   );
 }
@@ -90,15 +84,5 @@ const styles = StyleSheet.create({
   },
   /** La única división con «Copiar imagen»: la línea blanca del borde. */
   mitadIzquierda: { borderRightWidth: 1.5, borderColor: '#FFFFFF' },
-  verUbicacion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: FONDO_TARJETA,
-    borderTopWidth: 1.5,
-    borderColor: '#FFFFFF',
-    paddingVertical: 14,
-  },
-  icono: { marginRight: 8 },
   texto: { color: '#555555', fontSize: 15, fontWeight: '600' },
 });

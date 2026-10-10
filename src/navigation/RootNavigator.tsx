@@ -37,6 +37,7 @@ import { RegisterScreen } from '../screens/RegisterScreen';
 import { SelectGroupsForServiceScreen } from '../screens/SelectGroupsForServiceScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { SplashScreen } from '../screens/SplashScreen';
+import { UbicacionDeLaUnidadScreen } from '../screens/UbicacionDeLaUnidadScreen';
 import { BlockedUser, ServiceAlert } from '../types';
 import type { UsuarioDelPanel } from '../lib/panel';
 
@@ -101,6 +102,8 @@ export type RootStackParamList = {
   /** Grupos: la lista y un grupo concreto (para cargarle integrantes desde el archivo). */
   AdministracionGrupos: undefined;
   AdministracionGrupo: { grupo: { id: string; nombre: string } };
+  /** «Ver ubicación» del proveedor (0053): el mapa en vivo del conductor, dentro de la app. */
+  UbicacionDeLaUnidad: { serviceId: string };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -131,6 +134,7 @@ const ENLACES = {
       // El panel de administración: se entra por el enlace directo y no está en ningún menú.
       Administracion: 'administracion',
       AdministracionGrupos: 'administracion/grupos',
+      UbicacionDeLaUnidad: 'ubicacion/:serviceId',
       Splash: '',
     },
   },
@@ -300,6 +304,12 @@ export function RootNavigator() {
               <Stack.Screen
                 name="AdministracionUsuario"
                 component={AdminUsuarioScreen}
+                options={{ headerShown: false }}
+              />
+              {/* El mapa en vivo del conductor (0053): se abre desde «Ver ubicación» del pie. */}
+              <Stack.Screen
+                name="UbicacionDeLaUnidad"
+                component={UbicacionDeLaUnidadScreen}
                 options={{ headerShown: false }}
               />
               <Stack.Screen

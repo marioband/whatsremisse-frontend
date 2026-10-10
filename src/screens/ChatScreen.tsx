@@ -26,6 +26,7 @@ import {
   EvaluationBar,
   MessageList,
   PagoDelServicio,
+  PideTuUbicacion,
   ProviderStatusBar,
 } from '../components/chat';
 import { useAuth } from '../context/AuthContext';
@@ -1321,6 +1322,11 @@ export function ChatScreen() {
             <>
               {isDriver && isAssigned && currentStep === 'IN_PROGRESS' && (
                 <BotonDeNavegacion service={service} conductor={effectiveDriverId} />
+              )}
+              {/* «Compartir ubicación» (0053): el pedido del proveedor, para que el conductor
+                  acepte ahí mismo (la misma forma del botón «Compartir viaje», pedido del usuario). */}
+              {isDriver && isAssigned && currentStep === 'IN_PROGRESS' && (
+                <PideTuUbicacion service={service} />
               )}
               {isProvider && currentStep === 'IN_PROGRESS' && (
                 <AccionesDeLaTarjeta

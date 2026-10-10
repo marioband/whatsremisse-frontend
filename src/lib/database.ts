@@ -2333,6 +2333,106 @@ export async function crearEnlaceDelSeguimiento(serviceId: string): Promise<Enla
   return enlace;
 }
 
+/** El pedido de ubicación (0053): el proveedor pide ver al conductor en vivo. */
+export interface PedidoDeUbicacion {
+  id: string;
+  token: string;
+  /** Ruta de la pantalla del proveedor ('/viaje/unidad/<token>'): el dominio lo pone la app. */
+  url: string;
+  /** PEDIDO | ACEPTADO | RECHAZADO | CORTADO | CADUCADO (el vencido se lee, no se guarda). */
+  estado: string;
+  es_proveedor?: boolean;
+  pedido_at?: string;
+  expira_at?: string;
+  nuevo?: boolean;
+}
+
+/**
+ * El proveedor pide ver la ubicación del conductor (0053). Repetir el botón NO crea pedidos de
+ * más: la base devuelve el que ya está vivo; si no hay, crea uno nuevo (caduca a los 10 minutos).
+ */
+export async function pedirUbicacionDelConductor(serviceId: string): Promise<PedidoDeUbicacion> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('pedido_de_ubicacion_crear', { p_service_id: serviceId });
+  if (error) {
+    if (esFuncionAusente(error)) {
+      throw new Error('«Ver ubicación» todavía no está preparado en la base de datos.');
+    }
+    throw error;
+  }
+  const pedido = data as PedidoDeUbicacion | null;
+  if (!pedido?.id) throw new Error('La base no devolvió el pedido de ubicación.');
+  return pedido;
+}
+
+/** El conductor responde: aceptar (empezar a compartir) o «Ahora no». Devuelve el estado nuevo. */
+export async function responderPedidoDeUbicacion(
+  pedidoId: string,
+  aceptar: boolean
+): Promise<string | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const { data, error } = await supabase.rpc('pedido_de_ubicacion_responder', {
+      p_pedido_id: pedidoId,
+      p_aceptar: aceptar,
+    });
+    if (error) throw error;
+    return (data as { estado?: string } | null)?.estado ?? null;
+  } catch (err) {
+    if (esFuncionAusente(err)) return null;
+    throw err;
+  }
+}
+
+/** El conductor deja de compartir su ubicación cuando quiera (0053). */
+export async function cortarPedidoDeUbicacion(pedidoId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { data, error } = await supabase.rpc('pedido_de_ubicacion_cortar', {
+      p_pedido_id: pedidoId,
+    });
+    if (error) throw error;
+    return (data as { estado?: string } | null)?.estado === 'CORTADO';
+  } catch (err) {
+    if (esFuncionAusente(err)) return false;
+    throw err;
+  }
+}
+
+/**
+ * El último pedido de ubicación de este servicio (lo leen las dos tarjetas: el proveedor para
+ * su botón y el conductor para aceptar o cortar). null si no hay ninguno — o si la 0053 todavía
+ * no está aplicada, en cuyo caso «Ver ubicación» se queda como estaba.
+ */
+export async function pedidoDeUbicacionDelServicio(
+  serviceId: string
+): Promise<PedidoDeUbicacion | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const { data, error } = await supabase.rpc('pedido_de_ubicacion_del_servicio', {
+      p_service_id: serviceId,
+    });
+    if (error) throw error;
+    return (data as PedidoDeUbicacion | null) ?? null;
+  } catch (err) {
+    if (esFuncionAusente(err)) return null;
+    throw err;
+  }
+}
+
+/** Los servicios a los que les debo respuesta sobre la ubicación (aviso de la lista, 0053). */
+export async function pedidosDeUbicacionPendientes(): Promise<string[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data, error } = await supabase.rpc('pedidos_de_ubicacion_pendientes');
+    if (error) throw error;
+    return Array.isArray(data) ? (data as string[]) : [];
+  } catch (err) {
+    if (esFuncionAusente(err)) return [];
+    throw err;
+  }
+}
+
 /**
  * Posiciones de los postulantes pendientes de un servicio.
  *
