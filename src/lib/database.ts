@@ -2723,6 +2723,51 @@ export async function panelCambiarRol(usuarioId: string, rol: string): Promise<v
   if (error) throw error;
 }
 
+/** La marca del seguimiento de UNA cuenta (ficha del panel; lectura de la 0052). */
+export interface MarcaDelSeguimiento {
+  activo?: boolean;
+  nombre?: string | null;
+  color_principal?: string | null;
+  color_secundario?: string | null;
+  logo_url?: string | null;
+  tiene_marca?: boolean;
+}
+
+/** Lee la marca del seguimiento de una cuenta para la ficha del panel (0052). */
+export async function panelMarcaDeUsuario(usuarioId: string): Promise<MarcaDelSeguimiento> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_marca_de_usuario', { p_usuario: usuarioId });
+  if (error) throw error;
+  return (data || {}) as MarcaDelSeguimiento;
+}
+
+/**
+ * Guarda la marca del seguimiento de una cuenta (0049; la escribe el administrador).
+ * Devuelve la fila como quedó (el panel siembra el formulario y la vista previa con ella).
+ */
+export async function panelGuardarMarca(
+  usuarioId: string,
+  cambios: {
+    activo?: boolean | null;
+    nombre?: string | null;
+    colorPrincipal?: string | null;
+    colorSecundario?: string | null;
+    logo?: string | null;
+  }
+): Promise<MarcaDelSeguimiento> {
+  if (!isSupabaseConfigured) throw new Error('La app no está conectada a la base de datos.');
+  const { data, error } = await supabase.rpc('panel_marca_del_seguimiento', {
+    p_usuario: usuarioId,
+    p_activo: cambios.activo ?? null,
+    p_nombre: cambios.nombre ?? null,
+    p_color_principal: cambios.colorPrincipal ?? null,
+    p_color_secundario: cambios.colorSecundario ?? null,
+    p_logo: cambios.logo ?? null,
+  });
+  if (error) throw error;
+  return (data || {}) as MarcaDelSeguimiento;
+}
+
 /**
  * Enciende o apaga el «modo pruebas» (todos premium) de toda la plataforma.
  *

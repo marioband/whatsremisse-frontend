@@ -1,13 +1,19 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, TextInput, Image } from 'react-native';
 
+import { InterruptorDeslizante } from '../components/InterruptorDeslizante';
 import { CabeceraDelPanel, PantallaSoloAdministradores, useEsAdministrador } from '../components/PanelDeAdministracion';
+import { elegirFoto, fueCancelado, subirFoto } from '../lib/adjuntos';
 import { Alert } from '../lib/alert';
+import { useAuth } from '../context/AuthContext';
 import {
+  MarcaDelSeguimiento,
   panelActivarMembresia,
   panelCambiarRol,
+  panelGuardarMarca,
+  panelMarcaDeUsuario,
   panelQuitarMembresia,
   panelUsuarios,
 } from '../lib/database';
@@ -15,8 +21,12 @@ import {
   colorDeEstado,
   confirmacionDeQuitar,
   confirmacionDeRol,
+  contrasteSobreColor,
+  esColorDeMarcaValido,
   etiquetaDeMembresia,
   fechaCorta,
+  MARCA_COLOR_PRINCIPAL,
+  MARCA_COLOR_SECUNDARIO,
   nombreDeRol,
   nombreDeUsuario,
   PLANES,
@@ -47,6 +57,42 @@ export function AdminUsuarioScreen() {
   const [usuario, setUsuario] = useState<UsuarioDelPanel>(params.usuario);
   const [ocupado, setOcupado] = useState(false);
   const [problema, setProblema] = useState<string | null>(null);
+
+  /**
+   * La marca del seguimiento (0049/0052) y el formulario para personalizar el enlace del cliente.
+   * Se siembra con lo que devuelve la base —al abrir y después de cada guardado—, nunca inventa
+   * nada; la vista previa se arma con lo que hay en el formulario, así que se mueve al instante.
+   */
+  const { profile } = useAuth();
+  const [marcaActiva, setMarcaActiva] = useState(false);
+  const [nombreDeLaMarca, setNombreDeLaMarca] = useState('');
+  const [colorPrincipal, setColorPrincipal] = useState('');
+  const [colorSecundario, setColorSecundario] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+
+  const sembrarCampos = useCallback((m: MarcaDelSeguimiento | null) => {
+    setMarcaActiva(Boolean(m?.activo));
+    setNombreDeLaMarca(m?.nombre || '');
+    setColorPrincipal(m?.color_principal || '');
+    setColorSecundario(m?.color_secundario || '');
+    setLogoUrl(m?.logo_url || '');
+  }, []);
+
+  const cargarMarca = useCallback(async () => {
+    try {
+      const m = await panelMarcaDeUsuario(usuario.id);
+      sembrarCampos(m);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[panel] no se pudo leer la marca del seguimiento:', err);
+      setProblema(problemaDelPanel(err));
+    }
+  }, [usuario.id, sembrarCampos]);
+
+  useEffect(() => {
+    void cargarMarca();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const recargar = useCallback(async () => {
     const telefono = usuario.phone;
@@ -135,6 +181,57 @@ export function AdminUsuarioScreen() {
   };
 
   const esPremium = String(usuario.tier || '').toUpperCase() === 'PREMIUM';
+  /** El interruptor guarda en el acto (el usuario lo ve al toque, sin esperar al botón). */
+  const cambiarSeguimiento = (encendido: boolean) => {
+    setMarcaActiva(encendido);
+    ejecutar(encendido ? 'Compartir viaje encendido' : 'Compartir viaje apagado', async () => {
+      const quedado = await panelGuardarMarca(usuario.id, { activo: encendido });
+      sembrarCampos(quedado);
+    });
+  };
+
+  /** Sube el logo al almacén (el mismo camino que las fotos del chat) y lo deja listo para guardar. */
+  const subirLogo = async () => {
+    if (!profile?.id) return;
+    setOcupado(true);
+    try {
+      const elegida = await elegirFoto();
+      if (!elegida.ok) {
+        if (!fueCancelado(elegida)) Alert.alert('No se pudo usar el logo', elegida.motivo);
+        return;
+      }
+      const subida = await subirFoto(elegida.valor, profile.id);
+      if (!subida.ok) {
+        Alert.alert('No se pudo subir el logo', subida.motivo);
+        return;
+      }
+      setLogoUrl(subida.valor);
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  /** Guarda nombre, colores y logo; la base valida el formato y devuelve la fila como quedó. */
+  const guardarPersonalizacion = () => {
+    if (colorPrincipal.trim() && !esColorDeMarcaValido(colorPrincipal)) {
+      Alert.alert('Revisa el color principal', 'Va en formato #RRGGBB, por ejemplo #0B5FFF.');
+      return;
+    }
+    if (colorSecundario.trim() && !esColorDeMarcaValido(colorSecundario)) {
+      Alert.alert('Revisa el color secundario', 'Va en formato #RRGGBB, por ejemplo #9AA0A6.');
+      return;
+    }
+    ejecutar('Personalización guardada', async () => {
+      const quedado = await panelGuardarMarca(usuario.id, {
+        nombre: nombreDeLaMarca,
+        colorPrincipal: colorPrincipal.trim() || null,
+        colorSecundario: colorSecundario.trim() || null,
+        logo: logoUrl,
+      });
+      sembrarCampos(quedado);
+    });
+  };
+
   const esAdmin = String(usuario.role || '').toUpperCase() === 'ADMIN';
 
   return (
@@ -233,6 +330,116 @@ export function AdminUsuarioScreen() {
           que el panel no se cierre para siempre.
         </Text>
 
+        <Text style={styles.seccion}>Compartir viaje (seguimiento en vivo)</Text>
+        <View style={styles.interruptorFila}>
+          <InterruptorDeslizante
+            encendido={marcaActiva}
+            onCambiar={cambiarSeguimiento}
+            etiqueta="Compartir viaje para esta cuenta"
+          />
+          <Text style={styles.interruptorTexto}>
+            {marcaActiva
+              ? 'Encendido: esta cuenta ve el botón «Compartir viaje» y puede generar el enlace del cliente.'
+              : 'Apagado: esta cuenta no ve el botón «Compartir viaje».'}
+          </Text>
+        </View>
+
+        <Text style={styles.campoEtiqueta}>Nombre en el enlace</Text>
+        <TextInput
+          style={styles.campo}
+          value={nombreDeLaMarca}
+          onChangeText={setNombreDeLaMarca}
+          placeholder="Si se deja vacío, firma con su nombre de proveedor"
+          placeholderTextColor="#999999"
+          maxLength={40}
+        />
+
+        <View style={styles.coloresFila}>
+          <View style={styles.colorColumna}>
+            <Text style={styles.campoEtiqueta}>Color principal</Text>
+            <View style={styles.colorEntrada}>
+              <View
+                style={[
+                  styles.colorMuestra,
+                  {
+                    backgroundColor: esColorDeMarcaValido(colorPrincipal)
+                      ? colorPrincipal.trim()
+                      : MARCA_COLOR_PRINCIPAL,
+                  },
+                ]}
+              />
+              <TextInput
+                style={styles.campoColor}
+                value={colorPrincipal}
+                onChangeText={setColorPrincipal}
+                placeholder={MARCA_COLOR_PRINCIPAL}
+                placeholderTextColor="#999999"
+                autoCapitalize="characters"
+                maxLength={7}
+              />
+            </View>
+          </View>
+          <View style={styles.colorColumna}>
+            <Text style={styles.campoEtiqueta}>Color secundario</Text>
+            <View style={styles.colorEntrada}>
+              <View
+                style={[
+                  styles.colorMuestra,
+                  {
+                    backgroundColor: esColorDeMarcaValido(colorSecundario)
+                      ? colorSecundario.trim()
+                      : MARCA_COLOR_SECUNDARIO,
+                  },
+                ]}
+              />
+              <TextInput
+                style={styles.campoColor}
+                value={colorSecundario}
+                onChangeText={setColorSecundario}
+                placeholder={MARCA_COLOR_SECUNDARIO}
+                placeholderTextColor="#999999"
+                autoCapitalize="characters"
+                maxLength={7}
+              />
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.campoEtiqueta}>Logo (PNG con fondo transparente)</Text>
+        <View style={styles.logoFila}>
+          {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.logoMini} /> : null}
+          <TouchableOpacity
+            style={[styles.botonSecundario, styles.logoBoton, ocupado && styles.botonApagado]}
+            onPress={subirLogo}
+            disabled={ocupado}
+            accessibilityRole="button"
+            accessibilityLabel="Subir el logo del enlace"
+          >
+            <Text style={styles.botonSecundarioTexto}>{logoUrl ? 'Cambiar logo' : 'Subir logo'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <VistaPreviaDelLink
+          nombre={nombreDeLaMarca}
+          colorPrincipal={colorPrincipal}
+          colorSecundario={colorSecundario}
+          logoUrl={logoUrl}
+        />
+
+        <TouchableOpacity
+          style={[styles.boton, ocupado && styles.botonApagado]}
+          onPress={guardarPersonalizacion}
+          disabled={ocupado}
+          accessibilityRole="button"
+          accessibilityLabel="Guardar la personalización del enlace"
+        >
+          <Text style={styles.botonTexto}>Guardar personalización</Text>
+        </TouchableOpacity>
+        <Text style={styles.nota}>
+          Los colores van en formato #RRGGBB (por ejemplo #0B5FFF). El enlace toma los cambios en
+          segundos: la página se actualiza sola.
+        </Text>
+
         {ocupado && (
           <View style={styles.ocupado}>
             <ActivityIndicator color={DARK_BG} />
@@ -258,6 +465,48 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
     <View style={styles.dato}>
       <Text style={styles.datoEtiqueta}>{etiqueta}</Text>
       <Text style={styles.datoValor}>{valor}</Text>
+    </View>
+  );
+}
+
+/**
+ * La mini maqueta de la cabecera del enlace (pedido del usuario, 10-10-2026): se actualiza al
+ * instante con lo que hay en el formulario —nombre, color principal, logo— más el trazo y el
+ * punto del color secundario, para ver cómo le queda la personalización.
+ */
+export function VistaPreviaDelLink({
+  nombre,
+  colorPrincipal,
+  colorSecundario,
+  logoUrl,
+}: {
+  nombre: string;
+  colorPrincipal: string;
+  colorSecundario: string;
+  logoUrl: string;
+}) {
+  const principal = esColorDeMarcaValido(colorPrincipal)
+    ? colorPrincipal.trim().toUpperCase()
+    : MARCA_COLOR_PRINCIPAL;
+  const secundario = esColorDeMarcaValido(colorSecundario)
+    ? colorSecundario.trim().toUpperCase()
+    : MARCA_COLOR_SECUNDARIO;
+  return (
+    <View style={styles.vistaPrevia}>
+      <View style={[styles.vistaCabecera, { backgroundColor: principal }]}>
+        {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.vistaLogo} /> : null}
+        <Text
+          style={[styles.vistaNombre, { color: contrasteSobreColor(principal) }]}
+          numberOfLines={1}
+        >
+          {nombre.trim() || 'Su nombre de proveedor'}
+        </Text>
+      </View>
+      <View style={styles.vistaMapa}>
+        <View style={[styles.vistaTrazo, { backgroundColor: principal }]} />
+        <View style={[styles.vistaPunto, { backgroundColor: secundario }]} />
+      </View>
+      <Text style={styles.vistaNota}>Así se verá la cabecera del enlace del cliente.</Text>
     </View>
   );
 }
@@ -342,6 +591,60 @@ const styles = StyleSheet.create({
   chipActivo: { backgroundColor: '#3F51B5', borderColor: '#3F51B5' },
   chipTexto: { fontSize: 13, color: '#444444' },
   chipTextoActivo: { color: '#FFFFFF', fontWeight: '600' },
+  /** --- Compartir viaje: la selección y la personalización del enlace (10-10-2026) --- */
+  interruptorFila: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  interruptorTexto: { flex: 1, fontSize: 13, color: '#444444', lineHeight: 19 },
+  campoEtiqueta: { fontSize: 13, color: '#888888', marginTop: 14, marginBottom: 6 },
+  campo: {
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#111111',
+    backgroundColor: '#FFFFFF',
+  },
+  coloresFila: { flexDirection: 'row', gap: 12 },
+  colorColumna: { flex: 1 },
+  colorEntrada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  colorMuestra: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  campoColor: { flex: 1, paddingVertical: 10, fontSize: 15, color: '#111111' },
+  logoFila: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logoMini: { width: 42, height: 42, borderRadius: 10, backgroundColor: '#F2F2F2' },
+  logoBoton: { flexGrow: 1, marginTop: 0 },
+  /** La mini maqueta: la cabecera del enlace como la verá el cliente. */
+  vistaPrevia: { marginTop: 16 },
+  vistaCabecera: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  vistaLogo: { width: 22, height: 22, borderRadius: 4 },
+  vistaNombre: { fontSize: 15, fontWeight: '700' },
+  vistaMapa: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingHorizontal: 4 },
+  vistaTrazo: { flex: 1, height: 4, borderRadius: 2 },
+  vistaPunto: { width: 12, height: 12, borderRadius: 6 },
+  vistaNota: { fontSize: 11, color: '#888888', marginTop: 6, textAlign: 'center' },
   ocupado: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 },
   ocupadoTexto: { fontSize: 14, color: '#444444' },
   botonVolver: { marginTop: 24, alignItems: 'center', paddingVertical: 12 },

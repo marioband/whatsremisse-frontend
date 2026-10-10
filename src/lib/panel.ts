@@ -614,3 +614,30 @@ export function etiquetaDelIntegrante(integrante: IntegranteDelGrupo): string {
   if (String(integrante.rol).toLowerCase() === 'admin') return `${nombre} · administrador`;
   return nombre;
 }
+
+// ---------------------------------------------------------------------------
+// La marca del seguimiento del viaje (ficha del usuario en el panel, 10-10-2026)
+// ---------------------------------------------------------------------------
+
+/** Los colores de fábrica de la marca (los mismos que responde la base cuando no hay fila). */
+export const MARCA_COLOR_PRINCIPAL = '#2D2D2D';
+export const MARCA_COLOR_SECUNDARIO = '#9AA0A6';
+
+/** ¿Es un color con la forma que exige la base (#RRGGBB, con cualquiera de sus dos cajas)? */
+export function esColorDeMarcaValido(valor?: string | null): boolean {
+  return /^#[0-9A-F]{6}$/i.test((valor || '').trim());
+}
+
+/**
+ * El color con el que se pinta ENCIMA del color de la marca: negro casi puro si el fondo es
+ * claro, blanco si es oscuro. Es la MISMA cuenta que hace la página del viaje, para que la
+ * vista previa no engañe.
+ */
+export function contrasteSobreColor(color?: string | null): string {
+  if (!esColorDeMarcaValido(color)) return '#FFFFFF';
+  const hex = (color || '').trim();
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 165 ? '#111827' : '#FFFFFF';
+}

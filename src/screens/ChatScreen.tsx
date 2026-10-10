@@ -1220,12 +1220,15 @@ export function ChatScreen() {
   }, [handleCopyData]);
 
   /**
-   * «Copiar imagen»: la FOTO del conductor al portapapeles (o como archivo, si el navegador no lo
-   * deja copiar). La usan la foto de arriba (23-09-2026: se toca para copiarla) y el botón del
-   * mismo nombre del pie nuevo de la tarjeta (09-10-2026).
+   * «Copiar imagen»: la FOTO DEL PERFIL del conductor al portapapeles (o como archivo, si el
+   * navegador no deja copiar). Es la misma fuente que usaba la fotito del pie (23-09-2026: se
+   * tocaba para copiarla) y ahora es la función del botón «Copiar imagen» (09-10-2026).
    */
   const copiarLaImagenDelConductor = useCallback(() => {
-    if (!datosParaCopiar.foto) return;
+    if (!datosParaCopiar.foto) {
+      Alert.alert('Foto del conductor', 'Este conductor no tiene foto en su perfil.');
+      return;
+    }
     const nombre =
       [datosParaCopiar.nombres, datosParaCopiar.apellidos].filter(Boolean).join(' ') ||
       'conductor';
