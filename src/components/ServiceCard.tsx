@@ -54,6 +54,13 @@ interface Props {
    */
   sinDatosDePago?: boolean;
   /**
+   * SIN el aviso de «Ver ubicación» (10-10-2026): el aviso («El proveedor quiere ver tu
+   * ubicación — entra al chat», 0053) es para las LISTAS. En el CHAT no va: ahí ya se ve el
+   * bloque con el botón «Compartir ubicación», y el aviso quedaba encima con un texto parecido
+   * (el usuario lo vio el 10-10-2026: «detrás hay otro que impide leer bien»).
+   */
+  sinAvisoDeUbicacion?: boolean;
+  /**
    * SIN la franja inferior (09-10-2026, pedido del usuario): en el CHAT la franja duplicaba la
    * franja verde superior (el hito del conductor), así que se retiró y la tarjeta se cierra con
    * el pie (los botones). En los inicios la franja se mantiene.
@@ -77,6 +84,7 @@ export function ServiceCard({
   groupName,
   sinDatosDePago = false,
   sinFranja = false,
+  sinAvisoDeUbicacion = false,
 }: Props) {
   const swipeableRef = useRef<FilaDeslizableRef>(null);
   // El nombre lo configura el proveedor en su perfil; si no lo configuró, van su
@@ -248,8 +256,9 @@ export function ServiceCard({
 
       {/* Aviso de «Ver ubicación» (0053, 10-10-2026): el proveedor quiere ver al conductor
           en vivo y espera su respuesta — este es nuestro «push» sin push (pedido del usuario):
-          la tarjeta de la lista lo dice y el chat es donde se acepta o se dice «Ahora no». */}
-      {pidenMiUbicacion && (
+          la tarjeta de la LISTA lo dice y el chat es donde se acepta o se dice «Ahora no».
+          En el chat no se pinta (`sinAvisoDeUbicacion`): ahí manda el bloque con el botón. */}
+      {pidenMiUbicacion && !sinAvisoDeUbicacion && (
         <View style={styles.avisoUbicacion}>
           <MaterialCommunityIcons
             name="map-marker"
@@ -321,6 +330,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
+    paddingTop: 10,
     paddingBottom: 10,
   },
   iconoAviso: { marginRight: 6 },

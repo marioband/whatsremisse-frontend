@@ -1316,6 +1316,9 @@ export function ChatScreen() {
           // ganan el ancho que ocupaba esa columna. En los inicios se siguen viendo.
           sinDatosDePago
           sinFranja
+          // Y SIN el aviso de «Ver ubicación» (10-10-2026): dentro del chat ya está el bloque
+          // con el botón «Compartir ubicación» — el aviso quedaba encima con un texto parecido.
+          sinAvisoDeUbicacion
           vista={isProvider ? 'PROVEEDOR' : 'CONDUCTOR'}
           miPostulacion={isDriver ? miPostulacionEnLaTarjeta : undefined}
           pie={
