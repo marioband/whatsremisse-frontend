@@ -73,6 +73,7 @@ import {
   fetchServiceMessages,
   insertServiceMessage,
   marcarLecturaDelServicio,
+  miSeguimientoActivo,
   ServiceMessage,
   updateServiceMessage,
 } from '../lib/database';
@@ -1234,6 +1235,33 @@ export function ChatScreen() {
   }, [datosParaCopiar]);
 
   /**
+   * ¿El administrador SELECCIONÓ esta cuenta para el seguimiento? (0051) — El botón «Compartir
+   * viaje» es exclusivo de las cuentas que él elige en su panel: hasta no estar activadas, no
+   * aparece. Se pregunta una vez por servicio (y si algo falla, se calla: el botón no sale).
+   */
+  const [seguimientoActivo, setSeguimientoActivo] = useState(false);
+  const servicioDelPie = service?.id ?? null;
+  useEffect(() => {
+    let vivo = true;
+    if (!isProvider || !servicioDelPie || currentStep !== 'IN_PROGRESS') {
+      setSeguimientoActivo(false);
+      return () => {
+        vivo = false;
+      };
+    }
+    miSeguimientoActivo()
+      .then((activo) => {
+        if (vivo) setSeguimientoActivo(activo);
+      })
+      .catch(() => {
+        if (vivo) setSeguimientoActivo(false);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [isProvider, servicioDelPie, currentStep]);
+
+  /**
    * Cabecera del chat: la fecha y la MISMA tarjeta del inicio del conductor, con un pie
    * debajo de la franja (el botón azul de navegación para el conductor y, para el
    * proveedor, los datos a copiar).
@@ -1294,6 +1322,7 @@ export function ChatScreen() {
               {isProvider && currentStep === 'IN_PROGRESS' && (
                 <AccionesDeLaTarjeta
                   service={service}
+                  puedeCompartir={seguimientoActivo}
                   alCopiarDatos={() => copiarDatosRef.current()}
                   alCopiarImagen={copiarLaImagenDelConductor}
                 />
@@ -1314,6 +1343,7 @@ export function ChatScreen() {
     effectiveDriverId,
     datosParaCopiar,
     copiarLaImagenDelConductor,
+    seguimientoActivo,
   ]);
 
   // Con el teclado abierto, la barra de escribir no lleva hueco inferior: va pegada a él.

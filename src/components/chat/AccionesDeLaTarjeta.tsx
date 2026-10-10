@@ -23,6 +23,12 @@ import { CompartirViaje } from './CompartirViaje';
  */
 interface AccionesDeLaTarjetaProps {
   service: ServiceAlert;
+  /**
+   * ¿La cuenta del proveedor está SELECCIONADA por el administrador? (0051) — El botón
+   * «Compartir viaje» es exclusivo de esas cuentas; con esto en false, el pie solo lleva los
+   * copiados y «Ver ubicación».
+   */
+  puedeCompartir: boolean;
   alCopiarDatos: () => void;
   /** Copia (o comparte) la FOTO del conductor. La usa el botón «Copiar imagen». */
   alCopiarImagen: () => void;
@@ -30,12 +36,13 @@ interface AccionesDeLaTarjetaProps {
 
 export function AccionesDeLaTarjeta({
   service,
+  puedeCompartir,
   alCopiarDatos,
   alCopiarImagen,
 }: AccionesDeLaTarjetaProps) {
   return (
     <View style={styles.zona}>
-      <CompartirViaje service={service} esProveedor />
+      {puedeCompartir && <CompartirViaje service={service} esProveedor />}
 
       <View style={styles.fila}>
         <TouchableOpacity

@@ -2284,6 +2284,25 @@ export async function publicarPosicionDelSeguimiento(
   }
 }
 
+/**
+ * ¿El seguimiento del viaje está ENCENDIDO para mi cuenta? (0051)
+ *
+ * La selección la hace el administrador desde su panel: solo las cuentas elegidas ven el
+ * botón «Compartir viaje». Si la migración 0051 no está aplicada, devuelve false en
+ * silencio: el botón simplemente no aparece.
+ */
+export async function miSeguimientoActivo(): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { data, error } = await supabase.rpc('seguimiento_mi_activacion');
+    if (error) throw error;
+    return data === true;
+  } catch (err) {
+    if (esFuncionAusente(err)) return false;
+    throw err;
+  }
+}
+
 /** El enlace público del viaje (0049), tal como lo devuelve la base. */
 export interface EnlaceDelSeguimiento {
   token: string;
