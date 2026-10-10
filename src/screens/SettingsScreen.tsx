@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 
 import { lineaDeVersion, versionEnEjecucion } from '../lib/actualizacion';
+import { leerContadores, lineaDeContadores } from '../lib/medidor';
 import { useAuth } from '../context/AuthContext';
 import { useMockStore } from '../context/MockStoreContext';
 import { Alert } from '../lib/alert';
@@ -129,6 +130,18 @@ export function SettingsScreen() {
   const { userProfile } = useMockStore();
   const { signOut } = useAuth();
   const [saliendo, setSaliendo] = useState(false);
+  const [contadores, setContadores] = useState('');
+
+  // La línea de consultas a Google de este teléfono (para medir el gasto real en campo).
+  useEffect(() => {
+    let vivo = true;
+    void leerContadores().then((datos) => {
+      if (vivo) setContadores(lineaDeContadores(datos));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
 
   /**
    * Cerrar sesión (el usuario preguntó el 21-09-2026: «¿cómo se cierra la sesión?»).
@@ -268,6 +281,9 @@ export function SettingsScreen() {
         <Text style={styles.versionDeLaApp}>
           Versión {lineaDeVersion(versionEnEjecucion()) || 'desconocida'}
         </Text>
+        {/* Lo que este teléfono ha consultado a Google desde que se instaló. Es la línea con la que el
+            dueño de la plataforma mide el gasto REAL por usuario en vez de suponerlo. */}
+        {contadores ? <Text style={styles.versionDeLaApp}>{contadores}</Text> : null}
       </ScrollView>
     </SafeAreaView>
   );
