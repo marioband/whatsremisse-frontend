@@ -19,6 +19,7 @@ import {
   VUELO_MS,
 } from '../lib/barraDeProceso';
 import { VERDE_ACCION, VERDE_DESLIZABLE } from '../lib/colors';
+import { duracionMovimiento, useMovimientoReducido } from '../lib/movimiento';
 
 const TRACK_HEIGHT = 54;
 const THUMB_SIZE = 44;
@@ -143,6 +144,14 @@ export function SwipeStatusButton({ progressIndex, etiqueta, onAdvance }: Props)
   const gestoRef = useRef({ x0: 0, absolutaInicial: 0 });
   /** Último valor de "listo" sin pasar por React: el arrastre no re-renderiza. */
   const listoRef = useRef(false);
+
+  /**
+   * El ajuste "menos movimiento" del teléfono, para el viaje del pulgar al soltar.
+   * Va por ref porque el PanResponder se crea una sola vez y no debe leer un valor viejo.
+   */
+  const movimientoReducido = useMovimientoReducido();
+  const movimientoReducidoRef = useRef(movimientoReducido);
+  movimientoReducidoRef.current = movimientoReducido;
 
   const anchoDeBarra = () => anchoRef.current || trackWidth || 0;
   const recorridoMaximo = () => desplazamientoMaximo(anchoDeBarra(), THUMB_SIZE, MARGEN);
@@ -273,7 +282,7 @@ export function SwipeStatusButton({ progressIndex, etiqueta, onAdvance }: Props)
           desplazamientoRef.current = 0;
           Animated.timing(translateX, {
             toValue: 0,
-            duration: 150,
+            duration: duracionMovimiento(150, movimientoReducidoRef.current),
             easing: Easing.out(Easing.quad),
             useNativeDriver: false,
           }).start(() => relleno.setValue(desplazamientoDelRelleno(0, THUMB_SIZE, ancho, MARGEN)));
@@ -290,13 +299,13 @@ export function SwipeStatusButton({ progressIndex, etiqueta, onAdvance }: Props)
         Animated.parallel([
           Animated.timing(translateX, {
             toValue: destino,
-            duration: VUELO_MS,
+            duration: duracionMovimiento(VUELO_MS, movimientoReducidoRef.current),
             easing: Easing.out(Easing.quad),
             useNativeDriver: false,
           }),
           Animated.timing(relleno, {
             toValue: desplazamientoDelRelleno(destino, THUMB_SIZE, ancho, MARGEN),
-            duration: VUELO_MS,
+            duration: duracionMovimiento(VUELO_MS, movimientoReducidoRef.current),
             easing: Easing.out(Easing.quad),
             useNativeDriver: false,
           }),

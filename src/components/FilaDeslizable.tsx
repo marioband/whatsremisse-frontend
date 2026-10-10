@@ -20,6 +20,8 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, View } from 'react-native';
 
+import { duracionMovimiento, useMovimientoReducido } from '../lib/movimiento';
+
 export interface FilaDeslizableRef {
   /** Devuelve la fila a su sitio (lo que hacía `Swipeable.close()`). */
   cerrar: () => void;
@@ -55,10 +57,15 @@ export const FilaDeslizable = forwardRef<FilaDeslizableRef, FilaDeslizableProps>
   umbralRef.current = umbral;
   alAbrirRef.current = alAbrir;
 
+  /** Con "menos movimiento" del teléfono la fila vuelve a su sitio sin viaje animado. */
+  const movimientoReducido = useMovimientoReducido();
+  const movimientoReducidoRef = useRef(movimientoReducido);
+  movimientoReducidoRef.current = movimientoReducido;
+
   const animarA = (valor: number) => {
     Animated.timing(desplazamiento, {
       toValue: valor,
-      duration: 160,
+      duration: duracionMovimiento(160, movimientoReducidoRef.current),
       useNativeDriver: false,
     }).start();
   };

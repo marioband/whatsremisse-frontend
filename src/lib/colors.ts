@@ -56,3 +56,11 @@ export const GRUPO_INTEGRANTE = '#F2F2F2';
  * como pidió el usuario. Antes era rosa y solo cambiaba de glifo.
  */
 export const CORAZON_DE_GRUPO = '#333333';
+
+/**
+ * Blanco puro de superficies (hojas de diálogo, tarjetas) y el velo oscuro de los
+ * modales. Estaban repetidos a mano en varios archivos; desde el sistema de diseño
+ * (10-10-2026) se nombran una sola vez.
+ */
+export const BLANCO = '#FFFFFF';
+export const VELO_MODAL = 'rgba(0,0,0,0.45)';

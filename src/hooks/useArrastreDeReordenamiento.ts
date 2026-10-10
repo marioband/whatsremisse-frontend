@@ -18,6 +18,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { Animated, Easing, Platform } from 'react-native';
 
+import { duracionMovimiento, useMovimientoReducido } from '../lib/movimiento';
 import { DURACION_DEL_ARRASTRE_MS, desplazamientosDelReordenamiento } from '../lib/reordenar';
 
 export function useArrastreDeReordenamiento(idsEnOrden: readonly string[], altoDeFila: number) {
@@ -27,6 +28,11 @@ export function useArrastreDeReordenamiento(idsEnOrden: readonly string[], altoD
   const idsActuales = useRef<readonly string[]>(idsEnOrden);
   idsActuales.current = idsEnOrden;
   const claveDeOrden = idsEnOrden.join('|');
+
+  /** Con "menos movimiento" del teléfono las tarjetas se reordenan sin viaje animado. */
+  const reducido = useMovimientoReducido();
+  const reducidoRef = useRef(reducido);
+  reducidoRef.current = reducido;
 
   /**
    * El valor de la tarjeta: el suyo si ya existía, o uno nuevo (la primera vez que se
@@ -56,7 +62,7 @@ export function useArrastreDeReordenamiento(idsEnOrden: readonly string[], altoD
         valor.setValue(desplazamiento);
         Animated.timing(valor, {
           toValue: 0,
-          duration: DURACION_DEL_ARRASTRE_MS,
+          duration: duracionMovimiento(DURACION_DEL_ARRASTRE_MS, reducidoRef.current),
           easing: Easing.out(Easing.cubic),
           useNativeDriver: Platform.OS !== 'web',
         }).start();

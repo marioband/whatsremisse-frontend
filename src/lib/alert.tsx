@@ -3,11 +3,27 @@ import {
   Alert as NativeAlert,
   Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
 } from 'react-native';
+
+import {
+  AZUL,
+  BLANCO,
+  ESPACIADO,
+  FONDO_TARJETA,
+  INTERLINEADO,
+  PESO,
+  RADIOS,
+  ROJO_ACCION,
+  TALLAS,
+  TEXTO,
+  TEXTO_SUAVE,
+  TEXTO_TENUE,
+  VELO_MODAL,
+} from './diseno';
 
 export interface AlertButton {
   text?: string;
@@ -22,13 +38,14 @@ interface AlertRequest {
 }
 
 /**
- * El `Alert` de react-native-web (0.19) es una función vacía: en el navegador
- * ningún aviso ni confirmación se ve, y los errores parecen "no hacer nada".
+ * El `Alert` de react-native-web (0.19) es una función vacía: en el navegador ningún
+ * aviso ni confirmación se ve, y los errores parecen "no hacer nada".
  *
- * Este módulo expone la misma API (`Alert.alert(titulo, mensaje, botones)`) pero
- * en web usa `window.alert`/`window.confirm` para uno o dos botones y pinta una
- * hoja de acciones dentro de la app (AlertHost, montado en RootNavigator) para
- * tres o más. En nativo delega en el Alert de React Native.
+ * Este módulo expone la misma API (`Alert.alert(titulo, mensaje, botones)`) pero en web
+ * TODOS los avisos van por la hoja propia dentro de la app (AlertHost, montado en
+ * RootNavigator). Hasta el 10-10-2026 los avisos de uno y dos botones salían como cuadros
+ * del navegador (`window.alert` / `window.confirm`): rompían la identidad visual y no se
+ * pueden pintar; ya no se usan. En nativo delega en el Alert de React Native.
  */
 let listener: ((request: AlertRequest) => void) | null = null;
 
@@ -37,23 +54,26 @@ function formatText(title: string, message?: string) {
 }
 
 function webAlert(title: string, message: string | undefined, buttons: AlertButton[]) {
-  if (buttons.length <= 1) {
-    window.alert(formatText(title, message));
-    buttons[0]?.onPress?.();
+  const lista = buttons.length > 0 ? buttons : [{ text: 'Aceptar' }];
+
+  if (listener) {
+    listener({ title, message, buttons: lista });
     return;
   }
 
-  if (buttons.length === 2) {
-    const cancel = buttons.find((button) => button.style === 'cancel');
-    if (cancel) {
-      const accept = buttons.find((button) => button !== cancel);
-      if (window.confirm(formatText(title, message))) accept?.onPress?.();
-      else cancel.onPress?.();
+  // Sin la hoja montada (fuera de la app: una prueba, un módulo suelto) el aviso no se
+  // pierde en silencio: último recurso del navegador.
+  if (lista.length === 2) {
+    const cancelar = lista.find((button) => button.style === 'cancel');
+    if (cancelar) {
+      const aceptar = lista.find((button) => button !== cancelar);
+      if (window.confirm(formatText(title, message))) aceptar?.onPress?.();
+      else cancelar.onPress?.();
       return;
     }
   }
-
-  listener?.({ title, message, buttons });
+  window.alert(formatText(title, message));
+  lista[0]?.onPress?.();
 }
 
 export const Alert = {
@@ -66,7 +86,7 @@ export const Alert = {
   },
 };
 
-/** Avisos de tres o más botones en web. Se monta una sola vez, en RootNavigator. */
+/** La hoja de avisos de la app. Se monta una sola vez, en RootNavigator. */
 export function AlertHost() {
   const [request, setRequest] = useState<AlertRequest | null>(null);
 
@@ -84,16 +104,32 @@ export function AlertHost() {
     button?.onPress?.();
   };
 
+  /** Toque fuera de la hoja: cierra; si hay un botón de cancelar, vale por él. */
+  const cerrarPorElFondo = () => {
+    close(request.buttons.find((button) => button.style === 'cancel'));
+  };
+
   return (
     <Modal transparent animationType="fade" visible onRequestClose={() => close()}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
-          <Text style={styles.title}>{request.title}</Text>
+      <Pressable style={styles.backdrop} onPress={cerrarPorElFondo}>
+        {/* La hoja no se cierra al tocarla: para eso están sus botones (o el fondo). */}
+        <Pressable
+          style={styles.sheet}
+          accessibilityViewIsModal
+          onPress={() => {
+            /* el toque en la hoja no hace nada: solo sus botones actúan */
+          }}
+        >
+          <Text style={styles.title} accessibilityRole="header">
+            {request.title}
+          </Text>
           {!!request.message && <Text style={styles.message}>{request.message}</Text>}
           {request.buttons.map((button, index) => (
             <TouchableOpacity
               key={`${button.text ?? 'accion'}-${index}`}
               style={styles.button}
+              accessibilityRole="button"
+              accessibilityLabel={button.text ?? 'Aceptar'}
               onPress={() => close(button)}
             >
               <Text
@@ -107,8 +143,8 @@ export function AlertHost() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -116,47 +152,50 @@ export function AlertHost() {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: VELO_MODAL,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: ESPACIADO.xxl,
   },
   sheet: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+    backgroundColor: BLANCO,
+    borderRadius: RADIOS.lg,
+    paddingVertical: ESPACIADO.lg,
+    paddingHorizontal: ESPACIADO.xl,
   },
   title: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111',
+    fontSize: TALLAS.subtitulo,
+    lineHeight: INTERLINEADO.subtitulo,
+    fontWeight: PESO.fuerte,
+    color: TEXTO,
     textAlign: 'center',
   },
   message: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#555',
+    marginTop: ESPACIADO.sm,
+    fontSize: TALLAS.texto,
+    lineHeight: INTERLINEADO.texto,
+    color: TEXTO_SUAVE,
     textAlign: 'center',
   },
   button: {
-    marginTop: 14,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#F2F2F2',
+    marginTop: ESPACIADO.lg,
+    paddingVertical: ESPACIADO.md,
+    borderRadius: RADIOS.md,
+    backgroundColor: FONDO_TARJETA,
     alignItems: 'center',
   },
   buttonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#3F51B5',
+    fontSize: TALLAS.cuerpo,
+    lineHeight: INTERLINEADO.cuerpo,
+    fontWeight: PESO.medio,
+    color: AZUL,
   },
   destructive: {
-    color: '#C2333F',
+    color: ROJO_ACCION,
   },
   cancel: {
-    color: '#666',
+    color: TEXTO_TENUE,
   },
 });
