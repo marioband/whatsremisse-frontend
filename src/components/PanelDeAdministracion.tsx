@@ -6,6 +6,7 @@ import { IconoDeAtras } from './IconoDeAtras';
 import { useAuth } from '../context/AuthContext';
 import { panelUsuarios } from '../lib/database';
 import { nombreDeUsuario, problemaDelPanel, telefonoBonito, UsuarioDelPanel } from '../lib/panel';
+import { TEXTO_TENUE } from '../lib/colors';
 
 /**
  * Piezas compartidas por las pantallas del panel de administración.
@@ -108,7 +109,7 @@ export function BuscadorDeCuenta({
       <TextInput
         style={styles.buscadorCampo}
         placeholder="Teléfono o nombre (mínimo 3 letras)"
-        placeholderTextColor="#888888"
+        placeholderTextColor={TEXTO_TENUE}
         value={texto}
         onChangeText={setTexto}
         autoCorrect={false}
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#111111',
   },
-  buscadorAyuda: { fontSize: 12, color: '#888888', marginTop: 6, lineHeight: 18 },
+  buscadorAyuda: { fontSize: 12, color: TEXTO_TENUE, marginTop: 6, lineHeight: 18 },
   buscadorProblema: { fontSize: 12, color: '#C2333F', marginTop: 6 },
   buscadorFila: {
     flexDirection: 'row',

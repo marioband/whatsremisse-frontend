@@ -70,6 +70,7 @@ import { displayName } from '../lib/names';
 import { AVISO_MIGRACION_0020, LecturaDeChat, estadoDePalomas } from '../lib/palomas';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type GroupChatNav = StackNavigationProp<
   RootStackParamList,
@@ -861,7 +862,7 @@ const styles = StyleSheet.create({
   },
   senderName: {
     fontSize: 11,
-    color: '#888',
+    color: TEXTO_TENUE,
     marginBottom: 2,
     marginLeft: 4,
   },
@@ -909,7 +910,7 @@ const styles = StyleSheet.create({
   },
   systemText: {
     fontSize: 12,
-    color: '#888',
+    color: TEXTO_TENUE,
     fontStyle: 'italic',
     textAlign: 'center',
   },

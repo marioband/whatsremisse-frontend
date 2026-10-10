@@ -15,6 +15,7 @@ import { Alert } from '../lib/alert';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type ProfileNav = StackNavigationProp<RootStackParamList, 'BlockedUserProfile'>;
 type ProfileRoute = RouteProp<RootStackParamList, 'BlockedUserProfile'>;
@@ -44,7 +45,7 @@ export function BlockedUserProfileScreen() {
         value={value}
         editable={false}
         placeholder="-"
-        placeholderTextColor="#999"
+        placeholderTextColor={TEXTO_TENUE}
       />
     </View>
   );

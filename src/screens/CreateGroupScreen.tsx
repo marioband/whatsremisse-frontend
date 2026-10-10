@@ -21,6 +21,7 @@ import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type CreateGroupNav = StackNavigationProp<RootStackParamList, 'CreateGroup'>;
 type CreateGroupRoute = RouteProp<RootStackParamList, 'CreateGroup'>;
@@ -184,7 +185,7 @@ export function CreateGroupScreen() {
           <TextInput
             style={styles.input}
             placeholder="Ingresa Nombre"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={name}
             onChangeText={setName}
             autoFocus

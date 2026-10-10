@@ -10,6 +10,8 @@
  * importarse (lanza «faltan credenciales»).
  */
 
+import { TEXTO_TENUE } from './colors';
+
 export type EstadoMembresia =
   | 'ACTIVA'
   | 'SIN_VENCIMIENTO'
@@ -159,7 +161,7 @@ export function colorDeEstado(estado: EstadoMembresia | string): string {
       return '#B8860B';
     case 'VENCIDA':
     default:
-      return '#888888';
+      return TEXTO_TENUE;
   }
 }
 

@@ -16,7 +16,7 @@ import {
   elegirContactoDelTelefono,
   haySelectorDeContactos,
 } from '../../lib/contactosDelTelefono';
-import { AZUL } from '../../lib/colors';
+import { AZUL, TEXTO_TENUE } from '../../lib/colors';
 
 /**
  * «Compartir un contacto» (pedido del usuario, 20-09-2026).
@@ -106,7 +106,7 @@ export function CompartirContacto({ visible, onCerrar, onEnviar }: Props) {
           <TextInput
             style={styles.input}
             placeholder="Nombre del contacto"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={nombre}
             onChangeText={setNombre}
           />
@@ -115,7 +115,7 @@ export function CompartirContacto({ visible, onCerrar, onEnviar }: Props) {
           <TextInput
             style={styles.input}
             placeholder="Número de teléfono"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={telefono}
             onChangeText={setTelefono}
             keyboardType="phone-pad"

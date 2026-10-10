@@ -15,6 +15,7 @@ import { formatoDeCelular } from '../lib/celular';
 import { Alert } from '../lib/alert';
 import { textoDeErrorParaElUsuario } from '../lib/errors';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type LoginRoute = RouteProp<RootStackParamList, 'Login'>;
 
@@ -75,7 +76,7 @@ export function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="codigo celular"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             keyboardType="number-pad"
             value={otp}
             onChangeText={setOtp}
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   hint: {
-    color: '#888',
+    color: TEXTO_TENUE,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 16,

@@ -9,6 +9,7 @@ import { RootStackParamList } from '../navigation/RootNavigator';
 import { BlockedUser } from '../types';
 import { IconoDeAtras } from '../components/IconoDeAtras';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type BlockedNav = StackNavigationProp<RootStackParamList, 'BlockedDrivers'>;
 
@@ -132,5 +133,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   removeText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  emptyText: { textAlign: 'center', color: '#888', marginTop: 40, fontSize: 14 },
+  emptyText: { textAlign: 'center', color: TEXTO_TENUE, marginTop: 40, fontSize: 14 },
 });

@@ -18,6 +18,7 @@ import {
   telefonoBonito,
 } from '../lib/panel';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type PanelNav = StackNavigationProp<RootStackParamList, 'Administracion'>;
 
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
   seccion: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#888888',
+    color: TEXTO_TENUE,
     textTransform: 'uppercase',
     marginTop: 24,
     marginBottom: 8,
@@ -265,10 +266,10 @@ const styles = StyleSheet.create({
   filaIzquierda: { flex: 1 },
   filaEtiqueta: { fontSize: 14, color: '#111111' },
   filaEtiquetaDestacada: { fontWeight: 'bold' },
-  filaNota: { fontSize: 12, color: '#888888', marginTop: 2 },
+  filaNota: { fontSize: 12, color: TEXTO_TENUE, marginTop: 2 },
   filaValor: { fontSize: 20, fontWeight: 'bold', color: '#111111' },
   filaValorDestacado: { color: '#B8860B' },
-  vacio: { fontSize: 14, color: '#888888' },
+  vacio: { fontSize: 14, color: TEXTO_TENUE },
   accion: {
     borderLeftWidth: 3,
     borderLeftColor: '#3F51B5',
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   accionTitulo: { fontSize: 14, color: '#111111', fontWeight: '600' },
-  accionDetalle: { fontSize: 12, color: '#888888', marginTop: 2 },
+  accionDetalle: { fontSize: 12, color: TEXTO_TENUE, marginTop: 2 },
   botonRecargar: {
     marginTop: 24,
     borderWidth: 1,

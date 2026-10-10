@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 40,
   },
 });

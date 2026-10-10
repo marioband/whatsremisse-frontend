@@ -33,6 +33,7 @@ import {
   UsuarioDelPanel,
 } from '../lib/panel';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type PanelNav = StackNavigationProp<RootStackParamList, 'AdministracionGrupo'>;
 type PanelRuta = RouteProp<RootStackParamList, 'AdministracionGrupo'>;
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
   },
   botonApagado: { opacity: 0.5 },
   botonTexto: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-  nota: { fontSize: 12, color: '#888888', marginTop: 8, lineHeight: 18 },
+  nota: { fontSize: 12, color: TEXTO_TENUE, marginTop: 8, lineHeight: 18 },
   problema: {
     marginTop: 16,
     borderWidth: 1,
@@ -392,9 +393,9 @@ const styles = StyleSheet.create({
     padding: 14,
     marginTop: 18,
   },
-  fichaTitulo: { fontSize: 13, fontWeight: 'bold', color: '#888888', textTransform: 'uppercase' },
+  fichaTitulo: { fontSize: 13, fontWeight: 'bold', color: TEXTO_TENUE, textTransform: 'uppercase' },
   fichaValor: { fontSize: 15, color: '#111111', fontWeight: '600', marginTop: 6 },
-  fichaNota: { fontSize: 12, color: '#888888', marginTop: 4 },
+  fichaNota: { fontSize: 12, color: TEXTO_TENUE, marginTop: 4 },
   botonSecundario: {
     marginTop: 12,
     borderWidth: 1,
@@ -407,7 +408,7 @@ const styles = StyleSheet.create({
   seccion: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#888888',
+    color: TEXTO_TENUE,
     textTransform: 'uppercase',
     marginTop: 24,
     marginBottom: 8,
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
   filaDetalle: { fontSize: 13, color: '#444444', marginTop: 2 },
   botonFila: { borderWidth: 1, borderColor: '#C2333F', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12 },
   botonFilaTexto: { color: '#C2333F', fontSize: 13, fontWeight: '600' },
-  vacio: { fontSize: 14, color: '#888888' },
+  vacio: { fontSize: 14, color: TEXTO_TENUE },
   ocupado: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20 },
   ocupadoTexto: { fontSize: 14, color: '#444444' },
   botonVolver: { marginTop: 24, alignItems: 'center', paddingVertical: 12 },

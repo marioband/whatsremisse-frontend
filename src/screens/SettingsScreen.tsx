@@ -23,6 +23,7 @@ import { registrarResumenEnConsola, reiniciarContadores, textoDelResumen } from 
 import { limpiarCacheDeRutas } from '../lib/routes';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type SettingsNav = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -378,7 +379,7 @@ const styles = StyleSheet.create({
   },
   profileSubtitle: {
     fontSize: 13,
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 4,
   },
   menuContainer: {

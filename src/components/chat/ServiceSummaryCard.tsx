@@ -5,6 +5,7 @@ import { BankDetailsRow } from './BankDetailsRow';
 import { useNombreDelProveedor } from '../../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../../lib/datetime';
 import { ServiceAlert } from '../../types';
+import { TEXTO_TENUE } from '../../lib/colors';
 
 interface ServiceSummaryCardProps {
   service: ServiceAlert;
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: '#888',
+    color: TEXTO_TENUE,
     marginBottom: 6,
   },
   routeText: {
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
   },
   paymentMethodText: {
     fontSize: 11,
-    color: '#888',
+    color: TEXTO_TENUE,
     textAlign: 'right',
     marginTop: 4,
   },

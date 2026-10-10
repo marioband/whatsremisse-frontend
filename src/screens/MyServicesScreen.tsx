@@ -17,6 +17,7 @@ import { historialDePago } from '../lib/pagoServicio';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type MyServicesNav = StackNavigationProp<RootStackParamList, 'MyServices'>;
 
@@ -412,12 +413,12 @@ const styles = StyleSheet.create({
   },
   paymentMethod: {
     fontSize: 11,
-    color: '#888',
+    color: TEXTO_TENUE,
     fontWeight: '600',
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 40,
     fontSize: 14,
   },

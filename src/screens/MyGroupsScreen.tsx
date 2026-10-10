@@ -26,6 +26,7 @@ import { horaDelUltimoMensaje } from '../lib/horaDelMensaje';
 import { vistaPreviaDelMensaje } from '../lib/mensajes';
 import { colorDeLaTarjeta, ordenarGrupos } from '../lib/ordenDeGrupos';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type GroupsNav = StackNavigationProp<
   RootStackParamList,
@@ -359,7 +360,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 40,
   },
 });

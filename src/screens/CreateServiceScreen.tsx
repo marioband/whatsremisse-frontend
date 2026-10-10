@@ -64,6 +64,7 @@ import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert, ServiceStatus } from '../types';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type CreateNav = StackNavigationProp<
   RootStackParamList,
@@ -740,7 +741,7 @@ export function CreateServiceScreen() {
           <TextInput
             style={styles.fareField}
             placeholder="0.00"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             keyboardType="numeric"
             value={fare}
             onChangeText={setFare}
@@ -768,7 +769,7 @@ export function CreateServiceScreen() {
           <TextInput
             style={styles.input}
             placeholder="Especifica el medio de pago"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={otherPayment}
             onChangeText={setOtherPayment}
           />
@@ -795,7 +796,7 @@ export function CreateServiceScreen() {
           <TextInput
             style={styles.input}
             placeholder="Especifica la fecha de pago"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={customPaymentDate}
             onChangeText={setCustomPaymentDate}
           />
@@ -959,7 +960,7 @@ export function CreateServiceScreen() {
         <TextInput
           style={[styles.input, styles.textArea]}
           placeholder="Aclaraciones adicionales..."
-          placeholderTextColor="#999"
+          placeholderTextColor={TEXTO_TENUE}
           multiline
           numberOfLines={4}
           value={observation}

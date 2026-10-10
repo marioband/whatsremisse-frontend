@@ -25,6 +25,7 @@ import { silenciarGrupo } from '../lib/database';
 import { displayName, groupRoleBadgeLabel, initialOf, sortMembersByRole } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type MembersNav = StackNavigationProp<RootStackParamList, 'GroupMembers'>;
 type MembersRoute = RouteProp<RootStackParamList, 'GroupMembers'>;
@@ -496,7 +497,7 @@ export function GroupMembersScreen() {
               autoFocus
               maxLength={60}
               placeholder="Nombre del grupo"
-              placeholderTextColor="#999"
+              placeholderTextColor={TEXTO_TENUE}
               onSubmitEditing={() => void guardarNombre()}
             />
             <View style={styles.modalBotones}>
@@ -676,7 +677,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   memberRoleMuted: {
-    color: '#999',
+    color: TEXTO_TENUE,
   },
   warnText: {
     marginTop: 18,
@@ -687,7 +688,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 40,
   },
   memberNote: {
@@ -696,7 +697,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 28,
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     fontSize: 13,
     paddingHorizontal: 24,
   },

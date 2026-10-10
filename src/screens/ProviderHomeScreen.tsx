@@ -31,6 +31,7 @@ import { estaCompartido } from '../lib/gruposDeServicio';
 import { isVisibleAsProvider } from '../lib/visibility';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { ServiceAlert } from '../types';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type HomeNav = StackNavigationProp<
   RootStackParamList,
@@ -441,7 +442,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 40,
     fontSize: 14,
   },

@@ -21,6 +21,7 @@ import { describeError, textoDeErrorParaElUsuario } from '../lib/errors';
 import { initialOf } from '../lib/names';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type AddNav = StackNavigationProp<RootStackParamList, 'AddParticipant'>;
 type AddRoute = RouteProp<RootStackParamList, 'AddParticipant'>;
@@ -299,7 +300,7 @@ export function AddParticipantScreen() {
           <TextInput
             style={styles.searchInput}
             placeholder="Buscar por nombre o teléfono"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
@@ -534,7 +535,7 @@ const styles = StyleSheet.create({
   },
   alreadyText: {
     fontSize: 12,
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 2,
   },
   selector: {
@@ -558,7 +559,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 40,
   },
   errorText: {

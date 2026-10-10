@@ -6,6 +6,7 @@ import { useNombreDelProveedor } from '../hooks/useNombreDelProveedor';
 import { textoProgramado } from '../lib/datetime';
 import { textoDeLasUnidadesDeLaAlerta } from '../lib/unidades';
 import { ServiceAlert } from '../types';
+import { TEXTO_TENUE } from '../lib/colors';
 
 interface Props {
   service: ServiceAlert;
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
   },
   paymentMethod: {
     fontSize: 11,
-    color: '#888',
+    color: TEXTO_TENUE,
     fontWeight: '600',
   },
   archiveAction: {

@@ -37,6 +37,7 @@ import {
   UsuarioDelPanel,
 } from '../lib/panel';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type PanelNav = StackNavigationProp<RootStackParamList, 'AdministracionUsuario'>;
 type PanelRuta = RouteProp<RootStackParamList, 'AdministracionUsuario'>;
@@ -353,7 +354,7 @@ export function AdminUsuarioScreen() {
           value={nombreDeLaMarca}
           onChangeText={setNombreDeLaMarca}
           placeholder="Si se deja vacío, firma con su nombre de proveedor"
-          placeholderTextColor="#999999"
+          placeholderTextColor={TEXTO_TENUE}
           maxLength={40}
         />
 
@@ -375,7 +376,7 @@ export function AdminUsuarioScreen() {
                 value={colorPrincipal}
                 onChangeText={(t) => setColorPrincipal(limpiarColorDeMarca(t))}
                 placeholder={MARCA_COLOR_PRINCIPAL}
-                placeholderTextColor="#999999"
+                placeholderTextColor={TEXTO_TENUE}
                 autoCapitalize="characters"
                 maxLength={7}
               />
@@ -398,7 +399,7 @@ export function AdminUsuarioScreen() {
                 value={colorSecundario}
                 onChangeText={(t) => setColorSecundario(limpiarColorDeMarca(t))}
                 placeholder={MARCA_COLOR_SECUNDARIO}
-                placeholderTextColor="#999999"
+                placeholderTextColor={TEXTO_TENUE}
                 autoCapitalize="characters"
                 maxLength={7}
               />
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F2F2F2',
   },
-  datoEtiqueta: { fontSize: 13, color: '#888888' },
+  datoEtiqueta: { fontSize: 13, color: TEXTO_TENUE },
   datoValor: { fontSize: 14, color: '#111111', fontWeight: '600', flexShrink: 1, textAlign: 'right' },
   problema: {
     marginTop: 12,
@@ -570,7 +571,7 @@ const styles = StyleSheet.create({
   seccion: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#888888',
+    color: TEXTO_TENUE,
     textTransform: 'uppercase',
     marginTop: 24,
     marginBottom: 8,
@@ -586,7 +587,7 @@ const styles = StyleSheet.create({
   },
   botonTexto: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
   botonApagado: { opacity: 0.5 },
-  nota: { fontSize: 12, color: '#888888', marginTop: 8, lineHeight: 18 },
+  nota: { fontSize: 12, color: TEXTO_TENUE, marginTop: 8, lineHeight: 18 },
   botonSecundario: {
     marginTop: 12,
     borderWidth: 1,
@@ -619,7 +620,7 @@ const styles = StyleSheet.create({
   /** --- Compartir viaje: la selección y la personalización del enlace (10-10-2026) --- */
   interruptorFila: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   interruptorTexto: { flex: 1, fontSize: 13, color: '#444444', lineHeight: 19 },
-  campoEtiqueta: { fontSize: 13, color: '#888888', marginTop: 14, marginBottom: 6 },
+  campoEtiqueta: { fontSize: 13, color: TEXTO_TENUE, marginTop: 14, marginBottom: 6 },
   campo: {
     borderWidth: 1,
     borderColor: '#E2E2E2',
@@ -669,7 +670,7 @@ const styles = StyleSheet.create({
   vistaMapa: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingHorizontal: 4 },
   vistaTrazo: { flex: 1, height: 4, borderRadius: 2 },
   vistaPunto: { width: 12, height: 12, borderRadius: 6 },
-  vistaNota: { fontSize: 11, color: '#888888', marginTop: 6, textAlign: 'center' },
+  vistaNota: { fontSize: 11, color: TEXTO_TENUE, marginTop: 6, textAlign: 'center' },
   ocupado: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 },
   ocupadoTexto: { fontSize: 14, color: '#444444' },
   botonVolver: { marginTop: 24, alignItems: 'center', paddingVertical: 12 },

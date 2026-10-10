@@ -28,6 +28,7 @@ import {
 } from '../lib/billeterasYBancos';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type PaymentNav = StackNavigationProp<RootStackParamList, 'PaymentDetails'>;
 type PaymentRoute = RouteProp<RootStackParamList, 'PaymentDetails'>;
@@ -237,7 +238,7 @@ export function PaymentDetailsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Nombre de la billetera"
-              placeholderTextColor="#999"
+              placeholderTextColor={TEXTO_TENUE}
               value={billeteraOtro}
               onChangeText={setBilleteraOtro}
             />
@@ -248,7 +249,7 @@ export function PaymentDetailsScreen() {
           <TextInput
             style={styles.input}
             placeholder="Número"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={numeroDeBilletera}
             onChangeText={setNumeroDeBilletera}
             keyboardType="phone-pad"
@@ -271,7 +272,7 @@ export function PaymentDetailsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Nombre del banco"
-              placeholderTextColor="#999"
+              placeholderTextColor={TEXTO_TENUE}
               value={bancoOtro}
               onChangeText={setBancoOtro}
             />
@@ -283,7 +284,7 @@ export function PaymentDetailsScreen() {
           <TextInput
             style={styles.input}
             placeholder="Número de cuenta"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={cuenta}
             onChangeText={setCuenta}
           />
@@ -293,7 +294,7 @@ export function PaymentDetailsScreen() {
           <TextInput
             style={styles.input}
             placeholder="CCI"
-            placeholderTextColor="#999"
+            placeholderTextColor={TEXTO_TENUE}
             value={cci}
             onChangeText={setCci}
           />
@@ -352,7 +353,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, backgroundColor: '#fff' },
   bodyContent: { padding: 20, paddingBottom: 40 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#111', marginBottom: 6 },
-  sectionSubtitle: { fontSize: 13, color: '#888', marginBottom: 24, lineHeight: 18 },
+  sectionSubtitle: { fontSize: 13, color: TEXTO_TENUE, marginBottom: 24, lineHeight: 18 },
   groupTitle: {
     fontSize: 16,
     fontWeight: 'bold',

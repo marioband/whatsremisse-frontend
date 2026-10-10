@@ -10,6 +10,7 @@ import {
   sumarMeses,
   tituloMes,
 } from '../lib/datetime';
+import { TEXTO_TENUE } from '../lib/colors';
 
 const DARK_BG = '#2D2D2D';
 const BLUE = '#3F51B5';
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
     fontWeight: '700',
-    color: '#999',
+    color: TEXTO_TENUE,
     letterSpacing: 0.5,
   },
   dayRow: {

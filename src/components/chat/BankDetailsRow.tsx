@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 import { Icono, ICONO_COPIAR } from '../Icono';
+import { TEXTO_TENUE } from '../../lib/colors';
 
 interface BankDetailsRowProps {
   label: string;
@@ -44,7 +45,7 @@ const styles = StyleSheet.create({
     // espacio, déjalo como estaba antes».
   },
   info: { flex: 1 },
-  label: { fontSize: 11, color: '#888', marginBottom: 2 },
+  label: { fontSize: 11, color: TEXTO_TENUE, marginBottom: 2 },
   value: { fontSize: 14, color: '#111', fontWeight: '600' },
   copyButton: {
     // Sin fondo ni relleno: el botón es solo el icono (el usuario pidió quitar el fondo azul el

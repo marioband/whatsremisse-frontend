@@ -5,6 +5,7 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } fr
 
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { IconoDeAtras } from '../components/IconoDeAtras';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type MembershipNav = StackNavigationProp<RootStackParamList, 'Membership'>;
 
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 24,
   },
-  statusLabel: { fontSize: 13, color: '#888', marginBottom: 4 },
+  statusLabel: { fontSize: 13, color: TEXTO_TENUE, marginBottom: 4 },
   statusValue: { fontSize: 24, fontWeight: 'bold', color: GREEN, marginBottom: 6 },
   statusDesc: { fontSize: 13, color: '#666' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111', marginBottom: 16 },
@@ -146,7 +147,7 @@ const styles = StyleSheet.create({
   planButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   hint: {
     fontSize: 12,
-    color: '#888',
+    color: TEXTO_TENUE,
     marginTop: 10,
     fontStyle: 'italic',
     textAlign: 'center',

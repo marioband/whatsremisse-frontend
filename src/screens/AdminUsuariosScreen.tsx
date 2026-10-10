@@ -18,6 +18,7 @@ import {
   UsuarioDelPanel,
 } from '../lib/panel';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type PanelNav = StackNavigationProp<RootStackParamList, 'AdministracionUsuarios'>;
 
@@ -104,7 +105,7 @@ export function AdminUsuariosScreen() {
         <TextInput
           style={styles.campo}
           placeholder="Buscar por nombre o teléfono"
-          placeholderTextColor="#888888"
+          placeholderTextColor={TEXTO_TENUE}
           value={busqueda}
           onChangeText={setBusqueda}
           keyboardType="default"
@@ -210,7 +211,7 @@ const styles = StyleSheet.create({
   filaIzquierda: { flex: 1 },
   nombre: { fontSize: 15, fontWeight: '600', color: '#111111' },
   detalle: { fontSize: 13, color: '#444444', marginTop: 2 },
-  membresia: { fontSize: 12, color: '#888888', marginTop: 2 },
+  membresia: { fontSize: 12, color: TEXTO_TENUE, marginTop: 2 },
   etiqueta: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   etiquetaTexto: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold' },
   cargando: { paddingVertical: 24, alignItems: 'center' },
@@ -233,5 +234,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   botonReintentarTexto: { color: '#C2333F', fontSize: 14, fontWeight: '600' },
-  vacio: { fontSize: 14, color: '#888888', paddingVertical: 24, textAlign: 'center' },
+  vacio: { fontSize: 14, color: TEXTO_TENUE, paddingVertical: 24, textAlign: 'center' },
 });

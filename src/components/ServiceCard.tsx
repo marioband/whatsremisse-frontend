@@ -13,6 +13,7 @@ import { tarjetaBloqueadaDelConductor } from '../lib/listaDelConductor';
 import { usePedidoDeUbicacionPendiente } from '../lib/pedidosDeUbicacionPendientes';
 import { textoDeLasUnidadesDeLaAlerta } from '../lib/unidades';
 import { ServiceAlert } from '../types';
+import { TEXTO_TENUE } from '../lib/colors';
 
 interface Props {
   service: ServiceAlert;
@@ -456,7 +457,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   estimate: {
-    color: '#888',
+    color: TEXTO_TENUE,
     fontSize: 12,
   },
   emergenciaBadge: {
@@ -504,7 +505,7 @@ const styles = StyleSheet.create({
   },
   paymentMethod: {
     fontSize: 11,
-    color: '#888',
+    color: TEXTO_TENUE,
     fontWeight: '600',
   },
   actionButton: {

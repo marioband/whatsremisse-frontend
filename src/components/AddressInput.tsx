@@ -15,6 +15,7 @@ import {
   FilaSugerencia,
   hayLugarGuardadoQueResuelve,
 } from '../lib/addressSuggestions';
+import { TEXTO_TENUE } from '../lib/colors';
 import { LugarGuardado, lugaresParaElCampo, ServicioDelHistorial } from '../lib/lugaresFrecuentes';
 import { registrarAhorro } from '../lib/medidor';
 import {
@@ -362,7 +363,7 @@ export function AddressInput({
           ref={campoDeTexto}
           style={styles.entrada}
           placeholder={placeholder}
-          placeholderTextColor="#999"
+          placeholderTextColor={TEXTO_TENUE}
           value={valor}
           onChangeText={(texto) => {
             onChangeText(texto);
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   limpiarTexto: {
-    color: '#999',
+    color: TEXTO_TENUE,
     fontSize: 15,
     fontWeight: '700',
   },

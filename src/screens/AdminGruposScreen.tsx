@@ -27,6 +27,7 @@ import {
   UsuarioDelPanel,
 } from '../lib/panel';
 import { RootStackParamList } from '../navigation/RootNavigator';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type PanelNav = StackNavigationProp<RootStackParamList, 'AdministracionGrupos'>;
 
@@ -142,7 +143,7 @@ export function AdminGruposScreen() {
             <TextInput
               style={styles.campo}
               placeholder="Por ejemplo: Taxi el Polo"
-              placeholderTextColor="#888888"
+              placeholderTextColor={TEXTO_TENUE}
               value={nombre}
               onChangeText={setNombre}
               editable={!guardando}
@@ -188,7 +189,7 @@ export function AdminGruposScreen() {
         <TextInput
           style={styles.campo}
           placeholder="Nombre del grupo o teléfono del dueño"
-          placeholderTextColor="#888888"
+          placeholderTextColor={TEXTO_TENUE}
           value={busqueda}
           onChangeText={setBusqueda}
           autoCorrect={false}
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 10,
   },
-  etiqueta: { fontSize: 13, fontWeight: 'bold', color: '#888888', textTransform: 'uppercase', marginTop: 16 },
+  etiqueta: { fontSize: 13, fontWeight: 'bold', color: TEXTO_TENUE, textTransform: 'uppercase', marginTop: 16 },
   campo: {
     borderWidth: 1,
     borderColor: '#E2E2E2',
@@ -295,7 +296,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   botonReintentarTexto: { color: '#C2333F', fontSize: 14, fontWeight: '600' },
-  vacio: { fontSize: 14, color: '#888888', marginTop: 16, textAlign: 'center' },
+  vacio: { fontSize: 14, color: TEXTO_TENUE, marginTop: 16, textAlign: 'center' },
   fila: {
     paddingVertical: 14,
     borderBottomWidth: 1,

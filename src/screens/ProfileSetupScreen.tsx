@@ -24,6 +24,7 @@ import { RootStackParamList } from '../navigation/RootNavigator';
 import { Icono, ICONO_AJUSTES } from '../components/Icono';
 import { IconoDeAtras } from '../components/IconoDeAtras';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { TEXTO_TENUE } from '../lib/colors';
 
 type SetupNav = StackNavigationProp<RootStackParamList, 'ProfileSetup'>;
 
@@ -209,7 +210,7 @@ export function ProfileSetupScreen() {
           onChangeText={onChange}
           keyboardType={keyboardType}
           placeholder="-"
-          placeholderTextColor="#999"
+          placeholderTextColor={TEXTO_TENUE}
         />
       ) : (
         <Text style={[styles.input, styles.inputDisabled]} numberOfLines={1}>
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   inputDisabled: {
-    color: '#888',
+    color: TEXTO_TENUE,
   },
   vehicleTypeRow: {
     width: '100%',
