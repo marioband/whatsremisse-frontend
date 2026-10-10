@@ -912,6 +912,19 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       const servicios = [...servicesById.values()];
       dispatch({ type: 'SET_SERVICES', payload: servicios });
       guardarCache(claveDeCache('servicios', profile.id), servicios);
+      // 10-10-2026 (4ª vuelta): un servicio propio publicado ANTES del arreglo del trazo quedó con
+      // su medida vieja (sin recorrido) y la página del cliente dibujaba una línea recta. Al abrir
+      // la app se completa SOLO, en segundo plano: una medida por servicio (después sale de la
+      // caché) y queda guardado para todos. Best effort: si falla, todo sigue como estaba.
+      providerServices
+        .filter(
+          (s) =>
+            !s.trazoPolyline &&
+            s.status !== 'STATUS_COMPLETED' &&
+            s.status !== 'STATUS_CANCELLED'
+        )
+        .slice(0, 5)
+        .forEach((s) => void medirYGuardarElViaje(s));
       // Las que le tocan AHORA: es lo que la lista y los contadores dejan pasar aunque no sean de
       // sus grupos (el tiempo real usa esta misma lista para no descartarlas).
       emergenciasCercaRef.current = emergenciasActivas
